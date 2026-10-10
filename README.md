@@ -16,7 +16,7 @@ deflate reduces the representation overhead of tool results before a model sees 
 - A minimal transparent Anthropic Messages proxy with streaming support.
 - Local compression statistics that separate observed proposals from emitted reductions.
 
-Structural encodings stay opt-in until paired task evaluations pass. See [PLAN §14.4](docs/PLAN.md).
+Structural encodings stay opt-in until paired task evaluations pass. See [PLAN §14.4](docs/PLAN.md#144-agent-effectiveness).
 
 ## Roadmap
 
