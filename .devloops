@@ -1,0 +1,77 @@
+version: 1
+
+strategy: local-first
+
+inputSource: tracker
+
+# Maximum autonomy: no operator checkpoints. The loop refines, opens draft PRs,
+# passes gates and merges on its own once the full gate pipeline is clean
+# (draft_gate + pre_approval_gate at current head, zero unresolved threads).
+autonomy:
+  stopAt: []
+  humanMergeOnly: false
+
+refinement:
+  maxCopilotRounds: 2
+  lowSignal:
+    enabled: true
+
+workflow:
+  baseBranch: main
+  requireDraftFirst: true
+  requireRetrospective: false
+
+gates:
+  requireFanoutEvidence: true
+
+localImplementation:
+  issueless: true
+  lightMode:
+    enabled: true
+    maxFiles: 2
+    maxLines: 40
+    # Supply-chain and release surfaces always get full gate fan-out.
+    riskPaths:
+      - Cargo.lock
+      - "**/Cargo.toml"
+      - rust-toolchain.toml
+      - deny.toml
+      - plugins/claude/**
+
+# Rust layout from docs/PLAN.md §5.2. Built-in tables already map .rs to code
+# and .toml/.lock to config; these rules classify test and benchmark trees.
+classify:
+  paths:
+    - pattern: tests/**
+      kind: test
+    - pattern: crates/*/tests/**
+      kind: test
+    - pattern: crates/*/benches/**
+      kind: test
+    - pattern: benchmarks/**
+      kind: test
+    - pattern: fuzz/**
+      kind: test
+
+models:
+  roleTiers:
+    developer: low
+    fixer: low
+  tiers:
+    low:
+      claude: sonnet
+    high:
+      claude: opus
+
+queue:
+  maxParallel: 3
+  maxAutoFiledIssues: 10
+
+# Operator-recorded standing authorization (mfittko, 2026-10-10): the ADR
+# tripwire waiver writer may act for this repo until the expiry (max 90 days).
+standingAuthorizations:
+  adrTripwireWaiver:
+    grantedBy: mfittko
+    grantedAt: 2026-10-10
+    expires: 2027-01-08
+    reason: Maximum-autonomy bootstrap; waive tripwires that record no new decision
