@@ -5,8 +5,8 @@ strategy: local-first
 inputSource: tracker
 
 # Maximum autonomy: no operator checkpoints. The loop refines, opens draft PRs,
-# passes gates and merges on its own once the full gate pipeline is clean
-# (draft_gate + pre_approval_gate at current head, zero unresolved threads).
+# passes gates and merges on its own. The merge conditions are owned by
+# docs/decisions/0001-dev-loops-autonomy.md.
 autonomy:
   stopAt: []
   humanMergeOnly: false
@@ -42,8 +42,9 @@ localImplementation:
       - .devloops
       - ".github/workflows/**"
 
-# Rust layout from docs/PLAN.md §5.2. Built-in tables already map .rs to code
-# and .toml/.lock to config; these rules classify test and benchmark trees.
+# Rules cover the docs/PLAN.md §5.2 layout plus the standard Cargo test, bench
+# and fuzz trees. Built-in tables already map .rs to code and .toml/.lock to
+# config; these rules classify test and benchmark trees.
 classify:
   paths:
     - pattern: tests/**
