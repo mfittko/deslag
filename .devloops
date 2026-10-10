@@ -65,9 +65,19 @@ models:
     high:
       claude: opus
 
+tracker:
+  board:
+    number: 6  # https://github.com/users/mfittko/projects/6 (stable; survives project renames)
+
 queue:
   maxParallel: 3
   maxAutoFiledIssues: 10
+  # Board uses the GitHub kanban template names; Backlog is the dev-loops default.
+  statusColumns:
+    next_up: Ready
+    in_progress: In progress
+    ready_for_review: In review
+    done: Done
 
 # Operator-recorded standing authorization (mfittko, 2026-10-10): the ADR
 # tripwire waiver writer may act for this repo until the expiry (max 90 days).
