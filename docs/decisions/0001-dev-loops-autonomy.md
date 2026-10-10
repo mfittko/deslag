@@ -16,6 +16,6 @@ deflate is a new single-maintainer repository. Work runs through dev-loops from 
 
 ## Consequences
 
-- No human approves merges. Gate quality is the only merge control, so the gates stay mandatory and unwaivable for size budget.
+- No human approves merges, so gate quality is the only merge control. All gates stay mandatory.
 - Renewing the standing authorization after 2027-01-08 needs a new decision record.
 - To return to human merges, set `humanMergeOnly: true` or add `merge` to `stopAt`.

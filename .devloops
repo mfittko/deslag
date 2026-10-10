@@ -34,7 +34,7 @@ localImplementation:
     # Supply-chain, release, autonomy-config and CI surfaces always get full
     # gate fan-out.
     riskPaths:
-      - Cargo.lock
+      - "**/Cargo.lock"
       - "**/Cargo.toml"
       - rust-toolchain.toml
       - deny.toml
@@ -88,6 +88,6 @@ queue:
 standingAuthorizations:
   adrTripwireWaiver:
     grantedBy: mfittko
-    grantedAt: 2026-10-10
-    expires: 2027-01-08
+    grantedAt: "2026-10-10"
+    expires: "2027-01-08"
     reason: Maximum-autonomy bootstrap; waive tripwires that record no new decision
