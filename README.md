@@ -43,4 +43,4 @@ Work runs through [dev-loops](https://github.com/mfittko/dev-loops). Repository 
 
 ## License
 
-Not yet chosen. License selection and upstream reuse review are tracked in [DF-001](https://github.com/mfittko/deflate/issues/5).
+Dual-licensed under `MIT OR Apache-2.0`, as decided in the [M0 epic](https://github.com/mfittko/deflate/issues/2). The `LICENSE-MIT` and `LICENSE-APACHE` files and the upstream reuse notes are pending in [DF-001](https://github.com/mfittko/deflate/issues/5).
