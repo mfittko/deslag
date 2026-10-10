@@ -1,0 +1,18 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # ponytail: config-only check until DF-001 adds cargo fmt/clippy/test here.
+      - name: Validate .devloops YAML
+        run: ruby -ryaml -rdate -e 'YAML.safe_load(File.read(".devloops"), permitted_classes: [Date])'
