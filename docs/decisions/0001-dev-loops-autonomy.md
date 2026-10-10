@@ -1,0 +1,21 @@
+# 0001: dev-loops runs with maximum autonomy
+
+**Status:** accepted
+**Date:** 2026-10-10
+**Decided by:** mfittko
+
+## Context
+
+deflate is a new single-maintainer repository. Work runs through dev-loops from the epic tree in issues #1 to #23. The maintainer wants the loop to proceed without operator checkpoints.
+
+## Decision
+
+- `autonomy.stopAt: []` and `autonomy.humanMergeOnly: false`. The agent merges after the full gate pipeline is clean: `draft_gate` and `pre_approval_gate` at the current head, zero unresolved threads, and a green evidence audit.
+- Light mode stays at the dev-loops defaults (2 files, 40 lines). Rust supply-chain and release surfaces (`Cargo.lock`, `Cargo.toml`, `rust-toolchain.toml`, `deny.toml`, `plugins/claude/**`) always get full gate fan-out.
+- A standing ADR-tripwire waiver authorization is granted by mfittko from 2026-10-10 until 2027-01-08 (the 90-day maximum). It applies only to tripwires that record no new decision.
+
+## Consequences
+
+- No human approves merges. Gate quality is the only merge control, so the gates stay mandatory and unwaivable for size budget.
+- Renewing the standing authorization after 2027-01-08 needs a new decision record.
+- To return to human merges, set `humanMergeOnly: true` or add `merge` to `stopAt`.

@@ -52,6 +52,8 @@ classify:
       kind: test
     - pattern: fuzz/**
       kind: test
+    - pattern: .gitignore
+      kind: config
 
 models:
   roleTiers:
