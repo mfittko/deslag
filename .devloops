@@ -30,13 +30,17 @@ localImplementation:
     enabled: true
     maxFiles: 2
     maxLines: 40
-    # Supply-chain and release surfaces always get full gate fan-out.
+    # 2 files / 40 lines is a deliberate tightening of the dev-loops default.
+    # Supply-chain, release, autonomy-config and CI surfaces always get full
+    # gate fan-out.
     riskPaths:
       - Cargo.lock
       - "**/Cargo.toml"
       - rust-toolchain.toml
       - deny.toml
       - plugins/claude/**
+      - .devloops
+      - ".github/workflows/**"
 
 # Rust layout from docs/PLAN.md §5.2. Built-in tables already map .rs to code
 # and .toml/.lock to config; these rules classify test and benchmark trees.
