@@ -25,22 +25,26 @@ use std::{
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper::{
-    Method, Request,
+    Method, Request, StatusCode,
     body::{Body, Frame, Incoming, SizeHint},
     header,
+    http::request::Parts,
 };
 use serde::de::{Deserialize, Deserializer, Error, MapAccess, Visitor};
 use serde_json::value::RawValue;
-use tokio::sync::Semaphore;
+use tokio::{sync::Semaphore, time::Duration};
 
 /// ponytail: at or above the Anthropic Messages request limit (32 MB), so every
 /// request the provider accepts is inspected and the decision never depends on
 /// size. A lower cap would bypass long sessions and change their history bytes.
+/// A larger body is forwarded unrewritten: the buffered prefix, then the rest.
 const MAX_INSPECT_BYTES: usize = 32 * 1024 * 1024;
 
 /// ponytail: at most 4 requests buffer and rewrite at once, so peak inspection
 /// memory is about 4 x ~100 MiB (buffer growth plus rewrite output). Others wait
 /// for a permit and never stream through, so the decision never depends on load.
+/// A permit holder that does not deliver its body within
+/// `Limits::body_read_timeout` gets `408` and releases the permit.
 /// Make the permit count configurable via `Limits` if that ceiling is wrong.
 static INSPECT_PERMITS: Semaphore = Semaphore::const_new(4);
 
@@ -99,11 +103,14 @@ impl Body for ReqBody {
 
 /// Returns the request to forward. With `enabled`, an uncompressed
 /// `POST /v1/messages` body is buffered and its Bash tool results minified.
-/// Anything else streams through untouched.
+/// Anything else streams through untouched. A failed buffered read is `400`.
+/// A buffered read that exceeds `read_timeout` after its permit is granted is
+/// `408`: the request is rejected, never forwarded unrewritten.
 pub(crate) async fn prepare(
     req: Request<Incoming>,
     enabled: bool,
-) -> Result<Request<ReqBody>, hyper::Error> {
+    read_timeout: Duration,
+) -> Result<Request<ReqBody>, StatusCode> {
     let eligible = enabled
         && req.method() == Method::POST
         && req.uri().path() == "/v1/messages"
@@ -111,7 +118,7 @@ pub(crate) async fn prepare(
         && !INTEGRITY_HEADERS
             .iter()
             .any(|h| req.headers().contains_key(*h));
-    let (mut parts, mut body) = req.into_parts();
+    let (parts, body) = req.into_parts();
     if !eligible {
         let body = ReqBody {
             prefix: None,
@@ -123,6 +130,16 @@ pub(crate) async fn prepare(
         .acquire()
         .await
         .expect("semaphore is never closed");
+    // The deadline starts at the permit, so time spent queued does not count.
+    match tokio::time::timeout(read_timeout, buffer(parts, body)).await {
+        Ok(Ok(req)) => Ok(req),
+        Ok(Err(_)) => Err(StatusCode::BAD_REQUEST),
+        Err(_) => Err(StatusCode::REQUEST_TIMEOUT),
+    }
+}
+
+/// Buffers up to `MAX_INSPECT_BYTES` of `body` and rewrites it once complete.
+async fn buffer(mut parts: Parts, mut body: Incoming) -> Result<Request<ReqBody>, hyper::Error> {
     let hint = body.size_hint().exact().unwrap_or(0);
     let mut buf = Vec::with_capacity(hint.min(MAX_INSPECT_BYTES as u64 + 1) as usize);
     while let Some(frame) = body.frame().await {

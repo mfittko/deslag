@@ -38,7 +38,7 @@ Runs 2 and 3 used throwaway `jq` hooks to characterize the client. The deslag ad
 
 ### JSON minification (opt-in)
 
-`deslag hook claude --minify-json` and `deslag-proxy --minify-json` remove insignificant whitespace from JSON in Bash tool results only. Both call `deslag_core::minify_json`. The plugin hook in `plugins/claude` does not pass the flag, so it stays a no-op. Neither flag has been run against a live client. Whitespace removal changes bytes; no token saving is claimed.
+`deslag hook claude --minify-json` and `deslag-proxy --minify-json` remove insignificant whitespace from JSON in Bash tool results only. Both call `deslag_core::minify_json`. The plugin hook in `plugins/claude` does not pass the flag, so it stays a no-op. Neither flag has been run against a live client. Token savings from whitespace removal have not been measured.
 
 Status: experimental. The proxy rewrite is stateless and keeps no replay manifest yet.
 
@@ -47,6 +47,7 @@ Status: experimental. The proxy rewrite is stateless and keeps no replay manifes
 - The proxy passes requests with `content-encoding` through unchanged. A client that compresses only some requests would see drift.
 - The proxy passes requests with a body-integrity header (`content-digest`, `digest`, `content-md5`, `x-amz-content-sha256`, `repr-digest`) through unchanged.
 - The proxy does not rewrite `/v1/messages/count_tokens`. Its token counts can overstate the rewritten request.
+- The proxy buffers and rewrites at most 4 eligible requests at once (`INSPECT_PERMITS`). Others wait for a permit. A body over 32 MiB (`MAX_INSPECT_BYTES`) is forwarded unrewritten. A buffered body that does not arrive within `BODY_READ_TIMEOUT` (300 s) of its permit fails with `408`. See the README proxy limits.
 
 ### Pending
 

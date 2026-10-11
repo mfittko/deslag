@@ -49,9 +49,14 @@ async fn proxy(upstream: &str, limits: Limits) -> SocketAddr {
     addr
 }
 
-/// Sends one request on `stream` and reads until the response head is complete.
+/// Sends `REQUEST` on `stream` and returns the response head.
 async fn exchange(stream: &mut TcpStream) -> String {
-    stream.write_all(REQUEST).await.unwrap();
+    send(stream, REQUEST).await
+}
+
+/// Sends `request` on `stream` and reads until the response head is complete.
+async fn send(stream: &mut TcpStream, request: &[u8]) -> String {
+    stream.write_all(request).await.unwrap();
     let mut buf = Vec::new();
     let mut chunk = [0; 1024];
     while !buf.windows(4).any(|w| w == b"\r\n\r\n") {
@@ -172,4 +177,51 @@ async fn idle_upstream_connection_is_closed() {
         .expect("idle upstream connection not closed")
         .unwrap();
     drop(client);
+}
+
+#[tokio::test]
+async fn stalled_minify_uploads_release_permits_at_body_read_timeout() {
+    let (up, _) = mock().await;
+    let body_read_timeout = SHORT * 3;
+    let limits = Limits {
+        body_read_timeout,
+        ..Limits::default()
+    };
+    let upstream = Upstream::parse(&format!("http://{up}"))
+        .unwrap()
+        .with_json_minification();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(serve_with(listener, upstream, limits));
+
+    // Four uploads take every inspection permit, then stall mid-body.
+    let stalled: Vec<_> = (0..4)
+        .map(|_| {
+            tokio::spawn(async move {
+                let mut client = TcpStream::connect(addr).await.unwrap();
+                send(
+                    &mut client,
+                    b"POST /v1/messages HTTP/1.1\r\nhost: proxy\r\ncontent-length: 1000\r\n\r\n{\"messages\"",
+                )
+                .await
+            })
+        })
+        .collect();
+    tokio::time::sleep(SHORT).await;
+
+    let mut healthy = TcpStream::connect(addr).await.unwrap();
+    let head = timeout(
+        WAIT,
+        send(
+            &mut healthy,
+            b"POST /v1/messages HTTP/1.1\r\nhost: proxy\r\ncontent-length: 2\r\n\r\n{}",
+        ),
+    )
+    .await
+    .expect("healthy request blocked behind stalled uploads");
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    for task in stalled {
+        let head = timeout(WAIT, task).await.unwrap().unwrap();
+        assert!(head.starts_with("HTTP/1.1 408"), "{head}");
+    }
 }

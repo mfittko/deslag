@@ -15,12 +15,15 @@ const MAX_DEPTH: usize = 128;
 
 /// Removes insignificant whitespace from a JSON object or array.
 ///
-/// Returns `Some` only if `input` is one valid JSON object or array and the
-/// result is strictly shorter. `None` means: pass the input through unchanged.
 /// Every string, number and literal lexeme is copied byte for byte, so values,
 /// escapes and number precision are preserved. Member and element order is kept.
-/// Inputs with duplicate keys in any object are skipped, because consumers
-/// disagree on which duplicate wins.
+///
+/// `None` means: pass the input through unchanged. It is returned when:
+/// - `input` is a bare scalar, invalid or truncated JSON, or has trailing data;
+/// - any object has a duplicate key, because consumers disagree on which wins;
+/// - any object key contains an escape, because it could hide a duplicate;
+/// - containers nest deeper than 128 levels;
+/// - the input is already minimal, so the result would not be shorter.
 pub fn minify_json(input: &str) -> Option<String> {
     let bytes = input.as_bytes();
     let mut s = Scanner {

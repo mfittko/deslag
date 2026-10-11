@@ -1,6 +1,6 @@
 # Benchmark baseline
 
-PLAN §13.2 budgets remain provisional. This file records measurements only; release thresholds are not frozen here.
+PLAN §13.2 budgets remain provisional. This file records measurements and sets no release thresholds.
 
 ## Metadata
 

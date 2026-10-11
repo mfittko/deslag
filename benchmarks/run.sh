@@ -10,18 +10,21 @@ if [ "$(uname -s)" = Darwin ]; then
   cpu=$(sysctl -n machdep.cpu.brand_string)
   cpus=$(sysctl -n hw.logicalcpu)
 else
-  cpu=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//')
+  # aarch64 kernels print no `model name` line.
+  cpu=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//' || true)
+  [ -n "$cpu" ] || cpu=$(uname -m)
   cpus=$(nproc)
 fi
 dirty=no
-if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
+# The documented redirect truncates baseline.md before this check runs.
+if [ -n "$(git status --porcelain --untracked-files=normal -- . ':!docs/benchmarks/baseline.md')" ]; then
   dirty=yes
 fi
 
 cat <<EOF
 # Benchmark baseline
 
-PLAN §13.2 budgets remain provisional. This file records measurements only; release thresholds are not frozen here.
+PLAN §13.2 budgets remain provisional. This file records measurements and sets no release thresholds.
 
 ## Metadata
 
