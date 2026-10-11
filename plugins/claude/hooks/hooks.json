@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "deslag hook claude"
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/deslag-hook.sh\""
           }
         ]
       }

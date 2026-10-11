@@ -223,6 +223,7 @@ The encoder returns the input unchanged, with a reason, in each of these cases:
 | A row's key order is not a subsequence of the column order | `unsupported_format` |
 | No row has a key | `unsupported_format` |
 | The array has more rows than `max_rows` | `unsupported_format` |
+| The distinct column paths together are longer than the minified input | `unsupported_format` |
 | The input, after leading whitespace, starts with `table-v1` | `unsupported_format` |
 | A string lexeme is not canonical | `unsupported_format` |
 | Containers nest deeper than `max_depth` | `depth_limit` |
