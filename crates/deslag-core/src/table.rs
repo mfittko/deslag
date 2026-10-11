@@ -7,6 +7,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::Write,
+    iter,
 };
 
 use crate::{Limits, Reason, Scanner, TokenCounter, minify};
@@ -166,7 +167,7 @@ pub fn decode(text: &str) -> Option<String> {
         let mut opened = true;
         for (cell, col) in cells.iter().zip(&cols) {
             if col.close > 0 {
-                out.push_str(&"}".repeat(col.close));
+                out.extend(iter::repeat_n('}', col.close));
                 opened = false;
             }
             if matches!(cell, Cell::Bare("")) {
@@ -185,7 +186,7 @@ pub fn decode(text: &str) -> Option<String> {
             push_json_value(&mut out, cell, col.ty)?;
             opened = false;
         }
-        out.push_str(&"}".repeat(cols.last().map_or(0, |c| c.depth)));
+        out.extend(iter::repeat_n('}', cols.last().map_or(0, |c| c.depth)));
         out.push('}');
     }
     out.push(']');
@@ -225,6 +226,10 @@ fn columns(specs: &str) -> Option<Vec<Column<'_>>> {
             return None;
         }
         let segs: Vec<&str> = path.split('.').collect();
+        // Bounds the per-column prefix joins below, which are quadratic in depth.
+        if segs.len() >= crate::MAX_JSON_DEPTH_CEILING {
+            return None;
+        }
         let (leaf, groups) = segs.split_last()?;
         let common = stack.iter().zip(groups).take_while(|(a, b)| a == b).count();
         let close = stack.len() - common;
@@ -420,10 +425,7 @@ fn valid_name(name: &str) -> bool {
 
 /// A column path is one name, or two or more non-empty names joined by `.`.
 fn valid_path(path: &str) -> bool {
-    (!path.contains('.') && valid_name(path))
-        || path
-            .split('.')
-            .all(|seg| !seg.is_empty() && valid_name(seg))
+    valid_name(path) || path.split('.').all(|s| !s.is_empty() && valid_name(s))
 }
 
 /// Quotes a string cell when its bare text would read as missing, `null`, a

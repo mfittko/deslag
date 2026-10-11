@@ -597,6 +597,19 @@ fn decoder_rejects_malformed_text() {
 }
 
 #[test]
+fn decoder_rejects_deep_dotted_column() {
+    let path = |n: usize| vec!["a"; n].join(".");
+    let ceiling = deslag_core::MAX_JSON_DEPTH_CEILING;
+    // Quadratic header parsing would take minutes at this depth.
+    let deep = format!("table-v1 [1]{{{}:int}}\n1", path(1_000_000));
+    assert_eq!(decode(&deep), None);
+    let at = format!("table-v1 [1]{{{}:int}}\n1", path(ceiling));
+    assert_eq!(decode(&at), None);
+    let below = format!("table-v1 [1]{{{}:int}}\n1", path(ceiling - 1));
+    assert!(decode(&below).is_some());
+}
+
+#[test]
 fn decoder_regroups_dotted_columns() {
     assert_eq!(
         decode(

@@ -115,6 +115,7 @@ The decoder splits each column path at `.`. The paths must form one tree, or the
 - The columns under each object path are contiguous, for example `a.x,b,a.y` is invalid.
 - No segment of a dotted path is empty, for example `.a`, `a.` and `a..b` are invalid.
 - An empty unquoted cell in a dotted column is invalid.
+- A column path has fewer than `MAX_JSON_DEPTH_CEILING` (1024) segments. This bounds decoder work for hostile headers.
 
 ### Lexeme preservation
 
