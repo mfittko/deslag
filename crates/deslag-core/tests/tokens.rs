@@ -87,6 +87,9 @@ fn every_estimate_is_labeled() {
     assert_eq!(EstimateCounter.count("").count, 0);
     assert_eq!(EstimateCounter.count(" ").count, 1);
     assert_eq!(EstimateCounter.count("a ").count, 2);
+    // Non-ASCII whitespace runs cost one token per run, like ASCII runs.
+    assert_eq!(EstimateCounter.count("a\u{3000}\u{3000}\u{3000}b").count, 3);
+    assert_eq!(EstimateCounter.count("a\u{00A0}\u{00A0}b").count, 3);
 }
 
 #[test]
