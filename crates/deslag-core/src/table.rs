@@ -84,7 +84,8 @@ struct Paths<'a> {
     /// Parent id, key and joined path length per node, indexed by id.
     nodes: Vec<(usize, &'a str, usize)>,
     /// Joined bytes of all distinct leaf paths. Every leaf path becomes a
-    /// header column, so once this exceeds the input the gain check must fail.
+    /// header column. Once this exceeds the input, the encoder passes the
+    /// input through with `unsupported_format` before any gain check runs.
     leaf_bytes: usize,
 }
 
@@ -403,6 +404,8 @@ fn parse_object<'a>(
         };
         if let Some(value) = value {
             if new {
+                // Leaf-path byte budget: a header longer than the input
+                // passes through as `unsupported_format`.
                 paths.leaf_bytes += paths.nodes[id].2;
                 if paths.leaf_bytes > min.len() {
                     return None;
