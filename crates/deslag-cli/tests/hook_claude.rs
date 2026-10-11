@@ -59,6 +59,8 @@ fn unknown_arguments_print_usage_and_exit_64() {
         &["hook"],
         &["hook", "codex"],
         &["hook", "claude", "x"],
+        &["hook", "claude", "--minify-json", "x"],
+        &["hook", "claude", "--minify-json", "--minify-json"],
     ] {
         let output = run(args, b"");
         assert_eq!(output.status.code(), Some(64), "{args:?}");

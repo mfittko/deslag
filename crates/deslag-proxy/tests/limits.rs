@@ -3,7 +3,7 @@
 use std::{convert::Infallible, net::SocketAddr, time::Duration};
 
 use bytes::Bytes;
-use deslag_proxy::{Limits, Upstream, serve_with};
+use deslag_proxy::{Limits, Upstream, available_inspect_permits, serve_with};
 use http_body_util::Full;
 use hyper::{Request, Response, body::Incoming, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
@@ -182,8 +182,8 @@ async fn idle_upstream_connection_is_closed() {
 #[tokio::test]
 async fn stalled_minify_uploads_release_permits_at_body_read_timeout() {
     let (up, _) = mock().await;
-    // ponytail: wall-clock margins, no public permit hook. The healthy request
-    // can only finish after a stalled permit times out, about 0.8 s after it starts.
+    // ponytail: waits on the hidden permit count instead of a fixed sleep. The
+    // healthy request can only finish after a stalled permit times out.
     let body_read_timeout = Duration::from_secs(1);
     let limits = Limits {
         body_read_timeout,
@@ -209,8 +209,14 @@ async fn stalled_minify_uploads_release_permits_at_body_read_timeout() {
             })
         })
         .collect();
-    // Lets the stalled uploads send headers and a partial body and take every permit.
-    tokio::time::sleep(SHORT * 2).await;
+    // Waits until the stalled uploads hold every permit.
+    timeout(WAIT, async {
+        while available_inspect_permits() > 0 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("stalled uploads never took every permit");
 
     let start = std::time::Instant::now();
     let mut healthy = TcpStream::connect(addr).await.unwrap();

@@ -25,6 +25,9 @@ use tokio::{net::TcpListener, sync::Semaphore};
 
 mod minify;
 
+#[doc(hidden)]
+pub use minify::available_inspect_permits;
+
 type HttpsClient = Client<hyper_rustls::HttpsConnector<HttpConnector>, minify::ReqBody>;
 type ProxyBody = Either<Incoming, Full<Bytes>>;
 

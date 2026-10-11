@@ -50,6 +50,12 @@ const MAX_INSPECT_BYTES: usize = 32 * 1024 * 1024;
 /// Make the permit count configurable via `Limits` if that ceiling is wrong.
 static INSPECT_PERMITS: Semaphore = Semaphore::const_new(4);
 
+/// Free inspection permits. Test readiness hook only.
+#[doc(hidden)]
+pub fn available_inspect_permits() -> usize {
+    INSPECT_PERMITS.available_permits()
+}
+
 /// Headers that pin the exact body bytes; rewriting would break the check.
 const INTEGRITY_HEADERS: [&str; 5] = [
     "content-digest",
