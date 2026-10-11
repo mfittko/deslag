@@ -37,7 +37,7 @@ output of `deslag_core::minify_json` for the pretty file.
 
 - Tool: `tiktoken` 0.14.0, Python 3.14.7.
 - Encodings: `o200k_base` and `cl100k_base`.
-- Date: 2026-10-12.
+- Date: 2026-10-11 (UTC).
 - Command, from the repository root, in a throwaway virtualenv outside the
   repository:
 
