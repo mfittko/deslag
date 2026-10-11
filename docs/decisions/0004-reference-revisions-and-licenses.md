@@ -12,7 +12,7 @@ PLAN §0 requires an inspection of the repository and the upstream reference lic
 
 ### Repository inventory
 
-After commit `42f195f` on branch `issue-5`, the repository tracks these files:
+With this change merged, the repository tracks these files:
 
 | Path | Purpose |
 | --- | --- |
@@ -49,6 +49,7 @@ Headroom at `976aa71`:
 - `NOTICE` exists at the root. It reads `Headroom` / `Copyright 2025 Headroom Contributors` / `This product includes software developed by the Headroom Contributors.` It then lists third-party licenses: tiktoken (MIT), Pydantic (MIT), sentence-transformers (Apache-2.0, optional), FastAPI (MIT, optional), NumPy (BSD-3-Clause, optional), and vendored dashboard assets Tailwind CSS 3.4.17 (MIT) and Alpine.js 3.13.3 (MIT) under `headroom/dashboard/static/`.
 - `plugins/headroom-oauth2/LICENSE` declares `SPDX-License-Identifier: Apache-2.0` and links to the full text.
 - A recursive tree search found no other `LICENSE`, `NOTICE`, `COPYING`, `THIRD_PARTY` or `AUTHORS` files.
+- `sbom/headroom-python-licenses.csv` is a third-party license inventory. It covers the Python distribution only.
 
 llm-proxy at `4ad75cc`:
 
@@ -59,11 +60,11 @@ llm-proxy at `4ad75cc`:
 
 These obligations apply when a later change copies or adapts upstream source:
 
-- Headroom (Apache-2.0, section 4): ship a copy of the Apache License 2.0 with the work. Add a prominent notice to every modified file that states it was changed. Keep all copyright, patent, trademark and attribution notices from the source. Include the attribution notices of the Headroom `NOTICE` file in a `NOTICE` file of deslag. Third-party entries in that `NOTICE` apply only if the copied code includes or depends on those components.
+- Headroom (Apache-2.0, section 4): ship a copy of the Apache License 2.0 with the work. Add a prominent notice to every modified file that states it was changed. Keep all copyright, patent, trademark and attribution notices from the source. Carry the attribution notices of the Headroom `NOTICE` file forward (section 4(d)). deslag policy satisfies section 4(d) with a root `NOTICE` file. Third-party entries in that `NOTICE` apply only if the copied code includes or depends on those components.
 - llm-proxy (MIT): keep the copyright notice `Copyright (c) 2025 Manuel Fittko, sofatutor GmbH` and the MIT permission notice with every copied or substantial portion.
 - Both: record each copied or adapted file with its upstream path and pinned commit, as PLAN §15 requires.
 
-Both upstream licenses are compatible with `MIT OR Apache-2.0` for deslag, provided these notices are kept.
+llm-proxy (MIT) source may be distributed under either deslag license. Headroom (Apache-2.0) source can be included, but copied or adapted Headroom files remain under Apache-2.0, and the MIT option does not cover them. The release license task in PLAN §15 must confirm this before such code ships.
 
 ### No copied source
 

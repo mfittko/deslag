@@ -29,9 +29,9 @@ Structural encodings stay opt-in until paired task evaluations pass. See [PLAN Â
 
 ## Development
 
-Requirements: a Rust toolchain. The toolchain version will be pinned in `rust-toolchain.toml` ([DF-001](https://github.com/mfittko/deslag/issues/5)).
+Requirements: rustup. `rust-toolchain.toml` pins Rust 1.96.0 with rustfmt and clippy. A cargo installed without rustup ignores the pin.
 
-Baseline checks, once the workspace exists:
+Baseline checks (CI runs the same commands):
 
 ```sh
 cargo fmt --all -- --check
