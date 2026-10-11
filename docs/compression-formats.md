@@ -57,12 +57,16 @@ The encoded text is the header line followed by the body.
 
 ### Integration
 
-- The transform is opt-in: `CompressionContext::exact_line_runs`, default
-  `false`.
+- The transform is opt-in: `CompressionContext::exact_line_runs` is `false` in
+  `FIRST_SLICE_JSON_MINIFY_CONTEXT`.
 - With the switch on, input that the JSON scanner rejects as
   `unsupported_format` is plain text and goes to this codec. With
   `json_minify` on, JSON content stays on the JSON path. With `json_minify` off
   and `exact_line_runs` on, all input goes to this codec.
+- The JSON scanner checks key policy and depth before it checks that the whole
+  input is one value. Input whose leading JSON value it rejects for
+  `duplicate_key`, `escaped_key` or `depth_limit` stays on the JSON path and
+  reports that reason, even when lines that are not JSON follow.
 - The core decodes the candidate and compares it with the input. A mismatch
   yields `failed` / `invalid_candidate`.
 - The header, prefix, escape and unit splitting are shared, so a later

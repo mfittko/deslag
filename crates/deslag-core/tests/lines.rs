@@ -86,10 +86,25 @@ fn short_runs_stay_literal() {
 }
 
 #[test]
+fn run_gain_boundary() {
+    // One 12-byte copy equals the 12-byte directive `#!deslag x2\n`: literal.
+    let equal = "abcdefghijk\n".repeat(2);
+    assert_eq!(encode_lines(&equal).unwrap(), format!("{HEADER}{equal}"));
+    // One 13-byte copy is longer than the directive: encoded.
+    let longer = "abcdefghijkl\n".repeat(2);
+    assert_eq!(
+        encode_lines(&longer).unwrap(),
+        format!("{HEADER}abcdefghijkl\n#!deslag x2\n")
+    );
+}
+
+#[test]
 fn no_runs_is_insufficient_gain() {
     let r = compress("one\ntwo\nthree\n", &on(Mode::Safe));
     assert_eq!(r.report.outcome, Outcome::Skipped);
     assert_eq!(r.report.reason, Some(Reason::InsufficientGain));
+    assert_eq!(r.report.validation_outcome, ValidationOutcome::NotRun);
+    assert!(r.report.candidate_bytes.is_some());
     assert_eq!(r.output, "one\ntwo\nthree\n");
 }
 
@@ -141,10 +156,17 @@ fn json_stays_on_the_json_path() {
     let r = compress("{ \"a\" : 1 }\n", &on(Mode::Safe));
     assert_eq!(r.report.transform_id, "json-minify");
     assert_eq!(r.output, "{\"a\":1}");
-    // JSON the scanner rejects for a key policy is not plain text.
+    // The scanner checks key policy before it checks that the input is one value,
+    // so a key-policy rejection keeps the input on the JSON path.
     let dup = "{\"a\":1,\n\"a\":1,\n\"a\":1,\n\"a\":1}";
     let r = compress(dup, &on(Mode::Safe));
     assert_eq!(r.report.reason, Some(Reason::DuplicateKey));
+    // This holds even when text lines follow the rejected leading value.
+    let mixed = format!("{{\"a\":1,\"a\":1}}\n{}", LINE.repeat(20));
+    let r = compress(&mixed, &on(Mode::Safe));
+    assert_eq!(r.report.reason, Some(Reason::DuplicateKey));
+    assert_eq!(r.report.transform_id, "json-minify");
+    assert_eq!(r.output, mixed);
 }
 
 #[test]
@@ -157,6 +179,11 @@ fn line_codec_works_without_json_minify() {
         compress(&LINE.repeat(20), &ctx).report.outcome,
         Outcome::Changed
     );
+    let mut small = ctx;
+    small.limits.min_candidate_bytes = 1000;
+    let r = compress("0123456789", &small).report;
+    assert_eq!(r.reason, Some(Reason::BelowMinBytes));
+    assert_eq!(r.transform_id, "exact-line-runs");
     let neither = CompressionContext {
         exact_line_runs: false,
         ..ctx
@@ -301,14 +328,6 @@ fn header_start_input_reports_unsupported_format() {
     assert_eq!(r.report.format_version, Some(1));
     assert_eq!(r.report.reason, Some(Reason::UnsupportedFormat));
     assert_eq!(r.report.validation_outcome, ValidationOutcome::NotRun);
-}
-
-#[test]
-fn plain_text_without_runs_reports_insufficient_gain() {
-    let r = compress("one\ntwo\nthree\n", &on(Mode::Safe));
-    assert_eq!(r.report.reason, Some(Reason::InsufficientGain));
-    assert_eq!(r.report.validation_outcome, ValidationOutcome::NotRun);
-    assert!(r.report.candidate_bytes.is_some());
 }
 
 #[test]

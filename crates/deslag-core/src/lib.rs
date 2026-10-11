@@ -187,7 +187,8 @@ pub struct CompressionContext<'c> {
     pub policy_version: u32,
     /// Enables the JSON minifier.
     pub json_minify: bool,
-    /// Enables the exact line-run codec for plain text the JSON scanner rejects.
+    /// Enables the exact line-run codec for text the JSON scanner rejects as
+    /// `unsupported_format`. `false` in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
     pub exact_line_runs: bool,
     pub limits: Limits,
     /// Without a counter, every token field in the report is `None`.
@@ -376,6 +377,9 @@ fn decide<'a>(
     if !ctx.json_minify && !ctx.exact_line_runs {
         return Err(Reason::TransformDisabled);
     }
+    if !ctx.json_minify {
+        set_line_runs_identity(report);
+    }
     if input.len() < limits.min_candidate_bytes {
         return Err(Reason::BelowMinBytes);
     }
@@ -398,11 +402,11 @@ fn decide<'a>(
             };
             candidate
         }
-        // Text the JSON scanner rejects is plain text.
+        // Text the JSON scanner rejects as unsupported_format is plain text. A
+        // leading value rejected for duplicate_key, escaped_key or depth_limit
+        // keeps the input on the JSON path, even when text lines follow.
         Err(Reason::UnsupportedFormat) if ctx.exact_line_runs => {
-            report.transform_id = EXACT_LINE_RUNS_ID;
-            report.transform_version = EXACT_LINE_RUNS_VERSION;
-            report.format_version = Some(LINES_FORMAT_VERSION);
+            set_line_runs_identity(report);
             let candidate = encode_lines(input).ok_or(Reason::UnsupportedFormat)?;
             report.candidate_bytes = Some(candidate.len());
             if candidate.len() >= input.len() {
@@ -433,6 +437,12 @@ fn decide<'a>(
     report.emitted_bytes = candidate.len();
     report.emitted_tokens = report.candidate_tokens;
     Ok(Cow::Owned(candidate))
+}
+
+fn set_line_runs_identity(report: &mut CompressionReport) {
+    report.transform_id = EXACT_LINE_RUNS_ID;
+    report.transform_version = EXACT_LINE_RUNS_VERSION;
+    report.format_version = Some(LINES_FORMAT_VERSION);
 }
 
 /// Removes insignificant whitespace from a JSON object or array.
