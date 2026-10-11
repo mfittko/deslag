@@ -41,9 +41,13 @@ install() {
   case "$(uname -s)/$(uname -m)" in
     Darwin/arm64) target=aarch64-apple-darwin ;;
     Linux/x86_64) target=x86_64-unknown-linux-gnu ;;
-    *) die "no deslag release for $(uname -s) $(uname -m); build it with cargo build --release -p deslag-cli and copy target/release/deslag to $bin" ;;
+    *) die "no deslag release for $(uname -s) $(uname -m); build it with cargo build --release -p deslag-cli and copy target/release/deslag to $bin, then run touch $marker so that uninstall removes it" ;;
   esac
-  [ ! -L "$data/bin/$version" ] || die "refusing to install: $data/bin/$version is a symlink"
+  # chmod, the marker write and the prune loop would follow a symlink out of
+  # the data dir, so refuse each symlinked path before touching anything.
+  for dir in "$data/bin" "$data/bin/$version" "$marker"; do
+    [ ! -L "$dir" ] || die "refusing to install: $dir is a symlink"
+  done
   base=${DESLAG_RELEASE_BASE_URL:-https://github.com/mfittko/deslag/releases/download}
   proto='=https'
   [ -z "${DESLAG_RELEASE_BASE_URL:-}" ] || proto='=https,file'

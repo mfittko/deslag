@@ -115,11 +115,11 @@ These zero-cost CLI runs used an isolated `CLAUDE_CONFIG_DIR`. No global setting
 - `claude plugin marketplace add <worktree path>` added the marketplace `deslag`.
 - `claude plugin install deslag@deslag` installed version 0.1.0.
 - After `install.sh` seeded `plugins/data/deslag-deslag`, `claude plugin uninstall deslag@deslag` removed that data directory.
-- `claude plugin marketplace add mfittko/deslag#issue-40` (the GitHub source at the pull request branch) added the marketplace. `claude plugin install deslag@deslag` installed version 0.1.0. The cached plugin holds only `commands`, `hooks` and `scripts`.
+- `claude plugin marketplace add mfittko/deslag#issue-40` (the GitHub source at the pull request branch) added the marketplace. `claude plugin install deslag@deslag` installed version 0.1.0. The cached plugin holds the plugin manifest `.claude-plugin/plugin.json` plus the `commands`, `hooks` and `scripts` directories.
 
 The pre-PR review fixes between runs 7 and 12 cover symlinked version dirs, the cleanup trap, quoted command paths, download timeouts, status detection, scoped uninstall and the missing-subcommand usage message.
 
 ### Pending
 
-- `/plugin marketplace add mfittko/deslag` against `main`. This needs the merge. The same GitHub source at the branch ref passed.
+- `/plugin marketplace add mfittko/deslag` against `main`. This needs the merge. The same GitHub source at the branch ref `mfittko/deslag#issue-40` passed. That branch-ref run is the accepted pre-merge evidence for the acceptance criterion "`/plugin marketplace add mfittko/deslag` lists the plugin". The post-merge run against `main` completes it.
 - `/deslag:install` against a published release.

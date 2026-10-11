@@ -40,17 +40,23 @@ sha256() { if command -v sha256sum >/dev/null; then sha256sum "$@"; else shasum 
 version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$root/.claude-plugin/plugin.json")
 targets="aarch64-apple-darwin x86_64-unknown-linux-gnu"
 
-# make_release <dir> <payload>: one archive per target with a fake `deslag`
-# that prints <payload>, its args and its stdin, plus SHA256SUMS.
+# make_release <dir> <payload> [renamed|symlink]: one archive per target with a
+# fake `deslag` that prints <payload>, its args and its stdin, plus SHA256SUMS.
+# `renamed` packs a wrong top directory; `symlink` packs deslag as a symlink.
 make_release() {
-  local dir=$1/v$version stage t
+  local dir=$1/v$version stage t top
   mkdir -p "$dir"
   for t in $targets; do
     stage=$(mktemp -d "$tmp/stage.XXXXXX")
-    mkdir "$stage/deslag-$version-$t"
-    printf '#!/bin/sh\necho "%s $*"\ncat\n' "$2" >"$stage/deslag-$version-$t/deslag"
-    chmod +x "$stage/deslag-$version-$t/deslag"
-    COPYFILE_DISABLE=1 tar -C "$stage" -czf "$dir/deslag-$version-$t.tar.gz" "deslag-$version-$t"
+    top=deslag-$version-$t
+    [ "${3:-}" != renamed ] || top=other-$t
+    mkdir "$stage/$top"
+    printf '#!/bin/sh\necho "%s $*"\ncat\n' "$2" >"$stage/$top/deslag"
+    chmod +x "$stage/$top/deslag"
+    if [ "${3:-}" = symlink ]; then
+      command mv "$stage/$top/deslag" "$stage/$top/real" && ln -s real "$stage/$top/deslag"
+    fi
+    COPYFILE_DISABLE=1 tar -C "$stage" -czf "$dir/deslag-$version-$t.tar.gz" "$top"
   done
   (cd "$dir" && sha256 ./*.tar.gz | sed 's| \./| |' >SHA256SUMS)
 }
@@ -91,6 +97,13 @@ noline=$tmp/noline && make_release "$noline" fake-deslag
 expect_fail "install rejects an archive missing from SHA256SUMS" "no checksum" run_install "$noline" "$tmp/data-noline" install
 expect_eq "missing checksum installs nothing" "" "$(ls "$tmp/data-noline/bin" 2>/dev/null || true)"
 
+make_release "$tmp/renamed" fake-deslag renamed
+expect_fail "install rejects an archive with a wrong top directory" "archive has no" run_install "$tmp/renamed" "$tmp/data-renamed" install
+expect_eq "wrong top directory installs nothing" "" "$(ls "$tmp/data-renamed/bin" 2>/dev/null || true)"
+make_release "$tmp/symmember" fake-deslag symlink
+expect_fail "install rejects a symlinked deslag member" "regular file" run_install "$tmp/symmember" "$tmp/data-symmember" install
+expect_eq "symlinked deslag member installs nothing" "" "$(ls "$tmp/data-symmember/bin" 2>/dev/null || true)"
+
 expect_fail "install fails when the release is missing" "download" run_install "$tmp/nowhere" "$tmp/data-404" install
 expect_fail "install requires a data dir" "CLAUDE_PLUGIN_DATA" run_install "$good" "" install
 expect_fail "install refuses a relative data dir" "absolute" run_install "$good" "rel/data" install
@@ -117,6 +130,20 @@ mkdir -p "$tmp/linked-cur" && echo keep >"$tmp/linked-cur/deslag"
 mkdir -p "$tmp/data-curlink/bin" && ln -s "$tmp/linked-cur" "$tmp/data-curlink/bin/$version"
 expect_fail "install refuses a symlinked current version dir" "symlink" run_install "$good" "$tmp/data-curlink" install
 expect_eq "refused install leaves the link target unchanged" "deslag:keep" "$(ls -A "$tmp/linked-cur"):$(cat "$tmp/linked-cur/deslag")"
+
+# A symlinked bin dir would let chmod and the prune loop act on its target.
+mkdir -p "$tmp/linked-bin" && echo keep >"$tmp/linked-bin/notes.txt" && chmod 755 "$tmp/linked-bin"
+mkdir -p "$tmp/data-binlink" && ln -s "$tmp/linked-bin" "$tmp/data-binlink/bin"
+expect_fail "install refuses a symlinked bin dir" "symlink" run_install "$good" "$tmp/data-binlink" install
+expect_eq "refused install leaves the bin link target unchanged" "notes.txt:keep:755" \
+  "$(ls -A "$tmp/linked-bin"):$(cat "$tmp/linked-bin/notes.txt"):$(mode "$tmp/linked-bin")"
+
+# A symlinked marker would let the marker write truncate its target.
+echo keep >"$tmp/linked-marker"
+mkdir -p "$tmp/data-markerlink" && ln -s "$tmp/linked-marker" "$tmp/data-markerlink/.deslag-data"
+expect_fail "install refuses a symlinked marker" "symlink" run_install "$good" "$tmp/data-markerlink" install
+expect_eq "refused install leaves the marker link target unchanged" keep "$(cat "$tmp/linked-marker")"
+expect_eq "refused marker install creates no bin dir" absent "$([ -e "$tmp/data-markerlink/bin" ] && echo present || echo absent)"
 
 # A user-managed binary on PATH is never touched.
 mkdir -p "$tmp/userbin" && printf '#!/bin/sh\necho user\n' >"$tmp/userbin/deslag" && chmod 755 "$tmp/userbin/deslag"
@@ -201,6 +228,11 @@ echo keep >"$tmp/data-extra/user-file"
 expect_fail "uninstall leaves a data dir with unknown content" "did not create" run_install "$good" "$tmp/data-extra" uninstall
 expect_eq "uninstall keeps unknown content" keep "$(cat "$tmp/data-extra/user-file")"
 expect_eq "uninstall still removes what install created" "user-file" "$(ls -A "$tmp/data-extra")"
+# The README manual-copy path: copy the binary, then touch the marker.
+mkdir -p "$tmp/data-manual/bin/$version" && printf '#!/bin/sh\n' >"$tmp/data-manual/bin/$version/deslag"
+touch "$tmp/data-manual/.deslag-data"
+expect_ok "uninstall removes a manually copied binary with the marker" run_install "$good" "$tmp/data-manual" uninstall
+expect_eq "manual-copy uninstall removes the data dir" absent "$([ -e "$tmp/data-manual" ] && echo present || echo absent)"
 
 if [ "$failures" -ne 0 ]; then echo "$failures test(s) failed" >&2; exit 1; fi
 echo "all plugin tests passed"
