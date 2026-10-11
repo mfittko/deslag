@@ -13,6 +13,9 @@ pub use lines::{
 
 use std::{borrow::Cow, collections::HashSet, fmt::Write, time::Duration, time::Instant};
 
+mod tokens;
+pub use tokens::EstimateCounter;
+
 /// Crate version, as set in the workspace manifest.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
