@@ -26,8 +26,10 @@ Example:
 ## The CI check
 
 The `changelog` workflow fails a pull request that changes files under
-`crates/` or `plugins/` and adds or modifies no fragment. A change with no
-user-visible effect opts out with a pull request body line that reads exactly:
+`crates/` or `plugins/` and adds, renames or modifies no fragment. It also
+fails when an added, renamed or modified fragment breaks the rules above or has
+no entry; `bump.sh` applies the same rules. A change with no user-visible
+effect opts out with a pull request body line that reads exactly:
 
 ```text
 changelog: none
