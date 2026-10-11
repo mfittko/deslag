@@ -113,6 +113,8 @@ Each run used a throwaway project directory, `--setting-sources project,local`, 
 
 Total: USD 0.00933671. Runs 1-7 used the scripts before the pre-PR review fixes. Runs 12-16 used the scripts at commit 9e498e83e100a6e3216364740e182dc743e9dd16. Runs 17-19 used the scripts at commit eb1708138a311bcd8eec4dd94a81c4d03a72179f. The refusals of a symlinked bin dir, version dir, binary path and marker are covered by `tests/plugin/test.sh` only.
 
+Runs 1-16 and the CLI runs below used plugin version 0.1.0. They predate the v0.1.0-alpha.1 bump (468d3dbbc7a936991f7a5c25f6dee632c6e42d34), which reached this branch through merge 961a45e865c9362e30cd4b2e3474fd98c49f1087. Run 17 used commit eb1708138a311bcd8eec4dd94a81c4d03a72179f, which also predates that merge, so the copy needed the version override. The exact commit under test in the CLI runs was not recorded. They were recorded in commits 8b0b073048fc96315de77713860cdccab14c73a1 (local marketplace) and b4123b0bfffbd51c17cb533664cc04dc35a134bf (GitHub source at the branch ref).
+
 These zero-cost CLI runs used an isolated `CLAUDE_CONFIG_DIR`. No global settings were touched.
 
 - `claude plugin marketplace add <worktree path>` added the marketplace `deslag`.

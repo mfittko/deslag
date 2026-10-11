@@ -72,7 +72,7 @@ The plugin does not download anything on its own. Run `/deslag:install` once aft
 - `/deslag:status` reports whether the matching binary is installed and how to fix it.
 - `/deslag:uninstall` removes the installed binary and then the plugin data directory. It leaves the directory in place when it holds files that `/deslag:install` did not create. `/plugin uninstall deslag@deslag` also removes the data directory.
 
-For a local checkout, `claude --plugin-dir plugins/claude` loads the plugin. Its hook also needs `/deslag:install`, or a binary built with `cargo build --release -p deslag-cli` and copied to `$CLAUDE_PLUGIN_DATA/bin/<version>/deslag`. After a manual copy, run `touch "$CLAUDE_PLUGIN_DATA/.deslag-data"` so that `/deslag:uninstall` recognizes the data directory and removes the binary.
+For a local checkout, `claude --plugin-dir plugins/claude` loads the plugin. Its hook also needs `/deslag:install`, or a binary built with `cargo build --release -p deslag-cli` and copied to `<data dir>/bin/<version>/deslag`. The data dir is `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/data/<plugin id>/`. The plugin id is `deslag-deslag` for the marketplace install; for another install, list `plugins/data/` under the config dir. Claude Code does not export the plugin data path to your shell, so use the concrete path. After a manual copy, run `touch "<data dir>/.deslag-data"` so that `/deslag:uninstall` recognizes the data directory and removes the binary.
 
 Benchmarks: `benchmarks/run.sh > docs/benchmarks/baseline.md` runs all runners in release mode and records machine and commit metadata. The committed [baseline](docs/benchmarks/baseline.md) is a measurement only; PLAN §13.2 budgets stay provisional.
 
