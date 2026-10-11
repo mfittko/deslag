@@ -63,7 +63,11 @@ The encoded text is the header line followed by the body.
 - With the switch on, input that the JSON scanner rejects as
   `unsupported_format` is plain text and goes to this codec. With
   `json_minify` on, JSON content stays on the JSON path. With `json_minify` off
-  and `exact_line_runs` on, all input goes to this codec.
+  and `exact_line_runs` on, input that table-v1 rejects as `unsupported_format`
+  goes to this codec, or all input when `json_table` is off. Other table-v1
+  rejections (`insufficient_gain`, `duplicate_key`, `escaped_key`,
+  `depth_limit`) skip with that reason and the `json-table` id (see table-v1,
+  Pipeline and configuration).
 - The JSON scanner checks key policy and depth before it checks that the whole
   input is one value. Input whose leading JSON value it rejects for
   `duplicate_key`, `escaped_key` or `depth_limit` stays on the JSON path and
@@ -232,3 +236,41 @@ The encoder returns the input unchanged, with a reason, in each of these cases:
 The gain check compares the encoded text, header included, with the minified original. Let `m` be the minified byte length and `e` the encoded byte length. Encoding applies only when `e < m` and `(m - e) * 1000 >= min_savings_permille * m`. When a token counter is set, the minified original must also have at least `min_token_savings` more tokens than the encoded text.
 
 `TableOptions::default()` sets `max_rows` to 20000, `min_savings_permille` to 100, `min_token_savings` to 64 and `max_depth` to 64, with no token counter.
+
+### Markdown-KV (evaluation only)
+
+`deslag_core::table::render_markdown_kv` renders the same table as a Markdown list. It exists so the evaluation harness can compare read-back accuracy against the CSV form. It has no decoder, and no `CompressionContext` setting selects it.
+
+It applies the same eligibility rules and the same gain check as `encode`. The gain check runs on the CSV form. The renderer returns no value exactly when `encode` fails.
+
+The output starts with the same header line as the CSV form. Each row follows as one list item:
+
+- The first field is written as `- key: value`. Each further field is written on its own line as `  key: value`, indented two spaces.
+- A nested leaf uses its dotted column path as the key, for example `meta.region`.
+- A missing field is omitted. A row with no fields is a bare `-`.
+- Each value is written exactly as its CSV cell, with the same quoting rules.
+- A value with line breaks continues on further lines. Each line break (`\r\n`, a lone `\r` or `\n`) is written as `\n`, and each line after the first is indented two spaces, the item indent. Value text therefore cannot start a new top-level row item. An indented continuation line can still read as a nested list item inside the row.
+
+The example below is illustrative. It is rendered with `min_savings_permille: 0`; the default gain check rejects an input this small.
+
+```text
+table-v1 [2]{id:int,name:str,meta.region:str}
+- id: 1
+  name: ""
+  meta.region: eu
+- id: 2
+  meta.region: "null"
+```
+
+### Pipeline and configuration
+
+`compress` tries table-v1 only when `CompressionContext.json_table` is true. The switch is opt-in. It is false in `FIRST_SLICE_JSON_MINIFY_CONTEXT`.
+
+When the switch is on, `compress` calls `encode` with `max_rows` set to `Limits::max_table_rows` (default 20000), `max_depth` set to `Limits::max_json_depth` and the context's token counter. The other thresholds keep their `TableOptions::default()` values. The size limits and mode checks apply first, as for the minifier.
+
+- If the input is eligible, `compress` decodes the encoded text and compares it with the minified original. A mismatch fails with `invalid_candidate` and validation outcome `failed`. Otherwise the report has transform id `json-table`, transform version 1 and format version 1. The byte and token fields are filled as for the minifier. Observe mode emits the original with outcome `would_change`.
+- If the input is ineligible and `json_minify` is true, `compress` runs the JSON minifier unchanged and reports it as `json-minify`.
+- If the input is ineligible and `json_minify` is false, `compress` skips with the table-v1 reason and transform id `json-table`. The format version is `null`, because no candidate was built.
+- If `exact_line_runs` is also true, input that the JSON transforms reject as `unsupported_format` goes to the lines-v1 codec as described in its Integration section. The report then has transform id `exact-line-runs`. The report names one selected transform: table-v1, else the minifier, else the line-run codec. More than one transform can run. When `json_minify` is true, an ineligible table-v1 input falls through to the minifier. An eligible table-v1 candidate is always validated against the minified original.
+- If `json_table` is true and `json_minify` is false, every other skip reports transform id `json-table`, including the mode and size checks that run before encoding.
+- If `json_table`, `json_minify` and `exact_line_runs` are all false, `compress` skips with `transform_disabled`.

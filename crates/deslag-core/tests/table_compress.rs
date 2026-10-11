@@ -1,0 +1,351 @@
+use std::borrow::Cow;
+
+use deslag_core::{
+    CompressionContext, CompressionResult, FIRST_SLICE_JSON_MINIFY_CONTEXT, JSON_MINIFY_ID,
+    JSON_MINIFY_VERSION, JSON_TABLE_FORMAT_VERSION, JSON_TABLE_ID, JSON_TABLE_VERSION, Limits,
+    Mode, Outcome, Reason, TableOptions, TokenCount, TokenCounter, TokenMethod, ValidationOutcome,
+    compress, minify_json,
+    table::{MARKER, decode, encode, render_markdown_kv},
+};
+
+struct Bytes;
+
+impl TokenCounter for Bytes {
+    fn count(&self, text: &str) -> TokenCount {
+        TokenCount {
+            count: text.len() as u64,
+            method: TokenMethod::Estimate,
+            tokenizer: "bytes",
+        }
+    }
+}
+
+/// `n` pretty-printed uniform rows: eligible for table-v1 with ample gain.
+fn rows(n: usize) -> String {
+    let items: Vec<String> = (0..n)
+        .map(|i| format!("  {{ \"id\": {i}, \"name\": \"user-{i}\", \"active\": true }}"))
+        .collect();
+    format!("[\n{}\n]", items.join(",\n"))
+}
+
+/// Pretty object: the minifier applies, table-v1 does not.
+const OBJECT: &str = "{ \"a\": 1,  \"b\": [1, 2] }";
+
+fn ctx(mode: Mode, json_minify: bool, json_table: bool) -> CompressionContext<'static> {
+    CompressionContext {
+        mode,
+        json_minify,
+        json_table,
+        ..FIRST_SLICE_JSON_MINIFY_CONTEXT
+    }
+}
+
+fn borrowed(result: &CompressionResult<'_>, input: &str) -> bool {
+    matches!(&result.output, Cow::Borrowed(s) if std::ptr::eq(*s, input))
+}
+
+#[test]
+fn table_is_off_by_default() {
+    const { assert!(!FIRST_SLICE_JSON_MINIFY_CONTEXT.json_table) };
+    assert_eq!(Limits::default().max_table_rows, 20_000);
+    assert_eq!(
+        FIRST_SLICE_JSON_MINIFY_CONTEXT.limits.max_table_rows,
+        20_000
+    );
+    let input = rows(10);
+    let result = compress(&input, &FIRST_SLICE_JSON_MINIFY_CONTEXT);
+    assert_eq!(result.report.outcome, Outcome::Changed);
+    assert_eq!(result.report.transform_id, JSON_MINIFY_ID);
+    assert_eq!(result.report.format_version, None);
+    assert!(!result.output.starts_with(MARKER));
+    assert!(!minify_json(&input).unwrap().starts_with(MARKER));
+}
+
+#[test]
+fn table_on_emits_validated_table_v1() {
+    let input = rows(10);
+    let counter = Bytes;
+    let ctx = CompressionContext {
+        token_counter: Some(&counter),
+        ..ctx(Mode::Safe, true, true)
+    };
+    let result = compress(&input, &ctx);
+    let r = &result.report;
+    assert_eq!(r.outcome, Outcome::Changed);
+    assert_eq!(r.reason, None);
+    assert_eq!(r.transform_id, JSON_TABLE_ID);
+    assert_eq!(r.transform_version, JSON_TABLE_VERSION);
+    assert_eq!(r.format_version, Some(JSON_TABLE_FORMAT_VERSION));
+    assert_eq!(r.validation_outcome, ValidationOutcome::Passed);
+    assert_eq!(r.original_bytes, input.len());
+    assert_eq!(r.candidate_bytes, Some(result.output.len()));
+    assert_eq!(r.emitted_bytes, result.output.len());
+    assert_eq!(r.original_tokens, Some(counter.count(&input)));
+    assert_eq!(r.candidate_tokens, Some(counter.count(&result.output)));
+    assert_eq!(r.emitted_tokens, r.candidate_tokens);
+    assert!(
+        result
+            .output
+            .starts_with("table-v1 [10]{id:int,name:str,active:bool}\n")
+    );
+    assert_eq!(decode(&result.output), minify_json(&input));
+    assert!(r.to_json().contains(r#""transform_id":"json-table""#));
+    assert!(r.to_json().contains(r#""format_version":1"#));
+}
+
+#[test]
+fn observe_emits_original_with_would_change() {
+    let input = rows(10);
+    let result = compress(&input, &ctx(Mode::Observe, true, true));
+    assert!(borrowed(&result, &input));
+    let r = &result.report;
+    assert_eq!(r.outcome, Outcome::WouldChange);
+    assert_eq!(r.transform_id, JSON_TABLE_ID);
+    assert_eq!(r.emitted_bytes, input.len());
+    assert!(r.candidate_bytes.unwrap() < input.len());
+}
+
+#[test]
+fn ineligible_input_falls_back_to_minify() {
+    let result = compress(OBJECT, &ctx(Mode::Safe, true, true));
+    let r = &result.report;
+    assert_eq!(r.outcome, Outcome::Changed);
+    assert_eq!(r.transform_id, JSON_MINIFY_ID);
+    assert_eq!(r.transform_version, JSON_MINIFY_VERSION);
+    assert_eq!(r.format_version, None);
+    assert_eq!(result.output, minify_json(OBJECT).unwrap());
+}
+
+#[test]
+fn max_table_rows_is_enforced() {
+    let input = rows(10);
+    let mut ctx = ctx(Mode::Safe, true, true);
+    ctx.limits.max_table_rows = 10;
+    assert_eq!(compress(&input, &ctx).report.transform_id, JSON_TABLE_ID);
+    ctx.limits.max_table_rows = 9;
+    let result = compress(&input, &ctx);
+    assert_eq!(result.report.transform_id, JSON_MINIFY_ID);
+    assert_eq!(result.report.outcome, Outcome::Changed);
+    ctx.json_minify = false;
+    let result = compress(&input, &ctx);
+    assert_eq!(result.report.reason, Some(Reason::UnsupportedFormat));
+    assert!(borrowed(&result, &input));
+}
+
+#[test]
+fn table_only_reports_the_table_reason() {
+    let table_only = ctx(Mode::Safe, false, true);
+    let result = compress(OBJECT, &table_only);
+    let r = &result.report;
+    assert!(borrowed(&result, OBJECT));
+    assert_eq!(r.outcome, Outcome::Skipped);
+    assert_eq!(r.reason, Some(Reason::UnsupportedFormat));
+    assert_eq!(r.transform_id, JSON_TABLE_ID);
+    assert_eq!(r.candidate_bytes, None);
+    let short = r#"[{"a":1},{"a":2}]"#;
+    assert_eq!(
+        compress(short, &table_only).report.reason,
+        Some(Reason::InsufficientGain)
+    );
+    assert_eq!(
+        compress(&rows(10), &ctx(Mode::Safe, false, false))
+            .report
+            .reason,
+        Some(Reason::TransformDisabled)
+    );
+}
+
+#[test]
+fn table_only_early_skips_report_json_table() {
+    let mut table_only = ctx(Mode::Off, false, true);
+    let check = |ctx: &CompressionContext, input: &str, reason| {
+        let r = compress(input, ctx).report;
+        assert_eq!(r.reason, Some(reason));
+        assert_eq!(r.transform_id, JSON_TABLE_ID);
+        assert_eq!(r.transform_version, JSON_TABLE_VERSION);
+        assert_eq!(r.format_version, None);
+    };
+    check(&table_only, &rows(10), Reason::ModeOff);
+    table_only.mode = Mode::Safe;
+    table_only.limits.min_candidate_bytes = 3;
+    check(&table_only, "[]", Reason::BelowMinBytes);
+    table_only.limits.min_candidate_bytes = 0;
+    table_only.limits.max_candidate_bytes = 4;
+    check(&table_only, &rows(10), Reason::AboveMaxBytes);
+}
+
+fn lenient() -> TableOptions<'static> {
+    TableOptions {
+        min_savings_permille: 0,
+        ..TableOptions::default()
+    }
+}
+
+#[test]
+fn markdown_kv_renders_rows_as_list_items() {
+    let input = r#"[
+      {"id": 1, "name": "a", "note": null, "meta": {"region": "eu"}},
+      {"id": 2, "name": "", "meta": {"region": "null"}},
+      {"id": 3, "name": "1.5", "note": "x, \"y\"", "meta": {"region": "true"}}
+    ]"#;
+    let kv = render_markdown_kv(input, &lenient()).unwrap();
+    assert_eq!(
+        kv,
+        "table-v1 [3]{id:int,name:str,note:str,meta.region:str}\n\
+         - id: 1\n  name: a\n  note: null\n  meta.region: eu\n\
+         - id: 2\n  name: \"\"\n  meta.region: \"null\"\n\
+         - id: 3\n  name: \"1.5\"\n  note: \"x, \"\"y\"\"\"\n  meta.region: \"true\""
+    );
+    let csv = encode(input, &lenient()).unwrap();
+    assert_eq!(kv.lines().next(), csv.lines().next());
+}
+
+#[test]
+fn markdown_kv_indents_multi_line_values() {
+    let input = r#"[{"id":1,"text":"line1\nline2\n- fake: item"},{"id":2,"text":"ok"},{"id":3,"text":"a\r- id: 9\r\nb"}]"#;
+    let kv = render_markdown_kv(input, &lenient()).unwrap();
+    assert_eq!(
+        kv,
+        "table-v1 [3]{id:int,text:str}\n\
+         - id: 1\n  text: \"line1\n  line2\n  - fake: item\"\n\
+         - id: 2\n  text: ok\n\
+         - id: 3\n  text: \"a\n  - id: 9\n  b\""
+    );
+    assert_rows_only(&kv, 3);
+}
+
+/// Asserts that no raw CR survives and that every line after the header is a
+/// row start or an indented field or continuation line.
+fn assert_rows_only(kv: &str, row_starts: usize) {
+    assert!(!kv.contains('\r'), "{kv:?}");
+    let mut rows = 0;
+    for line in kv.split('\n').skip(1) {
+        if line.starts_with("- id: ") {
+            rows += 1;
+        } else {
+            assert!(line.starts_with("  "), "column-0 text in {kv:?}");
+        }
+    }
+    assert_eq!(rows, row_starts, "{kv:?}");
+}
+
+#[test]
+fn markdown_kv_indents_lf_values() {
+    let input = r#"[{"id":1,"text":"a\n- id: 99"},{"id":2,"text":"ok"}]"#;
+    let kv = render_markdown_kv(input, &lenient()).unwrap();
+    assert!(kv.contains("text: \"a\n  - id: 99\""), "{kv:?}");
+    assert_rows_only(&kv, 2);
+}
+
+#[test]
+fn markdown_kv_indents_crlf_values() {
+    let input = r#"[{"id":1,"text":"a\r\n- id: 99"},{"id":2,"text":"ok"}]"#;
+    let kv = render_markdown_kv(input, &lenient()).unwrap();
+    assert!(kv.contains("text: \"a\n  - id: 99\""), "{kv:?}");
+    assert_rows_only(&kv, 2);
+}
+
+#[test]
+fn markdown_kv_indents_lone_cr_values() {
+    let input = r#"[{"id":1,"text":"a\r- id: 99"},{"id":2,"text":"ok"}]"#;
+    let kv = render_markdown_kv(input, &lenient()).unwrap();
+    assert!(kv.contains("text: \"a\n  - id: 99\""), "{kv:?}");
+    assert_rows_only(&kv, 2);
+}
+
+#[test]
+fn markdown_kv_never_emits_raw_cr_with_column_0_text() {
+    let input = r#"[{"id":1,"t":"a\r- fake: item\rb\r\nc"},{"id":2,"t":"x\r\r- id: 3"}]"#;
+    let kv = render_markdown_kv(input, &lenient()).unwrap();
+    assert_rows_only(&kv, 2);
+}
+
+#[test]
+fn markdown_kv_renders_an_empty_row_as_a_bare_dash() {
+    let input = r#"[{"a_long_key_name":1},{},{"a_long_key_name":2}]"#;
+    assert_eq!(
+        render_markdown_kv(input, &lenient()).unwrap(),
+        "table-v1 [3]{a_long_key_name:int}\n- a_long_key_name: 1\n-\n- a_long_key_name: 2"
+    );
+}
+
+#[test]
+fn markdown_kv_follows_encoder_eligibility() {
+    for input in [OBJECT, r#"[{"a":1}]"#, r#"[{"a":[1]},{"a":[2]}]"#] {
+        assert_eq!(render_markdown_kv(input, &lenient()), None, "{input}");
+    }
+    // The gain check applies to the CSV form, as for `encode`.
+    let short = r#"[{"a":1},{"a":2}]"#;
+    assert!(encode(short, &TableOptions::default()).is_err());
+    assert_eq!(render_markdown_kv(short, &TableOptions::default()), None);
+}
+
+#[test]
+fn compress_never_selects_markdown_kv() {
+    let input = rows(10);
+    let kv = render_markdown_kv(&input, &TableOptions::default()).unwrap();
+    for mode in [Mode::Off, Mode::Observe, Mode::Safe] {
+        for json_minify in [false, true] {
+            for json_table in [false, true] {
+                let ctx = ctx(mode, json_minify, json_table);
+                let result = compress(&input, &ctx);
+                assert_ne!(result.output, kv);
+                assert!(
+                    !result.output.lines().any(|l| l.starts_with("- ")),
+                    "{mode:?} {json_minify} {json_table}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn table_and_line_runs_route_by_input() {
+    let text = "connection refused by upstream\n".repeat(20);
+    let table = rows(10);
+    for json_minify in [false, true] {
+        let ctx = CompressionContext {
+            exact_line_runs: true,
+            ..ctx(Mode::Safe, json_minify, true)
+        };
+        // A table-eligible array goes to table-v1 only.
+        let r = compress(&table, &ctx);
+        assert_eq!(r.report.transform_id, JSON_TABLE_ID, "{json_minify}");
+        assert_eq!(decode(&r.output).unwrap(), minify_json(&table).unwrap());
+        // Plain text goes to the line-run codec only.
+        let r = compress(&text, &ctx);
+        assert_eq!(r.report.outcome, Outcome::Changed, "{json_minify}");
+        assert_eq!(r.report.transform_id, "exact-line-runs");
+        assert_eq!(
+            deslag_core::decode_lines(&r.output, text.len()).unwrap(),
+            text
+        );
+        // An object table-v1 rejects goes to the minifier when it is on.
+        let r = compress(OBJECT, &ctx);
+        let want = if json_minify {
+            JSON_MINIFY_ID
+        } else {
+            "exact-line-runs"
+        };
+        assert_eq!(r.report.transform_id, want);
+    }
+    // With json_minify off, a table-v1 rejection other than unsupported_format
+    // skips with that reason and never reaches the line-run codec.
+    let lines_no_minify = CompressionContext {
+        exact_line_runs: true,
+        ..ctx(Mode::Safe, false, true)
+    };
+    let r = compress(r#"[{"a":1},{"a":2}]"#, &lines_no_minify).report;
+    assert_eq!(r.outcome, Outcome::Skipped);
+    assert_eq!(r.reason, Some(Reason::InsufficientGain));
+    assert_eq!(r.transform_id, JSON_TABLE_ID);
+    // With every transform switch off, compress skips with TransformDisabled.
+    let none = CompressionContext {
+        exact_line_runs: false,
+        ..ctx(Mode::Safe, false, false)
+    };
+    assert_eq!(
+        compress(&text, &none).report.reason,
+        Some(Reason::TransformDisabled)
+    );
+}

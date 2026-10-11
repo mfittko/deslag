@@ -150,6 +150,8 @@ pub struct Limits {
     /// Clamped to [`MAX_JSON_DEPTH_CEILING`], so no caller value can make the
     /// recursive scanner overflow the stack.
     pub max_json_depth: usize,
+    /// Arrays with more rows are never encoded as table-v1.
+    pub max_table_rows: usize,
 }
 
 /// Hard upper bound on [`Limits::max_json_depth`].
@@ -162,6 +164,7 @@ impl Default for Limits {
             min_candidate_bytes: 2048,
             max_candidate_bytes: 2_097_152,
             max_json_depth: 64,
+            max_table_rows: 20_000,
         }
     }
 }
@@ -203,13 +206,18 @@ pub trait TokenCounter {
 pub struct CompressionContext<'c> {
     pub mode: Mode,
     pub policy_version: u32,
-    /// Enables the JSON minifier.
+    /// Enables the JSON minifier. Also the fallback when table-v1 does not apply.
     pub json_minify: bool,
+    /// Enables the table-v1 encoder, tried before the minifier. Opt-in: it
+    /// is false in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
+    pub json_table: bool,
     /// Enables the exact line-run codec. With `json_minify` on, the codec
     /// handles text the JSON scanner rejects as `unsupported_format`. With
-    /// `json_minify` off, all input goes to the codec. The codec skips input
-    /// that already starts with the `lines-v1` header as `unsupported_format`.
-    /// `false` in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
+    /// `json_minify` off, input table-v1 rejects as `unsupported_format` (all
+    /// input when `json_table` is off) goes to the codec. Other table-v1
+    /// rejections skip with their reason and the `json-table` id.
+    /// The codec skips input that already starts with the `lines-v1` header as
+    /// `unsupported_format`. `false` in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
     pub exact_line_runs: bool,
     pub limits: Limits,
     /// Without a counter, every token field in the report is `None`.
@@ -222,11 +230,13 @@ pub const FIRST_SLICE_JSON_MINIFY_CONTEXT: CompressionContext<'static> = Compres
     mode: Mode::Safe,
     policy_version: 1,
     json_minify: true,
+    json_table: false,
     exact_line_runs: false,
     limits: Limits {
         min_candidate_bytes: 0,
         max_candidate_bytes: usize::MAX,
         max_json_depth: 128,
+        max_table_rows: 20_000,
     },
     token_counter: None,
 };
@@ -348,8 +358,10 @@ impl CompressionResult<'_> {
     }
 }
 
-/// Runs the enabled transforms under `ctx`. Any skip or failure returns the input
-/// borrowed, never a partial rewrite.
+/// Runs the enabled transforms under `ctx`: table-v1 first, then the JSON
+/// minifier, then the exact line-run codec for input the JSON transforms reject
+/// as unsupported_format. Any skip or failure returns the input borrowed, never
+/// a partial rewrite.
 pub fn compress<'a>(input: &'a str, ctx: &CompressionContext) -> CompressionResult<'a> {
     let start = Instant::now();
     let mut report = CompressionReport {
@@ -392,13 +404,18 @@ fn decide<'a>(
     report: &mut CompressionReport,
 ) -> Result<Cow<'a, str>, Reason> {
     let limits = &ctx.limits;
+    // A table-only context reports json-table for every outcome, early skips included.
+    if ctx.json_table && !ctx.json_minify {
+        report.transform_id = JSON_TABLE_ID;
+        report.transform_version = JSON_TABLE_VERSION;
+    }
     if ctx.mode == Mode::Off {
         return Err(Reason::ModeOff);
     }
-    if !ctx.json_minify && !ctx.exact_line_runs {
+    if !ctx.json_minify && !ctx.json_table && !ctx.exact_line_runs {
         return Err(Reason::TransformDisabled);
     }
-    if !ctx.json_minify {
+    if !ctx.json_minify && !ctx.json_table {
         set_line_runs_identity(report);
     }
     if input.len() < limits.min_candidate_bytes {
@@ -407,7 +424,31 @@ fn decide<'a>(
     if input.len() > limits.max_candidate_bytes {
         return Err(Reason::AboveMaxBytes);
     }
-    let json = if ctx.json_minify {
+    let json = if ctx.json_table {
+        let opts = TableOptions {
+            max_rows: limits.max_table_rows,
+            max_depth: limits.max_json_depth,
+            token_counter: ctx.token_counter,
+            ..TableOptions::default()
+        };
+        match table::encode(input, &opts) {
+            Ok(text) => {
+                report.transform_id = JSON_TABLE_ID;
+                report.transform_version = JSON_TABLE_VERSION;
+                report.format_version = Some(JSON_TABLE_FORMAT_VERSION);
+                report.candidate_bytes = Some(text.len());
+                // The encoder validated `input`, so minifying it again succeeds.
+                let minified = minify(input, limits.max_json_depth)?;
+                if table::decode(&text).map(String::into_bytes) != Some(minified) {
+                    report.validation_outcome = ValidationOutcome::Failed;
+                    return Err(Reason::InvalidCandidate);
+                }
+                return emit(input, text, ctx, report);
+            }
+            Err(_) if ctx.json_minify => minify(input, limits.max_json_depth),
+            Err(reason) => Err(reason),
+        }
+    } else if ctx.json_minify {
         minify(input, limits.max_json_depth)
     } else {
         Err(Reason::UnsupportedFormat)
@@ -423,10 +464,13 @@ fn decide<'a>(
             };
             candidate
         }
-        // Text the JSON scanner rejects as unsupported_format is plain text. A
+        // Text the JSON transforms reject as unsupported_format is plain text. A
         // leading value rejected for duplicate_key, escaped_key or depth_limit
         // keeps the input on the JSON path, even when text lines follow. With
-        // json_minify off, all input arrives here as unsupported_format.
+        // json_minify off, input table-v1 rejects as unsupported_format (all
+        // input when json_table is off) arrives here. Other table-v1 rejections
+        // (insufficient_gain, duplicate_key, escaped_key, depth_limit) skip with
+        // that reason and the json-table id.
         Err(Reason::UnsupportedFormat) if ctx.exact_line_runs => {
             set_line_runs_identity(report);
             // Input that already starts with the lines-v1 header is skipped as
@@ -444,6 +488,16 @@ fn decide<'a>(
         }
         Err(reason) => return Err(reason),
     };
+    emit(input, candidate, ctx, report)
+}
+
+/// Records a validated candidate and returns the output for the mode.
+fn emit<'a>(
+    input: &'a str,
+    candidate: String,
+    ctx: &CompressionContext,
+    report: &mut CompressionReport,
+) -> Result<Cow<'a, str>, Reason> {
     report.validation_outcome = ValidationOutcome::Passed;
     if let Some(counter) = ctx.token_counter {
         report.original_tokens = Some(counter.count(input));
