@@ -196,6 +196,9 @@ async fn stalled_minify_uploads_release_permits_at_body_read_timeout() {
     let addr = listener.local_addr().unwrap();
     tokio::spawn(serve_with(listener, upstream, limits));
 
+    // Taken before any permit is granted, so no stalled permit can time out
+    // before start + body_read_timeout.
+    let start = std::time::Instant::now();
     // Four uploads take every inspection permit, then stall mid-body.
     let stalled: Vec<_> = (0..4)
         .map(|_| {
@@ -218,7 +221,6 @@ async fn stalled_minify_uploads_release_permits_at_body_read_timeout() {
     .await
     .expect("stalled uploads never took every permit");
 
-    let start = std::time::Instant::now();
     let mut healthy = TcpStream::connect(addr).await.unwrap();
     let head = timeout(
         WAIT,
@@ -231,7 +233,7 @@ async fn stalled_minify_uploads_release_permits_at_body_read_timeout() {
     .expect("healthy request still blocked after the body-read timeout");
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
     assert!(
-        start.elapsed() >= body_read_timeout / 2,
+        start.elapsed() >= body_read_timeout,
         "healthy request did not queue behind the stalled uploads"
     );
     for task in stalled {

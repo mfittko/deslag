@@ -105,7 +105,7 @@ impl<'a> Scanner<'a> {
             }
             let key = self.string()?;
             // ponytail: keys are compared as raw lexemes, and any escaped key is
-            // skipped. An escaped key such as `"a"` decodes to the same key as
+            // skipped. An escaped key such as `"\u0061"` decodes to the same key as
             // `"a"`, so the two could hide a duplicate. Decode keys
             // if escaped keys turn out to be common in real tool output.
             if key.contains(&b'\\') || !keys.insert(key) {

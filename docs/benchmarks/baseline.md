@@ -11,7 +11,7 @@ PLAN §13.2 budgets remain provisional. This file records measurements and sets 
 | Uncommitted changes (tracked or untracked) | no |
 | CPU | Apple M5 Max |
 | Logical CPUs | 18 |
-| OS | Darwin st13521495 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:27:04 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T6050 arm64 |
+| OS | Darwin 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:27:04 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T6050 arm64 |
 | cargo | cargo 1.96.0 (30a34c682 2026-05-25) (Homebrew) |
 | Profile | bench (release), default features |
 

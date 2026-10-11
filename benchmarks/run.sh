@@ -35,7 +35,7 @@ PLAN §13.2 budgets remain provisional. This file records measurements and sets 
 | Uncommitted changes (tracked or untracked) | $dirty |
 | CPU | $cpu |
 | Logical CPUs | $cpus |
-| OS | $(uname -a) |
+| OS | $(uname -srvm) |
 | cargo | $(cargo -V) |
 | Profile | bench (release), default features |
 
