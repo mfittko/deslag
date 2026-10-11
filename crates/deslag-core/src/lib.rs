@@ -117,8 +117,13 @@ impl ValidationOutcome {
 pub struct Limits {
     pub min_candidate_bytes: usize,
     pub max_candidate_bytes: usize,
+    /// Clamped to [`MAX_JSON_DEPTH_CEILING`], so no caller value can make the
+    /// recursive scanner overflow the stack.
     pub max_json_depth: usize,
 }
+
+/// Hard upper bound on [`Limits::max_json_depth`].
+pub const MAX_JSON_DEPTH_CEILING: usize = 1024;
 
 impl Default for Limits {
     /// Proposed starting values from the rollout policy.
@@ -174,6 +179,20 @@ pub struct CompressionContext<'c> {
     pub token_counter: Option<&'c dyn TokenCounter>,
 }
 
+/// Safe mode, JSON minifier on, no size limits and a depth limit of 128, so
+/// adapters keep the behavior of the first minification slice.
+pub const FIRST_SLICE_JSON_MINIFY_CONTEXT: CompressionContext<'static> = CompressionContext {
+    mode: Mode::Safe,
+    policy_version: 1,
+    json_minify: true,
+    limits: Limits {
+        min_candidate_bytes: 0,
+        max_candidate_bytes: usize::MAX,
+        max_json_depth: 128,
+    },
+    token_counter: None,
+};
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CompressionReport {
     pub schema_version: u32,
@@ -192,6 +211,7 @@ pub struct CompressionReport {
     pub original_tokens: Option<TokenCount>,
     pub candidate_tokens: Option<TokenCount>,
     pub emitted_tokens: Option<TokenCount>,
+    /// Wall time of the whole [`compress`] call, including token counting.
     pub compression_duration: Duration,
     pub validation_outcome: ValidationOutcome,
 }
@@ -204,16 +224,16 @@ impl CompressionReport {
         fn opt<T>(v: Option<T>, f: impl FnOnce(T) -> String) -> String {
             v.map_or_else(|| "null".to_string(), f)
         }
-        // ponytail: every string value is a static ASCII identifier, so
-        // quoting without escaping is valid JSON.
-        let q = |s: &str| format!("\"{s}\"");
+        // Every string value goes through `q`, so a caller-supplied tokenizer
+        // name cannot break the JSON.
+        let q = json_string;
         let tokens = |t: Option<TokenCount>| {
             opt(t, |t| {
                 format!(
-                    r#"{{"count":{},"method":"{}","tokenizer":"{}"}}"#,
+                    r#"{{"count":{},"method":{},"tokenizer":{}}}"#,
                     t.count,
-                    t.method.as_str(),
-                    t.tokenizer
+                    q(t.method.as_str()),
+                    q(t.tokenizer)
                 )
             })
         };
@@ -255,6 +275,24 @@ impl CompressionReport {
         out.push('}');
         out
     }
+}
+
+/// Quotes `s` as a JSON string: escapes `"`, `\` and control characters.
+fn json_string(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            c if c < ' ' => {
+                let _ = write!(out, "\\u{:04x}", u32::from(c));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 #[derive(Debug)]
@@ -353,20 +391,10 @@ fn decide<'a>(
 /// escapes and number precision are preserved. Member and element order is kept.
 ///
 /// `None` means: pass the input through unchanged. Equivalent to [`compress`]
-/// in safe mode with no size limits and a depth limit of 128.
+/// with [`FIRST_SLICE_JSON_MINIFY_CONTEXT`]; `Some` exactly when the outcome
+/// is `Changed`.
 pub fn minify_json(input: &str) -> Option<String> {
-    let ctx = CompressionContext {
-        mode: Mode::Safe,
-        policy_version: 0,
-        json_minify: true,
-        limits: Limits {
-            min_candidate_bytes: 0,
-            max_candidate_bytes: usize::MAX,
-            max_json_depth: 128,
-        },
-        token_counter: None,
-    };
-    match compress(input, &ctx).output {
+    match compress(input, &FIRST_SLICE_JSON_MINIFY_CONTEXT).output {
         Cow::Owned(out) => Some(out),
         Cow::Borrowed(_) => None,
     }
@@ -379,7 +407,7 @@ fn minify(input: &str, max_depth: usize) -> Result<Vec<u8>, Reason> {
         b: bytes,
         i: 0,
         out: Vec::with_capacity(bytes.len()),
-        max_depth,
+        max_depth: max_depth.min(MAX_JSON_DEPTH_CEILING),
     };
     s.ws();
     // Bare scalars are treated as plain text.
@@ -463,7 +491,7 @@ impl<'a> Scanner<'a> {
             }
             let key = self.string()?;
             // ponytail: keys are compared as raw lexemes, and any escaped key is
-            // skipped. An escaped key such as `"a"` decodes to the same key as
+            // skipped. An escaped key such as `"\u0061"` decodes to the same key as
             // `"a"`, so the two could hide a duplicate. Decode keys
             // if escaped keys turn out to be common in real tool output.
             if key.contains(&b'\\') {

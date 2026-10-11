@@ -1,8 +1,8 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, time::Duration};
 
 use deslag_core::{
-    CompressionContext, CompressionResult, Limits, Mode, Outcome, Reason, TokenCount, TokenCounter,
-    TokenMethod, ValidationOutcome, compress,
+    CompressionContext, CompressionReport, CompressionResult, Limits, Mode, Outcome, Reason,
+    TokenCount, TokenCounter, TokenMethod, ValidationOutcome, compress,
 };
 
 const PRETTY: &str = "{\n  \"a\": [1, 2, 3],\n  \"b\": \"x y\"\n}\n";
@@ -57,7 +57,11 @@ fn is_borrowed_from(result: &CompressionResult<'_>, input: &str) -> bool {
 }
 
 fn report_json(result: &CompressionResult<'_>) -> serde_json::Map<String, serde_json::Value> {
-    match serde_json::from_str(&result.report.to_json()).unwrap() {
+    report_map(&result.report)
+}
+
+fn report_map(report: &CompressionReport) -> serde_json::Map<String, serde_json::Value> {
+    match serde_json::from_str(&report.to_json()).unwrap() {
         serde_json::Value::Object(map) => map,
         other => panic!("report is not an object: {other}"),
     }
@@ -79,9 +83,34 @@ fn report_schema_has_every_field_for_each_outcome() {
         (ctx(Mode::Off), PRETTY, "skipped"),
         (ctx(Mode::Safe), "[1,2]", "skipped"),
     ];
-    for (ctx, input, outcome) in cases {
-        let result = compress(input, &ctx);
-        let map = report_json(&result);
+    let mut reports: Vec<(CompressionReport, &str)> = cases
+        .into_iter()
+        .map(|(ctx, input, outcome)| (compress(input, &ctx).report, outcome))
+        .collect();
+    // No input reaches `failed`, so that report is built directly.
+    reports.push((
+        CompressionReport {
+            schema_version: 1,
+            transform_id: "json-minify",
+            transform_version: 1,
+            format_version: None,
+            policy_version: 7,
+            mode: Mode::Safe,
+            outcome: Outcome::Failed,
+            reason: Some(Reason::InvalidCandidate),
+            original_bytes: 10,
+            candidate_bytes: Some(8),
+            emitted_bytes: 10,
+            original_tokens: None,
+            candidate_tokens: None,
+            emitted_tokens: None,
+            compression_duration: Duration::from_nanos(5),
+            validation_outcome: ValidationOutcome::Failed,
+        },
+        "failed",
+    ));
+    for (report, outcome) in reports {
+        let map = report_map(&report);
         let mut keys: Vec<&str> = map.keys().map(String::as_str).collect();
         let mut want = FIELDS.to_vec();
         keys.sort_unstable();
@@ -249,5 +278,47 @@ fn unknown_token_counts_are_null_not_zero() {
         for key in ["original_tokens", "candidate_tokens", "emitted_tokens"] {
             assert_eq!(map[key], serde_json::Value::Null, "{key}");
         }
+    }
+}
+
+#[test]
+fn depth_limit_is_capped_for_unbounded_caller_limits() {
+    let deep = format!("{}{}", "[".repeat(2000), "]".repeat(2000));
+    let ctx = CompressionContext {
+        limits: Limits {
+            max_json_depth: usize::MAX,
+            ..Limits::default()
+        },
+        ..ctx(Mode::Safe)
+    };
+    let result = compress(&deep, &ctx);
+    assert!(is_borrowed_from(&result, &deep));
+    assert_eq!(result.report.reason, Some(Reason::DepthLimit));
+}
+
+/// Names a tokenizer with a quote, a backslash and a newline.
+struct HostileCounter;
+
+impl TokenCounter for HostileCounter {
+    fn count(&self, text: &str) -> TokenCount {
+        TokenCount {
+            count: text.len() as u64,
+            method: TokenMethod::Exact,
+            tokenizer: "evil\"name\\v1\n",
+        }
+    }
+}
+
+#[test]
+fn report_json_escapes_tokenizer_names() {
+    let counter = HostileCounter;
+    let ctx = CompressionContext {
+        token_counter: Some(&counter),
+        ..ctx(Mode::Safe)
+    };
+    let map = report_json(&compress(PRETTY, &ctx));
+    for key in ["original_tokens", "candidate_tokens", "emitted_tokens"] {
+        assert_eq!(map[key]["tokenizer"], "evil\"name\\v1\n", "{key}");
+        assert_eq!(map[key]["method"], "exact", "{key}");
     }
 }
