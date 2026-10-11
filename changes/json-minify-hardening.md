@@ -1,3 +1,3 @@
-### Changed
+### Added
 
-- A duplicate or escaped key anywhere in a JSON document, at any depth, leaves the whole document unchanged (#11)
+- `deslag-core` documents and tests that a duplicate or escaped key anywhere in a JSON document keeps the whole document unchanged; minification output is unchanged (#11)

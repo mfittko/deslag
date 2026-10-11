@@ -89,7 +89,7 @@ fn number(rng: &mut Rng) -> String {
         n.push_str(rng.pick(&["e", "E"]));
         n.push_str(rng.pick(&["", "+", "-"]));
         // Two digits at most, so serde_json stays within f64 range.
-        n.push_str(&digits(rng, 1));
+        n.push_str(&digits(rng, 2));
     }
     n
 }
