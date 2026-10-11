@@ -372,6 +372,28 @@ fn ineligible_nested_depth_limit() {
 }
 
 #[test]
+fn encoder_handles_deep_rows_linearly() {
+    let depth = 1000;
+    let opts = TableOptions {
+        max_depth: deslag_core::MAX_JSON_DEPTH_CEILING,
+        ..lenient()
+    };
+    let row = format!("{}1{}", r#"{"a":"#.repeat(depth), "}".repeat(depth));
+    // Joined paths per key would allocate ~2 GB for this ~6 MB input.
+    let input = repeat(&row, 1000);
+    let encoded = encode(&input, &opts).unwrap();
+    assert_eq!(decode(&encoded), Some(minified(&input)));
+}
+
+#[test]
+fn ineligible_wide_object_under_long_key() {
+    let keys: Vec<String> = (0..20_000).map(|i| format!(r#""a{i}":1"#)).collect();
+    let row = format!(r#"{{"{}":{{{}}}}}"#, "k".repeat(100_000), keys.join(","));
+    // Joined paths per key would allocate ~4 GB for this ~0.5 MB input.
+    shape(&repeat(&row, 2));
+}
+
+#[test]
 fn ineligible_mixed_types() {
     shape(&repeat(r#"{"value":1},{"value":"1"}"#, 4));
     shape(&repeat(r#"{"value":true},{"value":0}"#, 4));
