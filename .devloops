@@ -23,6 +23,13 @@ workflow:
 
 gates:
   requireFanoutEvidence: true
+  # Size budget counts logic lines only; see docs/decisions/0005-size-budget.md.
+  size:
+    testDiscount: 0
+    tiers:
+      default:
+        softLoc: 800
+        waiverLoc: 1500
 
 localImplementation:
   issueless: true
