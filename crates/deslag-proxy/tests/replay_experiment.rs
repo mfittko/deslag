@@ -116,10 +116,14 @@ impl Replay {
         if loaded.as_ref().is_some_and(|m| m["mode"] == "off") {
             return Ok(body.to_vec());
         }
+        // Results without a valid manifest may mean a lost safe manifest. Passing them through
+        // could change an established prefix, so this is an error in every configured mode.
+        if loaded.is_none() && has_results {
+            return Err(ReplayError::MissingManifest);
+        }
         if self.off && loaded.is_none() {
-            // Mark only a fresh session. A session with results and no manifest may have lost
-            // a safe manifest, which must stay an explicit error under `safe`.
-            if !has_results && !path.exists() {
+            // Mark only a fresh session: no results and no manifest file.
+            if !path.exists() {
                 let marker = json!({"scope_digest": digest(scope.as_bytes()), "owner": "proxy",
                     "mode": "off", "decisions": {}});
                 write_atomic(&path, &serde_json::to_vec(&marker).unwrap());
@@ -128,7 +132,6 @@ impl Replay {
         }
         let mut manifest = match loaded {
             Some(m) => m,
-            None if has_results => return Err(ReplayError::MissingManifest),
             None => json!({
                 "scope_digest": digest(scope.as_bytes()),
                 "owner": "proxy",
@@ -659,6 +662,12 @@ fn off_session_stays_off_after_mode_change() {
         off.apply(Some("session-a"), &with_result).unwrap(),
         with_result
     );
+    // Configured off does not hide a lost manifest: results without one are an error.
+    assert_eq!(
+        off.apply(Some("session-lost"), &with_result),
+        Err(ReplayError::MissingManifest)
+    );
+    assert!(!off.manifest_path("session-lost").exists());
 
     // The configuration changes to `safe`; the existing off session keeps passing through.
     let safe = Replay { off: false, ..off };

@@ -75,7 +75,7 @@ This is the decided design. One configuration value, `owner = hook | proxy | non
 | Mode changed from `off` to `safe` | Not applicable | An existing `off` session keeps passing through; new sessions use `safe` (offline) |
 | Compression disabled | Stop replacing new results (design, untested) | Keep replaying pinned decisions; new results unchanged (design, untested) |
 | Proxy removed mid-session | Not applicable | The client resends originals. Content stays correct, the cached prefix is lost. Start a new session (design, untested) |
-| Manifest missing or corrupt | Not applicable | Explicit error when the request carries tool results. A manifest that does not parse or has no `decisions` object counts as corrupt (offline) |
+| Manifest missing or corrupt | Not applicable | Explicit error when the request carries tool results, in every configured mode including `off`. A manifest that does not parse or has no `decisions` object counts as corrupt (offline) |
 | Source digest mismatch | Not applicable | Explicit error; the known id gets no new decision (offline) |
 | Pinned transform id or version unknown to the binary | Not applicable | Explicit error (offline) |
 | Malformed pinned decision | Not applicable | Explicit error. Only `unchanged: true` or `encoded` with a transform id and an unsigned integer version is valid (offline) |
@@ -118,7 +118,7 @@ Scenarios:
 - Multi-turn resend and restart: three turns and an identical resend of the third, then a process restart and a fourth turn. Each upstream body starts with every message byte of the previous body. An identical resend is byte-identical.
 - Policy upgrade: a session built under policy v1 is resent under policy v2 with transform v2. Results decided under v1 keep their v1 bytes. This includes `toolu_2`, which v1 left unchanged and which a fresh v2 decision encodes; the test asserts both premises. A new result uses v2.
 - First decision unchanged: a result left unchanged under simulated load stays unchanged after the load drops.
-- Manifest loss: a corrupt or deleted manifest with tool results in the request is an explicit error. Corrupt covers bytes that do not parse and a manifest with no `decisions` object. A pinned transform id or version that the binary does not know is an explicit error too. So is a malformed pinned decision: one that does not carry exactly one of `unchanged: true` or `encoded` with a transform id and an unsigned integer version. Examples are version `1.0`, `"1"` or `-1`, and a decision with both `unchanged` and `encoded`. A malformed decision never replays as unchanged. The replay layer rejects the request before the proxy is called.
+- Manifest loss: a corrupt or deleted manifest with tool results in the request is an explicit error in every configured mode, including `off`. Corrupt covers bytes that do not parse and a manifest with no `decisions` object. A pinned transform id or version that the binary does not know is an explicit error too. So is a malformed pinned decision: one that does not carry exactly one of `unchanged: true` or `encoded` with a transform id and an unsigned integer version. Examples are version `1.0`, `"1"` or `-1`, and a decision with both `unchanged` and `encoded`. A malformed decision never replays as unchanged. The replay layer rejects the request before the proxy is called.
 - Digest mismatch and undecided history: changed source bytes under a known `tool_use_id`, or an unknown result outside the newest message, is an explicit error. The replay layer rejects the request before the proxy is called.
 - Model switch: a result decided under model `m` keeps its decision after the request model changes to `m2`. A new result records `m2` as its model profile. The session manifest keeps `m`.
 - Off session: an `off` session writes a manifest with mode `off` and no decisions. After the configuration changes to `safe`, that session still passes through byte-identical, and a new session transforms.
@@ -160,6 +160,7 @@ A mutation that re-decides known results under the current policy fails the upgr
 - Concurrent requests for one scope. The experiment layer does an unlocked read-modify-write; production needs a per-scope lock.
 - Tool results with block-array, image or other non-string content. The experiment passes them through undecided.
 - Manifest loss, corruption or expiry for a session with established history. Explicit error; there is no recovery path.
+- A `safe` session that loses its manifest before it records any decision, and then sends a request without tool results under configured `off`, looks like a fresh session. It gets an `off` marker. No decisions are lost.
 - Removing the proxy from a session with encoded history. The client resends originals and the cached prefix is lost.
 - Changing `owner` or `mode` inside a running session. It applies to new sessions only.
 - Owner enforcement: owner selection, the `owner` configuration write, and owner-mismatch passthrough. Untested.
