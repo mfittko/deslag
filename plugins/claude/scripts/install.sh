@@ -102,6 +102,8 @@ status() {
 }
 
 uninstall() {
+  # Removing through a symlinked data dir would delete files in its target.
+  [ ! -L "$data" ] || die "refusing to uninstall: $data is a symlink"
   if [ ! -e "$data" ]; then
     echo "Nothing to remove: $data does not exist."
     return

@@ -248,6 +248,11 @@ mkdir -p "$tmp/data-blank"
 expect_match "uninstall of an empty unmarked dir reports nothing installed" "nothing installed" \
   "$(run_install "$good" "$tmp/data-blank" uninstall)"
 expect_ok "uninstall of an empty unmarked dir exits 0" run_install "$good" "$tmp/data-blank" uninstall
+mkdir -p "$tmp/linked-udata/bin" && : >"$tmp/linked-udata/.deslag-data" && echo keep >"$tmp/linked-udata/bin/file"
+ln -s "$tmp/linked-udata" "$tmp/data-ulink"
+expect_fail "uninstall refuses a symlinked data dir" "symlink" run_install "$good" "$tmp/data-ulink" uninstall
+expect_eq "refused uninstall keeps the link target" keep "$(cat "$tmp/linked-udata/bin/file")"
+expect_eq "refused uninstall keeps the target marker" present "$([ -f "$tmp/linked-udata/.deslag-data" ] && echo present || echo absent)"
 # Content that install.sh did not create stops uninstall after its own files are gone.
 run_install "$good" "$tmp/data-extra" install >/dev/null
 echo keep >"$tmp/data-extra/user-file"
