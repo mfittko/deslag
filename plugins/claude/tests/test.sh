@@ -56,9 +56,12 @@ make_release() {
 }
 
 good=$tmp/good && make_release "$good" fake-deslag
-run_install() { # run_install <base> <data> <subcommand...>
-  local base=$1 data=$2; shift 2
-  DESLAG_RELEASE_BASE_URL=file://$base CLAUDE_PLUGIN_ROOT=$root CLAUDE_PLUGIN_DATA=$data "$install_sh" "$@"
+# The plugin commands pass the data dir as an argument and export no plugin env.
+run_install() { # run_install <base> <data> <subcommand>
+  DESLAG_RELEASE_BASE_URL=file://$1 env -u CLAUDE_PLUGIN_ROOT -u CLAUDE_PLUGIN_DATA "$install_sh" "$3" "$2"
+}
+run_install_env() { # run_install_env <base> <data> <subcommand>: data from CLAUDE_PLUGIN_DATA
+  DESLAG_RELEASE_BASE_URL=file://$1 CLAUDE_PLUGIN_DATA=$2 env -u CLAUDE_PLUGIN_ROOT "$install_sh" "$3"
 }
 run_hook() { # run_hook <data>; stdin passes through
   env -i PATH="$tmp/fakebin:/usr/bin:/bin" CLAUDE_PLUGIN_ROOT="$root" CLAUDE_PLUGIN_DATA="$1" "$hook_sh"
@@ -89,8 +92,11 @@ expect_fail "install rejects an archive missing from SHA256SUMS" "no checksum" r
 expect_eq "missing checksum installs nothing" "" "$(ls "$tmp/data-noline/bin" 2>/dev/null || true)"
 
 expect_fail "install fails when the release is missing" "download" run_install "$tmp/nowhere" "$tmp/data-404" install
-expect_fail "install requires CLAUDE_PLUGIN_DATA" "CLAUDE_PLUGIN_DATA" run_install "$good" "" install
+expect_fail "install requires a data dir" "CLAUDE_PLUGIN_DATA" run_install "$good" "" install
 expect_fail "install refuses a relative data dir" "absolute" run_install "$good" "rel/data" install
+expect_fail "install refuses a relative CLAUDE_PLUGIN_DATA" "absolute" run_install_env "$good" "rel/data" install
+expect_ok "install falls back to CLAUDE_PLUGIN_DATA" run_install_env "$good" "$tmp/data-env" install
+expect_eq "env fallback installs under bin/<version>" "fake-deslag --version" "$("$tmp/data-env/bin/$version/deslag" --version </dev/null)"
 expect_fail "install rejects an unknown subcommand" "usage" run_install "$good" "$data" frobnicate
 
 # A user-managed binary on PATH is never touched.
@@ -131,6 +137,16 @@ expect_eq "hooks.json registers only PostToolUse" '["PostToolUse"]' "$(jq -c '.h
 # shellcheck disable=SC2016 # the literal placeholder is expected
 expect_eq "hooks.json runs only the wrapper" '["\"${CLAUDE_PLUGIN_ROOT}/hooks/deslag-hook.sh\""]' \
   "$(jq -c '[.hooks[][].hooks[].command] | unique' "$hooks_json")"
+
+# --- commands ------------------------------------------------------------------
+# The client substitutes ${CLAUDE_PLUGIN_DATA} in command text but does not
+# export it, so each command must pass it to install.sh as an argument.
+for c in install status uninstall; do
+  # shellcheck disable=SC2016 # the literal placeholder is expected
+  expect_eq "commands/$c.md passes the data dir as an argument" \
+    '!`${CLAUDE_PLUGIN_ROOT}/scripts/install.sh '"$c"' "${CLAUDE_PLUGIN_DATA}"`' \
+    "$(grep '^!`' "$root/commands/$c.md")"
+done
 
 # --- uninstall -----------------------------------------------------------------
 expect_ok "uninstall succeeds" run_install "$good" "$data" uninstall

@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Usage: install.sh [install|status|uninstall]
+# Usage: install.sh <install|status|uninstall> <data-dir>
 # Manages the version-matched deslag binary in the plugin data directory
-# ($CLAUDE_PLUGIN_DATA/bin/<version>/deslag). It never touches PATH or any
-# binary outside that directory.
+# (<data-dir>/bin/<version>/deslag). It never touches PATH or any binary
+# outside that directory.
+# The plugin root is the parent of this script's directory. <data-dir> falls
+# back to $CLAUDE_PLUGIN_DATA. Plugin commands pass "${CLAUDE_PLUGIN_DATA}"
+# because the client substitutes it in command text but does not export it.
 #   install    Download the release archive for the plugin version and this
 #              platform, verify it against SHA256SUMS and install it.
 #   status     Report whether the matching binary is installed.
@@ -14,13 +17,10 @@ umask 077
 
 die() { echo "error: $*" >&2; exit 1; }
 
-for var in CLAUDE_PLUGIN_ROOT CLAUDE_PLUGIN_DATA; do
-  value=${!var:-}
-  [ -n "$value" ] || die "$var is not set; run this through the deslag plugin commands"
-  [[ $value == /* ]] || die "$var must be an absolute path: $value"
-done
-root=$CLAUDE_PLUGIN_ROOT
-data=$CLAUDE_PLUGIN_DATA
+root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+data=${2:-${CLAUDE_PLUGIN_DATA:-}}
+[ -n "$data" ] || die "no data dir: pass it as the second argument or set CLAUDE_PLUGIN_DATA; run this through the deslag plugin commands"
+[[ $data == /* ]] || die "the data dir must be an absolute path: $data"
 marker=$data/.deslag-data
 version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$root/.claude-plugin/plugin.json" | head -n 1)
 [ -n "$version" ] || die "no version in $root/.claude-plugin/plugin.json"
@@ -96,5 +96,5 @@ case "${1:-install}" in
   install) install ;;
   status) status ;;
   uninstall) uninstall ;;
-  *) die "usage: install.sh [install|status|uninstall]" ;;
+  *) die "usage: install.sh <install|status|uninstall> <data-dir>" ;;
 esac

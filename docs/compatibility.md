@@ -66,6 +66,7 @@ These facts were read from the Claude Code 2.1.296 client binary. `claude plugin
 - `.claude-plugin/marketplace.json` at the repository root is the default marketplace path for a GitHub source. `/plugin marketplace add mfittko/deslag` reads it. The shorthand also accepts `owner/repo#ref`.
 - A marketplace plugin entry with `source: "./plugins/claude"` points at the plugin directory. The entry carries no `version`; `plugin.json` is the only plugin version surface.
 - The client substitutes `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_PLUGIN_DATA}` in hook commands, in command markdown and in `allowed-tools`. Hook processes also receive both as environment variables.
+- Observed live with 2.1.296 and `--plugin-dir`: plugin command `!` injection substitutes `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_PLUGIN_DATA}` in the command text. It does not export them as environment variables to that shell. The plugin commands therefore pass `"${CLAUDE_PLUGIN_DATA}"` to `install.sh` as an argument. `install.sh` derives the plugin root from its own location.
 - The data directory is `<config dir>/plugins/data/<plugin id>/`. The config dir is `CLAUDE_CONFIG_DIR` or `~/.claude`. The client creates it on demand with default permissions. `/deslag:install` sets it to mode 0700.
 - `claude plugin uninstall` deletes the data directory unless `--keep-data` is passed.
 - A file `commands/<name>.md` in the plugin appears as `/deslag:<name>`.
