@@ -39,6 +39,8 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 ```
 
+The Claude Code plugin lives in [`plugins/claude`](plugins/claude). It currently registers a no-op `PostToolUse` hook that runs `deslag hook claude`, so the `deslag` binary must be on `PATH`.
+
 Work runs through [dev-loops](https://github.com/mfittko/dev-loops). Repository settings live in [`.devloops`](.devloops).
 
 ## License

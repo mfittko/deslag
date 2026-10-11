@@ -1,0 +1,27 @@
+{
+  "session_id": "d7704519-6765-49fb-bb09-9217a823c1af",
+  "transcript_path": "/home/user/.claude/projects/sanitized-project/d7704519-6765-49fb-bb09-9217a823c1af.jsonl",
+  "cwd": "/home/user/project",
+  "prompt_id": "6b8f5167-6bf1-419b-b611-91e08505ebff",
+  "permission_mode": "default",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "/home/user/project/sample.txt"
+  },
+  "tool_response": {
+    "type": "text",
+    "file": {
+      "filePath": "/home/user/project/sample.txt",
+      "content": "hello-deslag\n",
+      "numLines": 2,
+      "startLine": 1,
+      "totalLines": 2
+    }
+  },
+  "tool_use_id": "toolu_01WksVxDS9w7s1exDJtQgZKc",
+  "duration_ms": 2
+}
