@@ -4,7 +4,7 @@ This file specifies the text formats that deslag transforms emit. Each format ha
 
 ## table-v1
 
-`table-v1` is a lossless tabular encoding for a JSON array of flat objects. The encoder is `deslag_core::table::encode`. The decoder is `deslag_core::table::decode`. The transform identity is `json-table`, transform version 1, format version 1.
+`table-v1` is a lossless tabular encoding for a JSON array of objects. Uniform nested objects flatten to dotted columns. The encoder is `deslag_core::table::encode`. The decoder is `deslag_core::table::decode`. The transform identity is `json-table`, transform version 1, format version 1.
 
 For every eligible input `x`, `decode(encode(x))` equals the minified form of `x` byte for byte. The minified form is the output of the JSON minifier: the same members in the same order, with every lexeme unchanged.
 
@@ -30,17 +30,19 @@ The first line is the header. It has no leading or trailing whitespace.
 ```text
 header  = "table-v1 [" count "]{" column *( "," column ) "}"
 count   = "0" / %x31-39 *DIGIT
-column  = name ":" type
+column  = path ":" type
+path    = name / segment 1*( "." segment )
 name    = *namechar
+segment = 1*namechar
 namechar = %x20-21 / %x23-2B / %x2D / %x2F-5B / %x5D-10FFFF
 type    = "int" / "num" / "str" / "bool"
 ```
 
 - `count` is the number of rows. It has no leading zeros.
-- `name` may be empty.
+- A `name` may be empty. A dotted `path` has two or more non-empty segments.
 - Columns appear in first-seen key order across all rows.
 - A decoder splits the column list on `,` and splits each column at its last `:`. A name may therefore contain `:`.
-- A name must not contain `.`, `,`, `"`, `\` or a control character below U+0020. Column names are unique.
+- A name or segment must not contain `.`, `,`, `"`, `\` or a control character below U+0020. Column paths are unique.
 
 ### Rows
 
@@ -79,7 +81,7 @@ The encoder quotes a string cell when its text:
 The decoder reads each cell as follows:
 
 - A quoted cell is always a string. It is valid only in a `str` column.
-- An empty unquoted cell is a missing field.
+- An empty unquoted cell is a missing field. It is valid only in an undotted column.
 - An unquoted `null` is `null`.
 - Any other unquoted cell is read by the column type. In an `int` column it must be an `int` lexeme. In a `num` column it must be a JSON number lexeme. In a `bool` column it must be `true` or `false`. In a `str` column it is the string text.
 
@@ -88,6 +90,31 @@ Any other cell makes the whole text invalid, and the decoder returns no value.
 So `null`, a missing field and `""` stay distinct: they are `null`, an empty cell and `""`.
 
 Encoder output is canonical. The decoder also accepts some non-canonical texts, for example a quoted `str` cell such as `"abc"` that needs no quotes, or a bare string such as `1` or `NaN` in a `str` column that the encoder would quote. Such texts decode, but encoding the result does not reproduce them.
+
+### Nested objects
+
+A key whose value is an object in any row flattens into dotted columns. The key must hold an object in every row, and every row's object must have the same key list in the same order. The object must not be empty. The rule applies recursively, so `{"a":{"b":{"c":1}}}` becomes the column `a.b.c`. The dotted columns take the key's position in the column order.
+
+```text
+table-v1 [2]{id:int,meta.region:str,meta.zone:int}
+1,eu,3
+2,us,null
+```
+
+This decodes to:
+
+```json
+[{"id":1,"meta":{"region":"eu","zone":3}},{"id":2,"meta":{"region":"us","zone":null}}]
+```
+
+A nested leaf may hold `null`, but it is never missing. Only a top-level field can be missing. Arrays stay ineligible at any depth. Nesting depth is bounded by `max_depth`.
+
+The decoder splits each column path at `.`. The paths must form one tree, or the decoder returns no value:
+
+- No path is both a leaf column and a prefix of another column, for example `a` and `a.b`.
+- The columns under each object path are contiguous, for example `a.x,b,a.y` is invalid.
+- No segment of a dotted path is empty, for example `.a`, `a.` and `a..b` are invalid.
+- An empty unquoted cell in a dotted column is invalid.
 
 ### Lexeme preservation
 
@@ -108,7 +135,11 @@ The encoder returns the input unchanged, with a reason, in each of these cases:
 | The input is not a top-level JSON array | `unsupported_format` |
 | The array has fewer than two items | `unsupported_format` |
 | An item is not an object | `unsupported_format` |
-| A field holds an array or an object | `unsupported_format` |
+| A field holds an array, at any depth | `unsupported_format` |
+| A key holds an object in one row and is missing, `null` or a non-object in another row | `unsupported_format` |
+| Two rows hold objects with different key lists, or a different key order, under the same key | `unsupported_format` |
+| A field holds `{}` inside a row | `unsupported_format` |
+| A key inside a nested object is empty, or a key whose value is an object is empty | `unsupported_format` |
 | A column holds non-null values of more than one type (`int` and `num` together make a `num` column) | `unsupported_format` |
 | A key contains `.`, `,`, `"`, `\` or a control character below U+0020 | `unsupported_format`, or `escaped_key` when the key needs an escape |
 | An object has a duplicate key | `duplicate_key` |

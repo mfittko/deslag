@@ -1,4 +1,5 @@
-//! table-v1: a lossless CSV-schema encoding for a JSON array of flat objects.
+//! table-v1: a lossless CSV-schema encoding for a JSON array of objects.
+//! Uniform nested objects flatten to dotted columns such as `meta.region`.
 //!
 //! `docs/compression-formats.md` specifies the format. The round-trip contract
 //! is `decode(&encode(x)?) == minified(x)`, byte for byte.
@@ -76,7 +77,8 @@ enum Value<'a> {
     Str(String),
 }
 
-type Row<'a> = Vec<(&'a str, Value<'a>)>;
+/// Fields in order. A nested leaf key is its dotted path, such as `meta.region`.
+type Row<'a> = Vec<(String, Value<'a>)>;
 
 /// Encodes `input` as table-v1. `Err` means: pass the input through unchanged.
 pub fn encode(input: &str, opts: &TableOptions) -> Result<String, Reason> {
@@ -138,15 +140,7 @@ pub fn decode(text: &str) -> Option<String> {
         return None;
     }
     let rows: usize = count.parse().ok()?;
-    let mut cols: Vec<(&str, Ty)> = Vec::new();
-    let mut seen = HashSet::new();
-    for spec in specs.strip_suffix('}')?.split(',') {
-        let (name, ty) = spec.rsplit_once(':')?;
-        if !valid_name(name) || !seen.insert(name) {
-            return None;
-        }
-        cols.push((name, Ty::parse(ty)?));
-    }
+    let cols = columns(specs.strip_suffix('}')?)?;
     // A header with zero rows has no body; every row is one line after it.
     if (rows == 0) != body.is_none() {
         return None;
@@ -168,25 +162,97 @@ pub fn decode(text: &str) -> Option<String> {
         }
         i += 1;
         out.push_str(if r == 0 { "{" } else { ",{" });
-        let mut first = true;
-        for (cell, (name, ty)) in cells.iter().zip(&cols) {
+        // True right after `{`, where the next member needs no comma.
+        let mut opened = true;
+        for (cell, col) in cells.iter().zip(&cols) {
+            if col.close > 0 {
+                out.push_str(&"}".repeat(col.close));
+                opened = false;
+            }
             if matches!(cell, Cell::Bare("")) {
+                // Only a top-level field can be missing.
+                if col.depth > 0 {
+                    return None;
+                }
                 continue;
             }
-            out.push_str(if first { "\"" } else { ",\"" });
-            first = false;
-            out.push_str(name);
-            out.push_str("\":");
-            push_json_value(&mut out, cell, *ty)?;
+            for name in &col.open {
+                push_key(&mut out, opened, name);
+                out.push('{');
+                opened = true;
+            }
+            push_key(&mut out, opened, col.leaf);
+            push_json_value(&mut out, cell, col.ty)?;
+            opened = false;
         }
+        out.push_str(&"}".repeat(cols.last().map_or(0, |c| c.depth)));
         out.push('}');
     }
     out.push(']');
     Some(out)
 }
 
-/// Parses the minified array into flat rows. `None` when the top level is not
-/// an array, an item is not an object, or a field holds an array or object.
+fn push_key(out: &mut String, opened: bool, name: &str) {
+    out.push_str(if opened { "\"" } else { ",\"" });
+    out.push_str(name);
+    out.push_str("\":");
+}
+
+/// A header column, with the nested-object steps to take before its cell.
+struct Column<'t> {
+    /// Nested objects to close, innermost first.
+    close: usize,
+    /// Nested objects to open, outermost first.
+    open: Vec<&'t str>,
+    /// Last path segment: the member name of the cell.
+    leaf: &'t str,
+    /// Nesting depth of the cell, 0 for a top-level field.
+    depth: usize,
+    ty: Ty,
+}
+
+/// Parses the header column list. `None` unless the paths form one tree in
+/// which every path is unique, no path is both a leaf and an object, and each
+/// object's columns are contiguous.
+fn columns(specs: &str) -> Option<Vec<Column<'_>>> {
+    let mut cols = Vec::new();
+    // Every object path and leaf path seen so far.
+    let mut seen = HashSet::new();
+    let mut stack: Vec<&str> = Vec::new();
+    for spec in specs.split(',') {
+        let (path, ty) = spec.rsplit_once(':')?;
+        if !valid_path(path) {
+            return None;
+        }
+        let segs: Vec<&str> = path.split('.').collect();
+        let (leaf, groups) = segs.split_last()?;
+        let common = stack.iter().zip(groups).take_while(|(a, b)| a == b).count();
+        let close = stack.len() - common;
+        stack.truncate(common);
+        for k in common..groups.len() {
+            // A reopened object is either a duplicate or not contiguous.
+            if !seen.insert(groups[..=k].join(".")) {
+                return None;
+            }
+            stack.push(groups[k]);
+        }
+        if !seen.insert(path.to_string()) {
+            return None;
+        }
+        cols.push(Column {
+            close,
+            open: groups[common..].to_vec(),
+            leaf,
+            depth: groups.len(),
+            ty: Ty::parse(ty)?,
+        });
+    }
+    Some(cols)
+}
+
+/// Parses the minified array into rows of dotted leaf keys. `None` when the
+/// top level is not an array, an item is not an object, a field holds an
+/// array, or nested objects are not uniform across rows.
 fn parse_rows(min: &str) -> Option<Vec<Row<'_>>> {
     let mut s = Scanner {
         b: min.as_bytes(),
@@ -199,46 +265,13 @@ fn parse_rows(min: &str) -> Option<Vec<Row<'_>>> {
     if s.eat(b']') {
         return Some(rows);
     }
+    let mut first_shape = None;
     loop {
-        s.expect(b'{').ok()?;
-        let mut row = Vec::new();
-        if !s.eat(b'}') {
-            loop {
-                let start = s.i;
-                s.string().ok()?;
-                // The scanner rejected escaped keys, so the lexeme is the key.
-                let key = &min[start + 1..s.i - 1];
-                s.expect(b':').ok()?;
-                let start = s.i;
-                let value = match s.peek()? {
-                    b'"' => {
-                        s.string().ok()?;
-                        Value::Str(canonical_text(&min[start + 1..s.i - 1])?)
-                    }
-                    b't' => {
-                        s.literal(b"true").ok()?;
-                        Value::Bool(true)
-                    }
-                    b'f' => {
-                        s.literal(b"false").ok()?;
-                        Value::Bool(false)
-                    }
-                    b'n' => {
-                        s.literal(b"null").ok()?;
-                        Value::Null
-                    }
-                    b'-' | b'0'..=b'9' => {
-                        s.number().ok()?;
-                        Value::Num(&min[start..s.i])
-                    }
-                    _ => return None,
-                };
-                row.push((key, value));
-                if !s.eat(b',') {
-                    break;
-                }
-            }
-            s.expect(b'}').ok()?;
+        let (mut row, mut shape) = (Vec::new(), Vec::new());
+        parse_object(&mut s, min, "", &mut row, &mut shape)?;
+        // Every row must have the same nested objects with the same key lists.
+        if *first_shape.get_or_insert_with(|| shape.clone()) != shape {
+            return None;
         }
         rows.push(row);
         if !s.eat(b',') {
@@ -249,26 +282,94 @@ fn parse_rows(min: &str) -> Option<Vec<Row<'_>>> {
     Some(rows)
 }
 
+/// Parses the object at the cursor into `row`, flattening nested objects into
+/// leaf keys `prefix.key`. `prefix` is empty for a row and ends with `.` for a
+/// nested object. `shape` collects, in order, each nested object's path
+/// (`true`) and each key path inside a nested object (`false`).
+fn parse_object<'a>(
+    s: &mut Scanner<'a>,
+    min: &'a str,
+    prefix: &str,
+    row: &mut Row<'a>,
+    shape: &mut Vec<(bool, String)>,
+) -> Option<()> {
+    s.expect(b'{').ok()?;
+    if s.eat(b'}') {
+        // A nested `{}` would leave no column to restore it from.
+        return prefix.is_empty().then_some(());
+    }
+    loop {
+        let start = s.i;
+        s.string().ok()?;
+        // The scanner rejected escaped keys, so the lexeme is the key.
+        let key = &min[start + 1..s.i - 1];
+        if !valid_name(key) {
+            return None;
+        }
+        let path = format!("{prefix}{key}");
+        if !prefix.is_empty() {
+            shape.push((false, path.clone()));
+        }
+        s.expect(b':').ok()?;
+        let start = s.i;
+        let value = match s.peek()? {
+            b'{' => {
+                shape.push((true, path.clone()));
+                parse_object(s, min, &format!("{path}."), row, shape)?;
+                None
+            }
+            b'"' => {
+                s.string().ok()?;
+                Some(Value::Str(canonical_text(&min[start + 1..s.i - 1])?))
+            }
+            b't' => {
+                s.literal(b"true").ok()?;
+                Some(Value::Bool(true))
+            }
+            b'f' => {
+                s.literal(b"false").ok()?;
+                Some(Value::Bool(false))
+            }
+            b'n' => {
+                s.literal(b"null").ok()?;
+                Some(Value::Null)
+            }
+            b'-' | b'0'..=b'9' => {
+                s.number().ok()?;
+                Some(Value::Num(&min[start..s.i]))
+            }
+            _ => return None,
+        };
+        if let Some(value) = value {
+            row.push((path, value));
+        }
+        if !s.eat(b',') {
+            break;
+        }
+    }
+    s.expect(b'}').ok()
+}
+
 /// Columns in first-seen order and their types. `None` when a row's key order
 /// is not a subsequence of the column order, a key is not a valid column name,
 /// there are no columns, or a column mixes non-null types.
-fn layout<'a>(rows: &[Row<'a>]) -> Option<(Vec<&'a str>, Vec<Ty>)> {
+fn layout<'r>(rows: &'r [Row]) -> Option<(Vec<&'r str>, Vec<Ty>)> {
     let mut index: HashMap<&str, usize> = HashMap::new();
     let mut cols = Vec::new();
     for (key, _) in rows.iter().flatten() {
-        index.entry(key).or_insert_with(|| {
-            cols.push(*key);
+        index.entry(key.as_str()).or_insert_with(|| {
+            cols.push(key.as_str());
             cols.len() - 1
         });
     }
-    if cols.is_empty() || !cols.iter().all(|c| valid_name(c)) {
+    if cols.is_empty() || !cols.iter().all(|c| valid_path(c)) {
         return None;
     }
     let mut kinds: Vec<Option<Ty>> = vec![None; cols.len()];
     for row in rows {
         let mut prev = None;
         for (key, value) in row {
-            let j = index[key];
+            let j = index[key.as_str()];
             if prev.is_some_and(|p| j <= p) {
                 return None;
             }
@@ -315,6 +416,14 @@ fn valid_name(name: &str) -> bool {
     !name
         .chars()
         .any(|c| matches!(c, '.' | ',' | '"' | '\\') || c < ' ')
+}
+
+/// A column path is one name, or two or more non-empty names joined by `.`.
+fn valid_path(path: &str) -> bool {
+    (!path.contains('.') && valid_name(path))
+        || path
+            .split('.')
+            .all(|seg| !seg.is_empty() && valid_name(seg))
 }
 
 /// Quotes a string cell when its bare text would read as missing, `null`, a
