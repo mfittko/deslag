@@ -210,7 +210,9 @@ pub struct CompressionContext<'c> {
     pub json_table: bool,
     /// Enables the exact line-run codec. With `json_minify` on, the codec
     /// handles text the JSON scanner rejects as `unsupported_format`. With
-    /// `json_minify` off, all input table-v1 does not encode goes to the codec.
+    /// `json_minify` off, input table-v1 rejects as `unsupported_format` (all
+    /// input when `json_table` is off) goes to the codec. Other table-v1
+    /// rejections skip with their reason and the `json-table` id.
     /// The codec skips input that already starts with the `lines-v1` header as
     /// `unsupported_format`. `false` in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
     pub exact_line_runs: bool,
@@ -462,8 +464,10 @@ fn decide<'a>(
         // Text the JSON transforms reject as unsupported_format is plain text. A
         // leading value rejected for duplicate_key, escaped_key or depth_limit
         // keeps the input on the JSON path, even when text lines follow. With
-        // json_minify off, all input table-v1 does not encode arrives here as
-        // unsupported_format.
+        // json_minify off, input table-v1 rejects as unsupported_format (all
+        // input when json_table is off) arrives here. Other table-v1 rejections
+        // (insufficient_gain, duplicate_key, escaped_key, depth_limit) skip with
+        // that reason and the json-table id.
         Err(Reason::UnsupportedFormat) if ctx.exact_line_runs => {
             set_line_runs_identity(report);
             // Input that already starts with the lines-v1 header is skipped as

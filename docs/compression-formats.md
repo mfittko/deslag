@@ -63,9 +63,11 @@ The encoded text is the header line followed by the body.
 - With the switch on, input that the JSON scanner rejects as
   `unsupported_format` is plain text and goes to this codec. With
   `json_minify` on, JSON content stays on the JSON path. With `json_minify` off
-  and `exact_line_runs` on, all input goes to this codec, except input that
-  table-v1 encodes when `json_table` is on (see table-v1, Pipeline and
-  configuration).
+  and `exact_line_runs` on, input that table-v1 rejects as `unsupported_format`
+  goes to this codec, or all input when `json_table` is off. Other table-v1
+  rejections (`insufficient_gain`, `duplicate_key`, `escaped_key`,
+  `depth_limit`) skip with that reason and the `json-table` id (see table-v1,
+  Pipeline and configuration).
 - The JSON scanner checks key policy and depth before it checks that the whole
   input is one value. Input whose leading JSON value it rejects for
   `duplicate_key`, `escaped_key` or `depth_limit` stays on the JSON path and

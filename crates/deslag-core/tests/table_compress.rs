@@ -329,6 +329,16 @@ fn table_and_line_runs_route_by_input() {
         };
         assert_eq!(r.report.transform_id, want);
     }
+    // With json_minify off, a table-v1 rejection other than unsupported_format
+    // skips with that reason and never reaches the line-run codec.
+    let lines_no_minify = CompressionContext {
+        exact_line_runs: true,
+        ..ctx(Mode::Safe, false, true)
+    };
+    let r = compress(r#"[{"a":1},{"a":2}]"#, &lines_no_minify).report;
+    assert_eq!(r.outcome, Outcome::Skipped);
+    assert_eq!(r.reason, Some(Reason::InsufficientGain));
+    assert_eq!(r.transform_id, JSON_TABLE_ID);
     // With every transform switch off, compress skips with TransformDisabled.
     let none = CompressionContext {
         exact_line_runs: false,
