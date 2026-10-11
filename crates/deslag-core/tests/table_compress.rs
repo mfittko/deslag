@@ -155,6 +155,25 @@ fn table_only_reports_the_table_reason() {
     );
 }
 
+#[test]
+fn table_only_early_skips_report_json_table() {
+    let mut table_only = ctx(Mode::Off, false, true);
+    let check = |ctx: &CompressionContext, input: &str, reason| {
+        let r = compress(input, ctx).report;
+        assert_eq!(r.reason, Some(reason));
+        assert_eq!(r.transform_id, JSON_TABLE_ID);
+        assert_eq!(r.transform_version, JSON_TABLE_VERSION);
+        assert_eq!(r.format_version, None);
+    };
+    check(&table_only, &rows(10), Reason::ModeOff);
+    table_only.mode = Mode::Safe;
+    table_only.limits.min_candidate_bytes = 3;
+    check(&table_only, "[]", Reason::BelowMinBytes);
+    table_only.limits.min_candidate_bytes = 0;
+    table_only.limits.max_candidate_bytes = 4;
+    check(&table_only, &rows(10), Reason::AboveMaxBytes);
+}
+
 fn lenient() -> TableOptions<'static> {
     TableOptions {
         min_savings_permille: 0,
@@ -179,6 +198,17 @@ fn markdown_kv_renders_rows_as_list_items() {
     );
     let csv = encode(input, &lenient()).unwrap();
     assert_eq!(kv.lines().next(), csv.lines().next());
+}
+
+#[test]
+fn markdown_kv_indents_multi_line_values() {
+    let input = r#"[{"id":1,"text":"line1\nline2\n- fake: item"},{"id":2,"text":"ok"}]"#;
+    assert_eq!(
+        render_markdown_kv(input, &lenient()).unwrap(),
+        "table-v1 [2]{id:int,text:str}\n\
+         - id: 1\n  text: \"line1\n  line2\n  - fake: item\"\n\
+         - id: 2\n  text: ok"
+    );
 }
 
 #[test]

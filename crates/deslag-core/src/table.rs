@@ -140,7 +140,10 @@ fn build(input: &str, opts: &TableOptions, kv: bool) -> Result<String, Reason> {
                 out.push_str(if j == 0 { " " } else { "\n  " });
                 out.push_str(key);
                 out.push_str(": ");
-                push_cell(&mut out, v);
+                // Indent continuation lines so value text cannot start a list item.
+                let mut cell = String::new();
+                push_cell(&mut cell, v);
+                out.push_str(&cell.replace('\n', "\n  "));
             }
         }
     }

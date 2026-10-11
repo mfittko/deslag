@@ -171,6 +171,9 @@ The output starts with the same header line as the CSV form. Each row follows as
 - A nested leaf uses its dotted column path as the key, for example `meta.region`.
 - A missing field is omitted. A row with no fields is a bare `-`.
 - Each value is written exactly as its CSV cell, with the same quoting rules.
+- A value with line breaks continues on further lines. Each line after the first is indented two spaces, the item indent, so value text cannot start a new list item.
+
+The example below is illustrative. It is rendered with `min_savings_permille: 0`; the default gain check rejects an input this small.
 
 ```text
 table-v1 [2]{id:int,name:str,meta.region:str}
@@ -189,5 +192,6 @@ When the switch is on, `compress` calls `encode` with `max_rows` set to `Limits:
 
 - If the input is eligible, `compress` decodes the encoded text and compares it with the minified original. A mismatch fails with `invalid_candidate` and validation outcome `failed`. Otherwise the report has transform id `json-table`, transform version 1 and format version 1. The byte and token fields are filled as for the minifier. Observe mode emits the original with outcome `would_change`.
 - If the input is ineligible and `json_minify` is true, `compress` runs the JSON minifier unchanged and reports it as `json-minify`.
-- If the input is ineligible and `json_minify` is false, `compress` skips with the table-v1 reason and transform id `json-table`.
+- If the input is ineligible and `json_minify` is false, `compress` skips with the table-v1 reason and transform id `json-table`. The format version is `null`, because no candidate was built.
+- If `json_table` is true and `json_minify` is false, every skip reports transform id `json-table`, including the mode and size checks that run before encoding.
 - If both switches are false, `compress` skips with `transform_disabled`.

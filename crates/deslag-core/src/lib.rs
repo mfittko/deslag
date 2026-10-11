@@ -380,6 +380,11 @@ fn decide<'a>(
     report: &mut CompressionReport,
 ) -> Result<Cow<'a, str>, Reason> {
     let limits = &ctx.limits;
+    // A table-only context reports json-table for every outcome, early skips included.
+    if ctx.json_table && !ctx.json_minify {
+        report.transform_id = JSON_TABLE_ID;
+        report.transform_version = JSON_TABLE_VERSION;
+    }
     if ctx.mode == Mode::Off {
         return Err(Reason::ModeOff);
     }
@@ -413,11 +418,7 @@ fn decide<'a>(
                 }
                 return emit(input, text, ctx, report);
             }
-            Err(reason) if !ctx.json_minify => {
-                report.transform_id = JSON_TABLE_ID;
-                report.transform_version = JSON_TABLE_VERSION;
-                return Err(reason);
-            }
+            Err(reason) if !ctx.json_minify => return Err(reason),
             Err(_) => {}
         }
     }
