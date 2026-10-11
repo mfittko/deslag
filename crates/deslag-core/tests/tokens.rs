@@ -85,6 +85,8 @@ fn every_estimate_is_labeled() {
         assert_eq!(c.tokenizer, "deslag-estimate-v1");
     }
     assert_eq!(EstimateCounter.count("").count, 0);
+    assert_eq!(EstimateCounter.count(" ").count, 1);
+    assert_eq!(EstimateCounter.count("a ").count, 2);
 }
 
 #[test]
