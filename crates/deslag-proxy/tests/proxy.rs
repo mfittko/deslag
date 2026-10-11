@@ -63,13 +63,12 @@ where
     (addr, rx)
 }
 
-fn full(status: u16, headers: &[(&str, &str)], body: &'static str) -> Response<MockBody> {
+fn full(status: u16, headers: &[(&str, &str)], body: impl Into<Bytes>) -> Response<MockBody> {
     let mut resp = Response::builder().status(status);
     for (k, v) in headers {
         resp = resp.header(*k, *v);
     }
-    resp.body(Full::new(Bytes::from_static(body.as_bytes())).boxed())
-        .unwrap()
+    resp.body(Full::new(body.into()).boxed()).unwrap()
 }
 
 /// Mock upstream whose single response body is fed by the returned sender.
@@ -125,6 +124,9 @@ async fn relays_request_and_response_faithfully() {
                 ("content-type", "application/json"),
                 ("request-id", "req_1"),
                 ("anthropic-ratelimit-requests-remaining", "9"),
+                ("connection", "keep-alive, x-upstream-hop"),
+                ("x-upstream-hop", "1"),
+                ("keep-alive", "timeout=5"),
             ],
             r#"{"id":"msg_1", "unknown":true}"#,
         )
@@ -180,10 +182,8 @@ async fn relays_provider_errors_and_rate_limits() {
         (429, "rate_limit_error"),
         (529, "overloaded_error"),
     ] {
-        let body: &'static str = Box::leak(
-            format!(r#"{{"type":"error","error":{{"type":"{kind}","message":"x"}}}}"#)
-                .into_boxed_str(),
-        );
+        let body = format!(r#"{{"type":"error","error":{{"type":"{kind}","message":"x"}}}}"#);
+        let expected = body.clone();
         let (upstream, _seen) = mock(move || {
             full(
                 status,
@@ -192,7 +192,7 @@ async fn relays_provider_errors_and_rate_limits() {
                     ("x-should-retry", "true"),
                     ("anthropic-ratelimit-tokens-reset", "2026-10-11T00:00:00Z"),
                 ],
-                body,
+                body.clone(),
             )
         })
         .await;
@@ -211,7 +211,7 @@ async fn relays_provider_errors_and_rate_limits() {
             resp.headers()["anthropic-ratelimit-tokens-reset"],
             "2026-10-11T00:00:00Z"
         );
-        assert_eq!(body_bytes(resp).await, body.as_bytes());
+        assert_eq!(body_bytes(resp).await, expected.as_bytes());
     }
 }
 
@@ -339,14 +339,24 @@ async fn only_configured_upstream_is_contacted() {
     assert_eq!(s.uri, "/v1/models");
     assert_eq!(s.headers["host"], upstream.to_string());
     assert_eq!(s.headers["x-api-key"], "sk-secret");
-    assert!(decoy_seen.try_recv().is_err());
+    assert!(
+        timeout(Duration::from_millis(200), decoy_seen.recv())
+            .await
+            .is_err(),
+        "decoy upstream was contacted"
+    );
 }
 
 #[tokio::test]
 async fn upstream_failure_is_502_without_secrets() {
-    let closed = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let dead = closed.local_addr().unwrap();
-    drop(closed);
+    // Holds the port and closes every connection before any response.
+    let dead_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let dead = dead_listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        while let Ok((stream, _)) = dead_listener.accept().await {
+            drop(stream);
+        }
+    });
     let proxy = proxy_to(dead).await;
     let resp = send(
         proxy,

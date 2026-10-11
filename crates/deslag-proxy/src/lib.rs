@@ -4,12 +4,12 @@
 //! is buffered, parsed or logged. The upstream authority comes only from
 //! configuration, never from the request target, `Host` header or credentials.
 
-use std::{convert::Infallible, fmt, net::IpAddr};
+use std::{convert::Infallible, fmt, net::IpAddr, time::Duration};
 
 use bytes::Bytes;
 use http_body_util::{Either, Full};
 use hyper::{
-    HeaderMap, Request, Response, StatusCode, Uri,
+    HeaderMap, Method, Request, Response, StatusCode, Uri, Version,
     body::Incoming,
     header::{self, HeaderName},
     server::conn::http1,
@@ -47,6 +47,12 @@ impl Upstream {
             Some("http") => return Err("plain http upstream is allowed only on loopback".into()),
             _ => return Err("upstream URL scheme must be https or http".into()),
         };
+        if url.contains('#') {
+            return Err("upstream URL must not have a fragment".into());
+        }
+        if authority.as_str().len() > authority.host().len() && authority.port_u16().is_none() {
+            return Err("upstream URL port is invalid".into());
+        }
         if uri.query().is_some() {
             return Err("upstream URL must not have a query".into());
         }
@@ -86,16 +92,27 @@ fn is_loopback(host: &str) -> bool {
 }
 
 /// Accepts connections on `listener` and relays every request to `upstream`.
-pub async fn serve(listener: TcpListener, upstream: Upstream) -> std::io::Result<()> {
+pub async fn serve(listener: TcpListener, upstream: Upstream) {
+    // SSE is many small writes: disable Nagle on both legs.
+    let mut http = HttpConnector::new();
+    http.set_nodelay(true);
+    http.enforce_http(false);
     let https = hyper_rustls::HttpsConnectorBuilder::new()
         .with_webpki_roots()
         .https_or_http()
         .enable_http1()
-        .build();
+        .wrap_connector(http);
     let client: HttpsClient = Client::builder(TokioExecutor::new()).build(https);
     loop {
-        // ponytail: an accept error (e.g. fd exhaustion) ends the server; add backoff if it bites.
-        let (stream, _) = listener.accept().await?;
+        let stream = match listener.accept().await {
+            Ok((stream, _)) => stream,
+            // Transient errors such as fd exhaustion must not end the proxy.
+            Err(_) => {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                continue;
+            }
+        };
+        let _ = stream.set_nodelay(true);
         let (client, upstream) = (client.clone(), upstream.clone());
         let svc = service_fn(move |req| forward(client.clone(), upstream.clone(), req));
         tokio::spawn(async move {
@@ -112,7 +129,10 @@ async fn forward(
     upstream: Upstream,
     mut req: Request<Incoming>,
 ) -> Result<Response<ProxyBody>, Infallible> {
-    let Some(target) = upstream.target(req.uri()) else {
+    let target = (req.method() != Method::CONNECT)
+        .then(|| upstream.target(req.uri()))
+        .flatten();
+    let Some(target) = target else {
         return Ok(error(
             StatusCode::BAD_REQUEST,
             "invalid_request_error",
@@ -120,6 +140,8 @@ async fn forward(
         ));
     };
     *req.uri_mut() = target;
+    // Upstream always speaks HTTP/1.1, whatever version the client used.
+    *req.version_mut() = Version::HTTP_11;
     strip_hop_by_hop(req.headers_mut());
     // The client derives Host from the configured upstream.
     req.headers_mut().remove(header::HOST);
@@ -185,6 +207,8 @@ mod tests {
             "https://user:pw@example.com",
             "ftp://example.com",
             "https://example.com/?a=1",
+            "https://example.com#frag",
+            "https://example.com:99999",
             "/relative",
             "not a url",
         ] {
