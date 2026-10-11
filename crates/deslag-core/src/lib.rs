@@ -82,9 +82,11 @@ pub enum Reason {
     /// header, so the codec never encodes its own output.
     UnsupportedFormat,
     DepthLimit,
-    /// Consumers disagree on which duplicate wins.
+    /// Consumers disagree on which duplicate wins. A duplicate in any object
+    /// skips the whole document.
     DuplicateKey,
-    /// An escaped key could hide a duplicate.
+    /// An escaped key could hide a duplicate. An escaped key in any object
+    /// skips the whole document.
     EscapedKey,
     /// The candidate is not shorter than the input.
     InsufficientGain,
@@ -458,6 +460,11 @@ fn set_line_runs_identity(report: &mut CompressionReport) {
 /// Every string, number and literal lexeme is copied byte for byte, so values,
 /// escapes and number precision are preserved. Member and element order is kept.
 ///
+/// Ambiguous input is skipped as a whole: one duplicate or escaped key anywhere,
+/// however deep, makes the entire document pass through, because a partial
+/// rewrite of an ambiguous document is never emitted. Escaped string values and
+/// keys repeated across sibling objects are not ambiguous and still minify.
+///
 /// `None` means: pass the input through unchanged. Equivalent to [`compress`]
 /// with [`FIRST_SLICE_JSON_MINIFY_CONTEXT`]; `Some` exactly when the outcome
 /// is `Changed`.
@@ -555,10 +562,11 @@ impl<'a> Scanner<'a> {
                 return Err(BAD);
             }
             let key = self.string()?;
-            // ponytail: keys are compared as raw lexemes, and any escaped key is
-            // skipped. An escaped key such as `"\u0061"` decodes to the same key as
-            // `"a"`, so the two could hide a duplicate. Decode keys
-            // if escaped keys turn out to be common in real tool output.
+            // ponytail: keys are compared as raw lexemes, and any escaped key skips
+            // the whole document. An escaped key such as `"\u0061"` decodes to the
+            // same key as `"a"`, so the two could hide a duplicate. Ceiling: one such
+            // key anywhere forfeits all savings for the document. Decode keys if
+            // escaped keys turn out to be common in real tool output.
             if key.contains(&b'\\') {
                 return Err(Reason::EscapedKey);
             }
