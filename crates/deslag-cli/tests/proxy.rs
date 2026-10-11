@@ -56,7 +56,17 @@ fn valid_start_reports_bound_address_and_redacted_upstream() {
 }
 
 #[test]
-fn valid_start_with_minify_json_on_ipv6_loopback() {
+fn valid_start_with_minify_json() {
+    assert_valid_start(&["--minify-json", "--listen", "127.0.0.1:0"], "127.0.0.1");
+}
+
+#[test]
+fn valid_start_on_ipv6_loopback() {
+    // Hosts without an IPv6 loopback (Docker's default) cannot bind [::1].
+    if std::net::TcpListener::bind("[::1]:0").is_err() {
+        eprintln!("skipped: no IPv6 loopback on this host");
+        return;
+    }
     assert_valid_start(&["--minify-json", "--listen", "[::1]:0"], "[::1]");
 }
 
