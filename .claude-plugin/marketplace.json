@@ -1,0 +1,15 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "deslag",
+  "description": "Claude Code plugin for deslag, a local compression layer for tool results.",
+  "owner": {
+    "name": "mfittko"
+  },
+  "plugins": [
+    {
+      "name": "deslag",
+      "source": "./plugins/claude",
+      "description": "PostToolUse hook adapter for deslag. Run /deslag:install to install the matching deslag binary."
+    }
+  ]
+}
