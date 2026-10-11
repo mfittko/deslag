@@ -66,7 +66,8 @@ const INTEGRITY_HEADERS: [&str; 5] = [
 ];
 
 /// Request body: an optional buffered prefix followed by the rest of the original
-/// body, or by the buffered trailers when the body was read to the end.
+/// body, or by the buffered trailers when the body was read to the end. The
+/// upstream connection drops request trailers; see [`buffer`].
 pub(crate) struct ReqBody {
     prefix: Option<Bytes>,
     rest: Option<Incoming>,
@@ -152,7 +153,9 @@ pub(crate) async fn prepare(
 
 /// Buffers up to `MAX_INSPECT_BYTES` of `body` and rewrites it once complete.
 /// A body with trailers is never rewritten, because a trailer such as
-/// `content-digest` can pin its bytes. Its trailers are replayed after it.
+/// `content-digest` can pin its bytes. The trailers are kept in the body, but
+/// they do not reach the upstream: the hop-by-hop strip removes the `trailer`
+/// header, and a `content-length` body carries no trailers over HTTP/1.1.
 async fn buffer(mut parts: Parts, mut body: Incoming) -> Result<Request<ReqBody>, hyper::Error> {
     let hint = body.size_hint().exact().unwrap_or(0);
     let mut buf = Vec::with_capacity(hint.min(MAX_INSPECT_BYTES as u64 + 1) as usize);
