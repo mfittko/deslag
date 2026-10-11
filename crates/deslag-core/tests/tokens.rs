@@ -17,8 +17,10 @@ const ASCII_FIXTURE_ERROR_BOUND: f64 = 0.28;
 const CJK_FIXTURE_ERROR_BOUND: f64 = 0.40;
 const AGGREGATE_ERROR_BOUND: f64 = 0.10;
 /// The estimated savings ratio may undershoot the reference by this much. It
-/// may never exceed the reference. `nested_tab.json` sets it: one estimate
-/// cannot sit below cl100k_base and within 0.10 of o200k_base there.
+/// may never exceed the reference. `nested_tab.json` against o200k_base sets
+/// it. The space and tab variants share one estimate (0.363), which must stay
+/// below 0.427 (`nested.json`, cl100k_base). So it cannot come within 0.10 of
+/// 0.531 (`nested_tab.json`, o200k_base).
 const SAVINGS_UNDERSHOOT: f64 = 0.17;
 
 const PAIRS: [(&str, &str); 4] = [

@@ -6,8 +6,7 @@ enforces the bounds below and pins the estimate for every fixture.
 
 ## Corpus
 
-Every sample file was written for this repository. No file is copied
-from a third-party source.
+Every sample file was written for this repository.
 
 | File | Content |
 | --- | --- |
@@ -54,8 +53,8 @@ BPE files are already cached.
 These encodings belong to other model families. Their counts are calibration
 references. They are not Claude counts, and no deslag count is exact for any
 model family. Calibration against live Claude counts is pending: it needs an
-authorized offline run of a provider token-counting endpoint, and no API key
-was available. Production code never calls a counting API.
+authorized out-of-band run of a provider token-counting endpoint, outside
+production code, and no API key was available. Production code never calls a counting API.
 
 ## Measured error
 
