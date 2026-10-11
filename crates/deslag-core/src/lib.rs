@@ -199,8 +199,10 @@ pub struct CompressionContext<'c> {
     pub json_minify: bool,
     /// Enables the exact line-run codec. With `json_minify` on, the codec
     /// handles text the JSON scanner rejects as `unsupported_format`. With
-    /// `json_minify` off, all input goes to the codec. The codec skips input
-    /// that already starts with the `lines-v1` header as `unsupported_format`.
+    /// `json_minify` off, all input goes to the codec. When `line_templates`
+    /// is on, it takes precedence and the line-template codec takes this
+    /// codec's place. The codec skips input that already starts with the
+    /// `lines-v1` header as `unsupported_format`.
     /// `false` in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
     pub exact_line_runs: bool,
     /// Enables the line-template codec. It takes the place of the line-run

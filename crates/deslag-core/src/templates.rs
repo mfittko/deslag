@@ -28,7 +28,9 @@ pub fn encode_templates(input: &str) -> Option<String> {
     let mut i = 0;
     // ponytail: when a group does not pay, one retry starts at the next unit, so
     // an outlier base does not block the lines below it. When a paying run starts
-    // at the retry unit, the retry moves to the first unit after the run. Until
+    // at the retry unit, the retry moves to the first unit after the run. A
+    // one-line attempt changes no retry state; at the retry unit it moves the
+    // retry to the next unit. Until
     // the retry, no other group starts inside the failed span. When the retry
     // also fails, no group starts inside either span, so each unit is scanned a
     // bounded number of times. A shorter group in that span could still pay; it
@@ -57,7 +59,11 @@ pub fn encode_templates(input: &str) -> Option<String> {
                 i += len;
                 continue;
             }
-            if retry_at.take() == Some(i) {
+            if len == 1 {
+                if retry_at == Some(i) {
+                    retry_at = Some(i + 1);
+                }
+            } else if retry_at.take() == Some(i) {
                 no_group_before = no_group_before.max(i + len);
             } else {
                 no_group_before = i + len;

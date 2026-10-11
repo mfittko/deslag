@@ -382,6 +382,18 @@ fn outlier_base_does_not_block_the_group_below() {
 }
 
 #[test]
+fn outlier_base_after_a_unique_line_does_not_block_the_group_below() {
+    let rows: String = (0..1000)
+        .map(|i| format!("12:{:02}:{:02} 200 /a\n", i / 60, i % 60))
+        .collect();
+    let input = format!("starting\n12:00:00 500 /x\n{rows}");
+    let encoded = roundtrip(&input);
+    assert!(encoded.len() < input.len());
+    let r = compress(&input, &on(Mode::Safe));
+    assert_eq!(r.report.outcome, Outcome::Changed);
+}
+
+#[test]
 fn retry_moves_past_a_run_at_the_retry_unit() {
     let run = "12:00:00 200 /a\n".repeat(20);
     let rows: String = (1..1000)

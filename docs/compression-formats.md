@@ -62,7 +62,9 @@ The encoded text is the header line followed by the body.
 - With the switch on, input that the JSON scanner rejects as
   `unsupported_format` is plain text and goes to this codec. With
   `json_minify` on, JSON content stays on the JSON path. With `json_minify` off
-  and `exact_line_runs` on, all input goes to this codec.
+  and `exact_line_runs` on, all input goes to this codec. When
+  `line_templates` is on, it takes precedence and the input goes to the
+  `lines-v2` encoder instead.
 - The JSON scanner checks key policy and depth before it checks that the whole
   input is one value. Input whose leading JSON value it rejects for
   `duplicate_key`, `escaped_key` or `depth_limit` stays on the JSON path and
@@ -143,8 +145,9 @@ At each unit, in input order:
    The group is written only when the directive and the rows are shorter than
    the rows' literal bytes, escapes included. Otherwise the base is written
    literally, and the encoder retries once with a group that starts at the
-   next unit. When a run directive is written at the retry unit, the retry
-   moves to the first unit after the run. Until the retry, no other group
+   next unit. A one-line attempt (no row fits the base) changes no retry
+   state. When a run directive or a one-line attempt is at the retry unit,
+   the retry moves to the first unit after it. Until the retry, no other group
    starts inside the failed group's span. When the retry also fails, no group
    starts at the other units of either group. A group that is written ends the
    retry. Run directives still apply to all units.
