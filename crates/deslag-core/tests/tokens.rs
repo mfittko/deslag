@@ -203,8 +203,9 @@ fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 /// Returns the first manifest line that adds a non-dev dependency: a non-dev
-/// `[..dependencies]` header, or a `dependencies`, `build-dependencies` or
-/// `target.` key (bare or quoted) outside the `[dev-dependencies]` table.
+/// `[..dependencies]` header, or a line outside the `[dev-dependencies]` table
+/// whose first dotted key segment (bare, quoted or spaced) is `dependencies`,
+/// `build-dependencies` or `target`.
 fn manifest_violation(manifest: &str) -> Option<&str> {
     let mut in_dev = false;
     for line in manifest.lines().map(str::trim) {
@@ -214,9 +215,13 @@ fn manifest_violation(manifest: &str) -> Option<&str> {
                 return Some(line);
             }
         } else if !in_dev
-            && ["dependencies", "build-dependencies", "target."]
-                .iter()
-                .any(|key| line.trim_start_matches(['"', '\'']).starts_with(key))
+            && ["dependencies", "build-dependencies", "target"].contains(
+                &line
+                    .split(['.', '='])
+                    .next()
+                    .unwrap_or_default()
+                    .trim_matches(|c: char| c.is_whitespace() || c == '"' || c == '\''),
+            )
         {
             return Some(line);
         }
@@ -291,6 +296,9 @@ fn no_dependency_guard_rejects_every_form() {
         "\"dependencies\".reqwest = \"1\"\n[package]",
         "'build-dependencies' = { cc = \"1\" }\n[package]",
         "[dev-dependencies]\nx = \"1\"\n[dependencies]\ny = \"1\"",
+        "\"target\".'cfg(unix)'.dependencies.libc = \"0.2\"\n[package]",
+        "target = { 'cfg(unix)' = { dependencies = { libc = \"0.2\" } } }\n[package]",
+        "target .'cfg(unix)'.dependencies.libc = \"0.2\"\n[package]",
     ] {
         assert!(manifest_violation(bad).is_some(), "{bad}");
     }
