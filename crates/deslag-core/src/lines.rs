@@ -2,6 +2,8 @@
 //!
 //! The format is specified in `docs/compression-formats.md`.
 
+use crate::templates::{self, HEADER_V2, TEMPLATE};
+
 /// Stable transform identity for the line-run codec.
 pub const EXACT_LINE_RUNS_ID: &str = "exact-line-runs";
 /// Bumped whenever [`encode_lines`] output can change for some input.
@@ -10,9 +12,9 @@ pub const EXACT_LINE_RUNS_VERSION: u32 = 1;
 pub const LINES_FORMAT_VERSION: u32 = 1;
 
 /// Every body line that starts with this prefix is a directive or an escaped line.
-const PREFIX: &str = "#!deslag";
-const HEADER: &str = "#!deslag lines-v1\n";
-const ESCAPE: &str = "#!deslag|";
+pub(crate) const PREFIX: &str = "#!deslag";
+pub(crate) const HEADER: &str = "#!deslag lines-v1\n";
+pub(crate) const ESCAPE: &str = "#!deslag|";
 const RUN: &str = "#!deslag x";
 
 /// Why [`decode_lines`] rejected its input.
@@ -43,15 +45,7 @@ pub fn encode_lines(input: &str) -> Option<String> {
         if count < 2 {
             continue;
         }
-        let directive = format!("{RUN}{count}\n");
-        // Bytes one copy costs when written out.
-        let copy_cost = unit.len()
-            + if unit.starts_with(PREFIX) {
-                ESCAPE.len()
-            } else {
-                0
-            };
-        if directive.len() < (count - 1) * copy_cost {
+        if let Some(directive) = run_directive(unit, count) {
             out.push_str(&directive);
         } else {
             for _ in 1..count {
@@ -62,28 +56,56 @@ pub fn encode_lines(input: &str) -> Option<String> {
     Some(out)
 }
 
-fn push_unit(out: &mut String, unit: &str) {
+/// The run directive for `count` copies of `unit`, when it is shorter than the
+/// `count - 1` copies it replaces.
+pub(crate) fn run_directive(unit: &str, count: usize) -> Option<String> {
+    let directive = format!("{RUN}{count}\n");
+    (directive.len() < (count - 1) * unit_cost(unit)).then_some(directive)
+}
+
+/// Bytes `unit` costs when written out, escape included.
+pub(crate) fn unit_cost(unit: &str) -> usize {
+    unit.len()
+        + if unit.starts_with(PREFIX) {
+            ESCAPE.len()
+        } else {
+            0
+        }
+}
+
+pub(crate) fn push_unit(out: &mut String, unit: &str) {
     if unit.starts_with(PREFIX) {
         out.push_str(ESCAPE);
     }
     out.push_str(unit);
 }
 
-/// Reconstructs the original text from `lines-v1` `encoded`. Fails with
-/// [`DecodeError::OutputTooLarge`] before the output would pass `max_output` bytes.
+/// Reconstructs the original text from `lines-v1` or `lines-v2` `encoded`. Fails
+/// with [`DecodeError::OutputTooLarge`] before the output would pass `max_output` bytes.
 pub fn decode_lines(encoded: &str, max_output: usize) -> Result<String, DecodeError> {
-    let body = encoded
-        .strip_prefix(HEADER)
-        .ok_or(DecodeError::MissingHeader)?;
+    let (v2, body) = match encoded.strip_prefix(HEADER) {
+        Some(body) => (false, body),
+        None => (
+            true,
+            encoded
+                .strip_prefix(HEADER_V2)
+                .ok_or(DecodeError::MissingHeader)?,
+        ),
+    };
     let mut out = String::new();
     // The unit directly above the next line, until a directive consumes it.
     let mut last: Option<&str> = None;
-    for line in body.split_inclusive('\n') {
+    let mut lines = body.split_inclusive('\n');
+    while let Some(line) = lines.next() {
         let unit = if let Some(unit) = line.strip_prefix(ESCAPE) {
             if !unit.starts_with(PREFIX) {
                 return Err(DecodeError::InvalidDirective);
             }
             unit
+        } else if v2 && line.starts_with(TEMPLATE) {
+            let base = last.take().ok_or(DecodeError::InvalidDirective)?;
+            templates::decode_group(line, base, &mut lines, &mut out, max_output)?;
+            continue;
         } else if line.starts_with(PREFIX) {
             let count = parse_run(line).ok_or(DecodeError::InvalidDirective)?;
             let unit = last.take().ok_or(DecodeError::InvalidDirective)?;
@@ -107,7 +129,12 @@ fn parse_run(line: &str) -> Option<usize> {
     digits.parse().ok().filter(|&n| n >= 2)
 }
 
-fn push_bounded(out: &mut String, unit: &str, times: usize, max: usize) -> Result<(), DecodeError> {
+pub(crate) fn push_bounded(
+    out: &mut String,
+    unit: &str,
+    times: usize,
+    max: usize,
+) -> Result<(), DecodeError> {
     unit.len()
         .checked_mul(times)
         .and_then(|n| n.checked_add(out.len()))

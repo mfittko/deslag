@@ -5,10 +5,14 @@
 //! recording and decide whether to commit a `Changed` output.
 
 mod lines;
+mod templates;
 
 pub use lines::{
     DecodeError, EXACT_LINE_RUNS_ID, EXACT_LINE_RUNS_VERSION, LINES_FORMAT_VERSION, decode_lines,
     encode_lines,
+};
+pub use templates::{
+    LINE_TEMPLATES_ID, LINE_TEMPLATES_VERSION, LINES_V2_FORMAT_VERSION, encode_templates,
 };
 
 use std::{borrow::Cow, collections::HashSet, fmt::Write, time::Duration, time::Instant};
@@ -79,7 +83,9 @@ pub enum Reason {
     /// Bare scalar, invalid or truncated JSON, or trailing data, when no depth
     /// or key-policy reason occurs earlier in the input. On the
     /// `exact-line-runs` path, input that already starts with the `lines-v1`
-    /// header, so the codec never encodes its own output.
+    /// header, and on the `line-templates` path, input that already starts with
+    /// the `lines-v1` or `lines-v2` header, so the codec never encodes its own
+    /// output.
     UnsupportedFormat,
     DepthLimit,
     /// Consumers disagree on which duplicate wins. A duplicate in any object
@@ -197,6 +203,12 @@ pub struct CompressionContext<'c> {
     /// that already starts with the `lines-v1` header as `unsupported_format`.
     /// `false` in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
     pub exact_line_runs: bool,
+    /// Enables the line-template codec. It takes the place of the line-run
+    /// codec on the same routing and emits `lines-v2`, which also carries run
+    /// directives. The codec skips input that already starts with the `lines-v1`
+    /// or `lines-v2` header as `unsupported_format`. `false` in
+    /// [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
+    pub line_templates: bool,
     pub limits: Limits,
     /// Without a counter, every token field in the report is `None`.
     pub token_counter: Option<&'c dyn TokenCounter>,
@@ -209,6 +221,7 @@ pub const FIRST_SLICE_JSON_MINIFY_CONTEXT: CompressionContext<'static> = Compres
     policy_version: 1,
     json_minify: true,
     exact_line_runs: false,
+    line_templates: false,
     limits: Limits {
         min_candidate_bytes: 0,
         max_candidate_bytes: usize::MAX,
@@ -381,11 +394,12 @@ fn decide<'a>(
     if ctx.mode == Mode::Off {
         return Err(Reason::ModeOff);
     }
-    if !ctx.json_minify && !ctx.exact_line_runs {
+    let lines = ctx.exact_line_runs || ctx.line_templates;
+    if !ctx.json_minify && !lines {
         return Err(Reason::TransformDisabled);
     }
     if !ctx.json_minify {
-        set_line_runs_identity(report);
+        set_line_runs_identity(report, ctx);
     }
     if input.len() < limits.min_candidate_bytes {
         return Err(Reason::BelowMinBytes);
@@ -413,11 +427,16 @@ fn decide<'a>(
         // leading value rejected for duplicate_key, escaped_key or depth_limit
         // keeps the input on the JSON path, even when text lines follow. With
         // json_minify off, all input arrives here as unsupported_format.
-        Err(Reason::UnsupportedFormat) if ctx.exact_line_runs => {
-            set_line_runs_identity(report);
-            // Input that already starts with the lines-v1 header is skipped as
+        Err(Reason::UnsupportedFormat) if lines => {
+            set_line_runs_identity(report, ctx);
+            // Input that already starts with a header the codec emits is skipped as
             // unsupported_format, so the codec never encodes its own output.
-            let candidate = encode_lines(input).ok_or(Reason::UnsupportedFormat)?;
+            let candidate = if ctx.line_templates {
+                encode_templates(input)
+            } else {
+                encode_lines(input)
+            }
+            .ok_or(Reason::UnsupportedFormat)?;
             report.candidate_bytes = Some(candidate.len());
             if candidate.len() >= input.len() {
                 return Err(Reason::InsufficientGain);
@@ -449,10 +468,16 @@ fn decide<'a>(
     Ok(Cow::Owned(candidate))
 }
 
-fn set_line_runs_identity(report: &mut CompressionReport) {
-    report.transform_id = EXACT_LINE_RUNS_ID;
-    report.transform_version = EXACT_LINE_RUNS_VERSION;
-    report.format_version = Some(LINES_FORMAT_VERSION);
+fn set_line_runs_identity(report: &mut CompressionReport, ctx: &CompressionContext) {
+    if ctx.line_templates {
+        report.transform_id = LINE_TEMPLATES_ID;
+        report.transform_version = LINE_TEMPLATES_VERSION;
+        report.format_version = Some(LINES_V2_FORMAT_VERSION);
+    } else {
+        report.transform_id = EXACT_LINE_RUNS_ID;
+        report.transform_version = EXACT_LINE_RUNS_VERSION;
+        report.format_version = Some(LINES_FORMAT_VERSION);
+    }
 }
 
 /// Removes insignificant whitespace from a JSON object or array.
