@@ -18,6 +18,19 @@ deslag reduces the representation overhead of tool results before a model sees t
 
 Structural encodings stay opt-in until paired task evaluations pass. See [PLAN §14.4](docs/PLAN.md#144-agent-effectiveness).
 
+## Proxy limits
+
+`deslag-proxy` bounds connections and waiting time. The defaults are constants in `crates/deslag-proxy/src/lib.rs`:
+
+| Limit | Default | Effect |
+| --- | --- | --- |
+| `MAX_CONNECTIONS` | 128 | Further client connections wait in the listen backlog until a slot frees. |
+| `HEADER_READ_TIMEOUT` | 30 s | A client that does not send a complete request head in time is disconnected. Idle keep-alive connections close after the same time. |
+| `CONNECT_TIMEOUT` | 10 s | An unreachable upstream fails with `502`. |
+| `POOL_IDLE_TIMEOUT` | 30 s | Unused pooled upstream connections close. |
+
+No limit applies to a response body after the upstream has answered, so long streams are never cut.
+
 ## Roadmap
 
 | Milestone | Scope | Epic |

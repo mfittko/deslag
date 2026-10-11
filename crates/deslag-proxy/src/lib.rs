@@ -4,7 +4,7 @@
 //! is buffered, parsed or logged. The upstream authority comes only from
 //! configuration, never from the request target, `Host` header or credentials.
 
-use std::{convert::Infallible, fmt, io, net::IpAddr, time::Duration};
+use std::{convert::Infallible, fmt, io, net::IpAddr, sync::Arc, time::Duration};
 
 use bytes::Bytes;
 use http_body_util::{Either, Full};
@@ -17,9 +17,9 @@ use hyper::{
 };
 use hyper_util::{
     client::legacy::{Client, connect::HttpConnector},
-    rt::{TokioExecutor, TokioIo},
+    rt::{TokioExecutor, TokioIo, TokioTimer},
 };
-use tokio::net::TcpListener;
+use tokio::{net::TcpListener, sync::Semaphore};
 
 type HttpsClient = Client<hyper_rustls::HttpsConnector<HttpConnector>, Incoming>;
 type ProxyBody = Either<Incoming, Full<Bytes>>;
@@ -98,10 +98,51 @@ fn is_loopback(host: &str) -> bool {
             .is_ok_and(|ip| ip.is_loopback())
 }
 
+/// Default cap on concurrently served client connections.
+pub const MAX_CONNECTIONS: usize = 128;
+/// Default time a client has to send a complete request head.
+pub const HEADER_READ_TIMEOUT: Duration = Duration::from_secs(30);
+/// Default time allowed to open the TCP connection to the upstream.
+pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// Default time an unused pooled upstream connection stays open.
+pub const POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Connection and timeout bounds. None of them limits how long a response
+/// body may stream once the upstream has answered.
+#[derive(Clone, Copy, Debug)]
+pub struct Limits {
+    /// Further connections wait in the listen backlog until a slot frees.
+    pub max_connections: usize,
+    /// Also bounds how long an idle keep-alive client connection is held.
+    pub header_read_timeout: Duration,
+    pub connect_timeout: Duration,
+    pub pool_idle_timeout: Duration,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            max_connections: MAX_CONNECTIONS,
+            header_read_timeout: HEADER_READ_TIMEOUT,
+            connect_timeout: CONNECT_TIMEOUT,
+            pool_idle_timeout: POOL_IDLE_TIMEOUT,
+        }
+    }
+}
+
+/// [`serve_with`] using [`Limits::default`].
+pub async fn serve(listener: TcpListener, upstream: Upstream) -> io::Result<()> {
+    serve_with(listener, upstream, Limits::default()).await
+}
+
 /// Accepts connections on `listener` and relays every request to `upstream`.
 /// Fails before accepting anything unless `listener` is bound to a loopback
 /// address: the proxy is unauthenticated and carries client credentials.
-pub async fn serve(listener: TcpListener, upstream: Upstream) -> io::Result<()> {
+pub async fn serve_with(
+    listener: TcpListener,
+    upstream: Upstream,
+    limits: Limits,
+) -> io::Result<()> {
     let addr = listener.local_addr()?;
     if !addr.ip().is_loopback() {
         return Err(io::Error::new(
@@ -113,13 +154,24 @@ pub async fn serve(listener: TcpListener, upstream: Upstream) -> io::Result<()> 
     let mut http = HttpConnector::new();
     http.set_nodelay(true);
     http.enforce_http(false);
+    http.set_connect_timeout(Some(limits.connect_timeout));
     let https = hyper_rustls::HttpsConnectorBuilder::new()
         .with_webpki_roots()
         .https_or_http()
         .enable_http1()
         .wrap_connector(http);
-    let client: HttpsClient = Client::builder(TokioExecutor::new()).build(https);
+    let client: HttpsClient = Client::builder(TokioExecutor::new())
+        .pool_idle_timeout(limits.pool_idle_timeout)
+        .pool_timer(TokioTimer::new())
+        .build(https);
+    let slots = Arc::new(Semaphore::new(limits.max_connections));
     loop {
+        // Waiting before accept leaves excess connections in the kernel backlog.
+        let permit = slots
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("semaphore is never closed");
         let stream = match listener.accept().await {
             Ok((stream, _)) => stream,
             // Transient errors such as fd exhaustion must not end the proxy.
@@ -134,8 +186,11 @@ pub async fn serve(listener: TcpListener, upstream: Upstream) -> io::Result<()> 
         tokio::spawn(async move {
             // Client disconnects end this future, which drops the upstream body and connection.
             let _ = http1::Builder::new()
+                .timer(TokioTimer::new())
+                .header_read_timeout(limits.header_read_timeout)
                 .serve_connection(TokioIo::new(stream), svc)
                 .await;
+            drop(permit);
         });
     }
 }
