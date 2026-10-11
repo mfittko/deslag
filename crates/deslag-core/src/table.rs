@@ -3,6 +3,8 @@
 //!
 //! `docs/compression-formats.md` specifies the format. The round-trip contract
 //! is `decode(&encode(x)?) == minified(x)`, byte for byte.
+//! [`render_markdown_kv`] renders the same rows as Markdown-KV for evaluation
+//! only; nothing in the compression context selects it.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -83,6 +85,19 @@ type Row<'a> = Vec<(String, Value<'a>)>;
 
 /// Encodes `input` as table-v1. `Err` means: pass the input through unchanged.
 pub fn encode(input: &str, opts: &TableOptions) -> Result<String, Reason> {
+    build(input, opts, false)
+}
+
+/// Renders `input` as Markdown-KV, for evaluation only: the table-v1 header,
+/// then one list item per row with a `key: value` line per present field.
+/// `None` exactly when [`encode`] fails. There is no decoder.
+pub fn render_markdown_kv(input: &str, opts: &TableOptions) -> Option<String> {
+    build(input, opts, true).ok()
+}
+
+/// Checks eligibility and gain on the CSV form, then returns the CSV form or,
+/// with `kv`, the Markdown-KV form of the same rows.
+fn build(input: &str, opts: &TableOptions, kv: bool) -> Result<String, Reason> {
     const NO: Reason = Reason::UnsupportedFormat;
     if input.trim_start().starts_with(MARKER) {
         return Err(NO);
@@ -100,6 +115,7 @@ pub fn encode(input: &str, opts: &TableOptions) -> Result<String, Reason> {
         let _ = write!(out, "{sep}{col}:{}", ty.name());
     }
     out.push('}');
+    let header_len = out.len();
     for row in &rows {
         out.push('\n');
         // Row keys are a subsequence of `cols`, so one pass aligns them.
@@ -108,19 +124,37 @@ pub fn encode(input: &str, opts: &TableOptions) -> Result<String, Reason> {
             if j > 0 {
                 out.push(',');
             }
-            match fields.next_if(|(k, _)| k == col).map(|(_, v)| v) {
-                None => {}
-                Some(Value::Null) => out.push_str("null"),
-                Some(Value::Bool(b)) => out.push_str(if *b { "true" } else { "false" }),
-                Some(Value::Num(n)) => out.push_str(n),
-                Some(Value::Str(s)) => push_str_cell(&mut out, s),
+            if let Some((_, v)) = fields.next_if(|(k, _)| k == col) {
+                push_cell(&mut out, v);
             }
         }
     }
     if !enough_gain(&minified, &out, opts) {
         return Err(Reason::InsufficientGain);
     }
+    if kv {
+        out.truncate(header_len);
+        for row in &rows {
+            out.push_str("\n-");
+            for (j, (key, v)) in row.iter().enumerate() {
+                out.push_str(if j == 0 { " " } else { "\n  " });
+                out.push_str(key);
+                out.push_str(": ");
+                push_cell(&mut out, v);
+            }
+        }
+    }
     Ok(out)
+}
+
+/// Writes a present field as a cell; a missing field is the empty cell.
+fn push_cell(out: &mut String, value: &Value) {
+    match value {
+        Value::Null => out.push_str("null"),
+        Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
+        Value::Num(n) => out.push_str(n),
+        Value::Str(s) => push_str_cell(out, s),
+    }
 }
 
 /// Decodes table-v1 text to minified JSON. `None` for malformed text.

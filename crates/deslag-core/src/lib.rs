@@ -136,6 +136,8 @@ pub struct Limits {
     /// Clamped to [`MAX_JSON_DEPTH_CEILING`], so no caller value can make the
     /// recursive scanner overflow the stack.
     pub max_json_depth: usize,
+    /// Arrays with more rows are never encoded as table-v1.
+    pub max_table_rows: usize,
 }
 
 /// Hard upper bound on [`Limits::max_json_depth`].
@@ -148,6 +150,7 @@ impl Default for Limits {
             min_candidate_bytes: 2048,
             max_candidate_bytes: 2_097_152,
             max_json_depth: 64,
+            max_table_rows: 20_000,
         }
     }
 }
@@ -189,8 +192,11 @@ pub trait TokenCounter {
 pub struct CompressionContext<'c> {
     pub mode: Mode,
     pub policy_version: u32,
-    /// Enables the JSON minifier, the only transform so far.
+    /// Enables the JSON minifier. Also the fallback when table-v1 does not apply.
     pub json_minify: bool,
+    /// Enables the table-v1 encoder, tried before the minifier. Opt-in: it
+    /// defaults to false and is false in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
+    pub json_table: bool,
     pub limits: Limits,
     /// Without a counter, every token field in the report is `None`.
     pub token_counter: Option<&'c dyn TokenCounter>,
@@ -202,10 +208,12 @@ pub const FIRST_SLICE_JSON_MINIFY_CONTEXT: CompressionContext<'static> = Compres
     mode: Mode::Safe,
     policy_version: 1,
     json_minify: true,
+    json_table: false,
     limits: Limits {
         min_candidate_bytes: 0,
         max_candidate_bytes: usize::MAX,
         max_json_depth: 128,
+        max_table_rows: 20_000,
     },
     token_counter: None,
 };
@@ -327,8 +335,9 @@ impl CompressionResult<'_> {
     }
 }
 
-/// Runs the JSON minifier under `ctx`. Any skip or failure returns the input
-/// borrowed, never a partial rewrite.
+/// Runs the enabled transforms under `ctx`: table-v1 first, then the JSON
+/// minifier. Any skip or failure returns the input borrowed, never a partial
+/// rewrite.
 pub fn compress<'a>(input: &'a str, ctx: &CompressionContext) -> CompressionResult<'a> {
     let start = Instant::now();
     let mut report = CompressionReport {
@@ -374,7 +383,7 @@ fn decide<'a>(
     if ctx.mode == Mode::Off {
         return Err(Reason::ModeOff);
     }
-    if !ctx.json_minify {
+    if !ctx.json_minify && !ctx.json_table {
         return Err(Reason::TransformDisabled);
     }
     if input.len() < limits.min_candidate_bytes {
@@ -382,6 +391,35 @@ fn decide<'a>(
     }
     if input.len() > limits.max_candidate_bytes {
         return Err(Reason::AboveMaxBytes);
+    }
+    if ctx.json_table {
+        let opts = TableOptions {
+            max_rows: limits.max_table_rows,
+            max_depth: limits.max_json_depth,
+            token_counter: ctx.token_counter,
+            ..TableOptions::default()
+        };
+        match table::encode(input, &opts) {
+            Ok(text) => {
+                report.transform_id = JSON_TABLE_ID;
+                report.transform_version = JSON_TABLE_VERSION;
+                report.format_version = Some(JSON_TABLE_FORMAT_VERSION);
+                report.candidate_bytes = Some(text.len());
+                // The encoder validated `input`, so minifying it again succeeds.
+                let minified = minify(input, limits.max_json_depth)?;
+                if table::decode(&text).map(String::into_bytes) != Some(minified) {
+                    report.validation_outcome = ValidationOutcome::Failed;
+                    return Err(Reason::InvalidCandidate);
+                }
+                return emit(input, text, ctx, report);
+            }
+            Err(reason) if !ctx.json_minify => {
+                report.transform_id = JSON_TABLE_ID;
+                report.transform_version = JSON_TABLE_VERSION;
+                return Err(reason);
+            }
+            Err(_) => {}
+        }
     }
     let bytes = minify(input, limits.max_json_depth)?;
     report.candidate_bytes = Some(bytes.len());
@@ -391,6 +429,16 @@ fn decide<'a>(
         report.validation_outcome = ValidationOutcome::Failed;
         return Err(Reason::InvalidCandidate);
     };
+    emit(input, candidate, ctx, report)
+}
+
+/// Records a validated candidate and returns the output for the mode.
+fn emit<'a>(
+    input: &'a str,
+    candidate: String,
+    ctx: &CompressionContext,
+    report: &mut CompressionReport,
+) -> Result<Cow<'a, str>, Reason> {
     report.validation_outcome = ValidationOutcome::Passed;
     if let Some(counter) = ctx.token_counter {
         report.original_tokens = Some(counter.count(input));

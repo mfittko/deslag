@@ -158,3 +158,36 @@ The encoder returns the input unchanged, with a reason, in each of these cases:
 The gain check compares the encoded text, header included, with the minified original. Let `m` be the minified byte length and `e` the encoded byte length. Encoding applies only when `e < m` and `(m - e) * 1000 >= min_savings_permille * m`. When a token counter is set, the minified original must also have at least `min_token_savings` more tokens than the encoded text.
 
 `TableOptions::default()` sets `max_rows` to 20000, `min_savings_permille` to 100, `min_token_savings` to 64 and `max_depth` to 64, with no token counter.
+
+### Markdown-KV (evaluation only)
+
+`deslag_core::table::render_markdown_kv` renders the same table as a Markdown list. It exists so the evaluation harness can compare read-back accuracy against the CSV form. It has no decoder, and no `CompressionContext` setting selects it.
+
+It applies the same eligibility rules and the same gain check as `encode`. The gain check runs on the CSV form. The renderer returns no value exactly when `encode` fails.
+
+The output starts with the same header line as the CSV form. Each row follows as one list item:
+
+- The first field is written as `- key: value`. Each further field is written on its own line as `  key: value`, indented two spaces.
+- A nested leaf uses its dotted column path as the key, for example `meta.region`.
+- A missing field is omitted. A row with no fields is a bare `-`.
+- Each value is written exactly as its CSV cell, with the same quoting rules.
+
+```text
+table-v1 [2]{id:int,name:str,meta.region:str}
+- id: 1
+  name: ""
+  meta.region: eu
+- id: 2
+  meta.region: "null"
+```
+
+### Pipeline and configuration
+
+`compress` tries table-v1 only when `CompressionContext.json_table` is true. The switch is opt-in. It is false in `FIRST_SLICE_JSON_MINIFY_CONTEXT`, and its default is false.
+
+When the switch is on, `compress` calls `encode` with `max_rows` set to `Limits::max_table_rows` (default 20000), `max_depth` set to `Limits::max_json_depth` and the context's token counter. The other thresholds keep their `TableOptions::default()` values. The size limits and mode checks apply first, as for the minifier.
+
+- If the input is eligible, `compress` decodes the encoded text and compares it with the minified original. A mismatch fails with `invalid_candidate` and validation outcome `failed`. Otherwise the report has transform id `json-table`, transform version 1 and format version 1. The byte and token fields are filled as for the minifier. Observe mode emits the original with outcome `would_change`.
+- If the input is ineligible and `json_minify` is true, `compress` runs the JSON minifier unchanged and reports it as `json-minify`.
+- If the input is ineligible and `json_minify` is false, `compress` skips with the table-v1 reason and transform id `json-table`.
+- If both switches are false, `compress` skips with `transform_disabled`.
