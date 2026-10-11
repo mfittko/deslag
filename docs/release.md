@@ -167,8 +167,11 @@ scripts/release/extract-notes.sh Unreleased
 
 ## Verify a download
 
+SHA256SUMS lists both archives. `--ignore-missing` skips the archive you did
+not download.
+
 ```sh
-sha256sum -c SHA256SUMS          # macOS: shasum -a 256 -c SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS   # macOS: shasum -a 256 -c --ignore-missing SHA256SUMS
 gh attestation verify deslag-0.1.0-alpha.1-aarch64-apple-darwin.tar.gz --repo mfittko/deslag
 ```
 
