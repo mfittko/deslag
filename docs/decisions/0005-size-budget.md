@@ -6,7 +6,7 @@
 
 ## Context
 
-The dev-loops size budget computes `logicLoc = code + testDiscount * test` with a default `testDiscount` of 0.25 and escalates above 400. An escalated merge needs a fresh per-PR owner approval, even under the standing merge authorization.
+The dev-loops size budget computes `logicLoc = code + testDiscount * test` with a default `testDiscount` of 0.25 and escalates above 400. An escalated merge needs a fresh per-PR owner approval, even under the autonomous merge policy in [ADR 0001](0001-dev-loops-autonomy.md).
 
 DF-003 (PR #29) escalated at 409. About 215 of those lines were proxy logic. The rest were blank lines, comment lines the detector missed, the inline `#[cfg(test)]` unit-test module in `src/lib.rs` (counted as code), and 25% of the integration tests in `tests/`.
 
@@ -18,7 +18,7 @@ DF-003 (PR #29) escalated at 409. About 215 of those lines were proxy logic. The
 
 ## Consequences
 
-- PRs up to 800 logic lines merge under the standing authorization when the gates are clean.
+- PRs up to 800 logic lines merge under the autonomous merge policy in [ADR 0001](0001-dev-loops-autonomy.md) when the gates are clean.
 - A PR above 800 logic lines is split or stacked before merge. A per-PR approval or waiver applies only to a change that cannot be split.
 - Inline Rust unit-test modules under `src/` still count as code, because the dev-loops classifier works per file. That is a dev-loops limitation, tracked upstream.
 - Test-heavy PRs no longer escalate on test volume. Test quality stays with the gate review angles.
