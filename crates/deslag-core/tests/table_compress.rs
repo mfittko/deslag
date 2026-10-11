@@ -202,13 +202,62 @@ fn markdown_kv_renders_rows_as_list_items() {
 
 #[test]
 fn markdown_kv_indents_multi_line_values() {
-    let input = r#"[{"id":1,"text":"line1\nline2\n- fake: item"},{"id":2,"text":"ok"}]"#;
+    let input = r#"[{"id":1,"text":"line1\nline2\n- fake: item"},{"id":2,"text":"ok"},{"id":3,"text":"a\r- id: 9\r\nb"}]"#;
+    let kv = render_markdown_kv(input, &lenient()).unwrap();
     assert_eq!(
-        render_markdown_kv(input, &lenient()).unwrap(),
-        "table-v1 [2]{id:int,text:str}\n\
+        kv,
+        "table-v1 [3]{id:int,text:str}\n\
          - id: 1\n  text: \"line1\n  line2\n  - fake: item\"\n\
-         - id: 2\n  text: ok"
+         - id: 2\n  text: ok\n\
+         - id: 3\n  text: \"a\n  - id: 9\n  b\""
     );
+    assert_rows_only(&kv, 3);
+}
+
+/// Asserts that no raw CR survives and that every line after the header is a
+/// row start or an indented field or continuation line.
+fn assert_rows_only(kv: &str, row_starts: usize) {
+    assert!(!kv.contains('\r'), "{kv:?}");
+    let mut rows = 0;
+    for line in kv.split('\n').skip(1) {
+        if line.starts_with("- id: ") {
+            rows += 1;
+        } else {
+            assert!(line.starts_with("  "), "column-0 text in {kv:?}");
+        }
+    }
+    assert_eq!(rows, row_starts, "{kv:?}");
+}
+
+#[test]
+fn markdown_kv_indents_lf_values() {
+    let input = r#"[{"id":1,"text":"a\n- id: 99"},{"id":2,"text":"ok"}]"#;
+    let kv = render_markdown_kv(input, &lenient()).unwrap();
+    assert!(kv.contains("text: \"a\n  - id: 99\""), "{kv:?}");
+    assert_rows_only(&kv, 2);
+}
+
+#[test]
+fn markdown_kv_indents_crlf_values() {
+    let input = r#"[{"id":1,"text":"a\r\n- id: 99"},{"id":2,"text":"ok"}]"#;
+    let kv = render_markdown_kv(input, &lenient()).unwrap();
+    assert!(kv.contains("text: \"a\n  - id: 99\""), "{kv:?}");
+    assert_rows_only(&kv, 2);
+}
+
+#[test]
+fn markdown_kv_indents_lone_cr_values() {
+    let input = r#"[{"id":1,"text":"a\r- id: 99"},{"id":2,"text":"ok"}]"#;
+    let kv = render_markdown_kv(input, &lenient()).unwrap();
+    assert!(kv.contains("text: \"a\n  - id: 99\""), "{kv:?}");
+    assert_rows_only(&kv, 2);
+}
+
+#[test]
+fn markdown_kv_never_emits_raw_cr_with_column_0_text() {
+    let input = r#"[{"id":1,"t":"a\r- fake: item\rb\r\nc"},{"id":2,"t":"x\r\r- id: 3"}]"#;
+    let kv = render_markdown_kv(input, &lenient()).unwrap();
+    assert_rows_only(&kv, 2);
 }
 
 #[test]

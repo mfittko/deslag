@@ -197,7 +197,7 @@ pub struct CompressionContext<'c> {
     /// Enables the JSON minifier. Also the fallback when table-v1 does not apply.
     pub json_minify: bool,
     /// Enables the table-v1 encoder, tried before the minifier. Opt-in: it
-    /// defaults to false and is false in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
+    /// is false in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
     pub json_table: bool,
     pub limits: Limits,
     /// Without a counter, every token field in the report is `None`.

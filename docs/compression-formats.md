@@ -173,7 +173,7 @@ The output starts with the same header line as the CSV form. Each row follows as
 - A nested leaf uses its dotted column path as the key, for example `meta.region`.
 - A missing field is omitted. A row with no fields is a bare `-`.
 - Each value is written exactly as its CSV cell, with the same quoting rules.
-- A value with line breaks continues on further lines. Each line after the first is indented two spaces, the item indent, so value text cannot start a new list item.
+- A value with line breaks continues on further lines. Each line break (`\r\n`, a lone `\r` or `\n`) is written as `\n`, and each line after the first is indented two spaces, the item indent. Value text therefore cannot start a new top-level row item. An indented continuation line can still read as a nested list item inside the row.
 
 The example below is illustrative. It is rendered with `min_savings_permille: 0`; the default gain check rejects an input this small.
 
@@ -188,7 +188,7 @@ table-v1 [2]{id:int,name:str,meta.region:str}
 
 ### Pipeline and configuration
 
-`compress` tries table-v1 only when `CompressionContext.json_table` is true. The switch is opt-in. It is false in `FIRST_SLICE_JSON_MINIFY_CONTEXT`, and its default is false.
+`compress` tries table-v1 only when `CompressionContext.json_table` is true. The switch is opt-in. It is false in `FIRST_SLICE_JSON_MINIFY_CONTEXT`.
 
 When the switch is on, `compress` calls `encode` with `max_rows` set to `Limits::max_table_rows` (default 20000), `max_depth` set to `Limits::max_json_depth` and the context's token counter. The other thresholds keep their `TableOptions::default()` values. The size limits and mode checks apply first, as for the minifier.
 

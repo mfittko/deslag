@@ -136,9 +136,11 @@ fn build(input: &str, opts: &TableOptions, kv: bool) -> Result<String, Reason> {
                 out.push_str(if j == 0 { " " } else { "\n  " });
                 out.push_str(key);
                 out.push_str(": ");
-                // Indent continuation lines so value text cannot start a list item.
+                // Each line break (`\r\n`, lone `\r` or `\n`) becomes `\n` plus the
+                // item indent, so value text cannot start a new top-level row item.
                 let mut cell = String::new();
                 push_cell(&mut cell, v);
+                let cell = cell.replace("\r\n", "\n").replace('\r', "\n");
                 out.push_str(&cell.replace('\n', "\n  "));
             }
         }
