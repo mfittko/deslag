@@ -14,6 +14,9 @@ path = "src/main.rs"
 
 [dependencies]
 deslag-core = { path = "../deslag-core" }
+deslag-proxy = { path = "../deslag-proxy" }
+# The runtime is built only for `deslag proxy`. Exact pin, matching deslag-proxy.
+tokio = { version = "=1.53.2", features = ["rt-multi-thread", "net"] }
 serde_json = "1.0.152"
 
 [[bench]]

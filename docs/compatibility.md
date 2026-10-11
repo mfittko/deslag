@@ -38,7 +38,7 @@ Runs 2 and 3 used throwaway `jq` hooks to characterize the client. The deslag ad
 
 ### JSON minification (opt-in)
 
-`deslag hook claude --minify-json` and `deslag-proxy --minify-json` remove insignificant whitespace from JSON in Bash tool results only. Both call `deslag_core::compress` with `FIRST_SLICE_JSON_MINIFY_CONTEXT` and commit the output only for a `Changed` result, through `into_changed`. The plugin hook in `plugins/claude` does not pass the flag, so it stays a no-op. Neither flag has been run against a live client. Token savings from whitespace removal have not been measured.
+`deslag hook claude --minify-json` and `deslag proxy --minify-json` remove insignificant whitespace from JSON in Bash tool results only. Both call `deslag_core::compress` with `FIRST_SLICE_JSON_MINIFY_CONTEXT` and commit the output only for a `Changed` result, through `into_changed`. The plugin hook in `plugins/claude` does not pass the flag, so it stays a no-op. Neither flag has been run against a live client. Token savings from whitespace removal have not been measured.
 
 Status: experimental. The proxy rewrite is stateless and keeps no replay manifest yet.
 
