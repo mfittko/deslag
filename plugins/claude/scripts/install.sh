@@ -65,7 +65,9 @@ install() {
   [ "$actual" = "$expected" ] || die "checksum mismatch for $name.tar.gz; nothing installed"
 
   tar -xzf "$stage/$name.tar.gz" -C "$stage" "$name/deslag" || die "archive has no $name/deslag"
-  [ -f "$stage/$name/deslag" ] && [ ! -L "$stage/$name/deslag" ] || die "archive has no regular file $name/deslag"
+  if [ ! -f "$stage/$name/deslag" ] || [ -L "$stage/$name/deslag" ]; then
+    die "archive has no regular file $name/deslag"
+  fi
   chmod 700 "$stage/$name/deslag"
   mkdir -p "$data/bin/$version"
   chmod 700 "$data/bin/$version"
