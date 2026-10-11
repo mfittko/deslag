@@ -42,6 +42,5 @@ async fn run() -> Result<(), String> {
         .await
         .map_err(|e| format!("cannot listen on {addr}: {e}"))?;
     eprintln!("deslag-proxy listening on {addr}, upstream {upstream}");
-    serve(listener, upstream).await;
-    Ok(())
+    serve(listener, upstream).await.map_err(|e| e.to_string())
 }

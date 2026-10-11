@@ -4,7 +4,7 @@
 //! is buffered, parsed or logged. The upstream authority comes only from
 //! configuration, never from the request target, `Host` header or credentials.
 
-use std::{convert::Infallible, fmt, net::IpAddr, time::Duration};
+use std::{convert::Infallible, fmt, io, net::IpAddr, time::Duration};
 
 use bytes::Bytes;
 use http_body_util::{Either, Full};
@@ -78,9 +78,14 @@ impl Upstream {
     }
 }
 
+/// Log-safe form: the base path is redacted because it may embed a credential.
 impl fmt::Display for Upstream {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}://{}{}", self.scheme, self.authority, self.base_path)
+        write!(f, "{}://{}", self.scheme, self.authority)?;
+        if !self.base_path.is_empty() {
+            f.write_str("/[redacted]")?;
+        }
+        Ok(())
     }
 }
 
@@ -94,7 +99,16 @@ fn is_loopback(host: &str) -> bool {
 }
 
 /// Accepts connections on `listener` and relays every request to `upstream`.
-pub async fn serve(listener: TcpListener, upstream: Upstream) {
+/// Fails before accepting anything unless `listener` is bound to a loopback
+/// address: the proxy is unauthenticated and carries client credentials.
+pub async fn serve(listener: TcpListener, upstream: Upstream) -> io::Result<()> {
+    let addr = listener.local_addr()?;
+    if !addr.ip().is_loopback() {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!("listener must be a loopback address, got {addr}"),
+        ));
+    }
     // SSE is many small writes: disable Nagle on both legs.
     let mut http = HttpConnector::new();
     http.set_nodelay(true);
@@ -176,9 +190,9 @@ fn strip_hop_by_hop(headers: &mut HeaderMap) {
     let named: Vec<HeaderName> = headers
         .get_all(header::CONNECTION)
         .iter()
-        .filter_map(|v| v.to_str().ok())
-        .flat_map(|v| v.split(','))
-        .filter_map(|n| HeaderName::from_bytes(n.trim().as_bytes()).ok())
+        // Byte-wise so one obs-text segment cannot hide the valid names beside it.
+        .flat_map(|v| v.as_bytes().split(|&b| b == b','))
+        .filter_map(|n| HeaderName::from_bytes(n.trim_ascii()).ok())
         .collect();
     for name in named {
         headers.remove(name);
@@ -245,5 +259,35 @@ mod tests {
             Some("https://gw.example/anthropic/v1/models")
         );
         assert_eq!(t("*"), None);
+    }
+
+    #[test]
+    fn display_redacts_base_path() {
+        let up = Upstream::parse("https://gw.example/token-secret/").unwrap();
+        assert_eq!(up.to_string(), "https://gw.example/[redacted]");
+        let up = Upstream::parse("https://api.anthropic.com").unwrap();
+        assert_eq!(up.to_string(), "https://api.anthropic.com");
+    }
+
+    #[test]
+    fn connection_options_survive_obs_text_segment() {
+        let mut h = HeaderMap::new();
+        h.insert(
+            header::CONNECTION,
+            header::HeaderValue::from_bytes(b"x-hop, \xff-opaque").unwrap(),
+        );
+        h.insert("x-hop", "1".parse().unwrap());
+        h.insert("x-keep", "1".parse().unwrap());
+        strip_hop_by_hop(&mut h);
+        assert!(!h.contains_key("x-hop"));
+        assert!(h.contains_key("x-keep"));
+    }
+
+    #[tokio::test]
+    async fn serve_rejects_non_loopback_listener() {
+        let listener = TcpListener::bind("0.0.0.0:0").await.unwrap();
+        let up = Upstream::parse("https://api.anthropic.com").unwrap();
+        let err = serve(listener, up).await.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
     }
 }
