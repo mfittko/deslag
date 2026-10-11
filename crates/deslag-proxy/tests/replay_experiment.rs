@@ -45,7 +45,7 @@ const POLICY_V2: Policy = Policy {
     transform_version: 2,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 enum ReplayError {
     /// The request carries tool results but the scope has no readable manifest.
     MissingManifest,
@@ -53,8 +53,11 @@ enum ReplayError {
     DigestMismatch(String),
     /// A tool result outside the newest message was never decided.
     UndecidedHistory(String),
-    /// A pinned decision names a transform version this binary does not keep.
+    /// A pinned decision names a transform id or version this binary does not keep.
     RetiredTransform(String),
+    /// A pinned decision is neither `unchanged: true` nor `encoded` with a transform id and a
+    /// u64 version.
+    CorruptDecision(String),
 }
 
 struct Replay {
@@ -144,7 +147,7 @@ impl Replay {
                     d
                 }
             };
-            if let Some(version) = decision["encoded"]["version"].as_u64() {
+            if let Some(version) = pinned_version(&decision, &id)? {
                 // A retained transform version always succeeds on bytes it accepted before.
                 let Some(encoded) = transform(version, &content) else {
                     return Err(ReplayError::RetiredTransform(id));
@@ -174,7 +177,21 @@ impl Replay {
     }
 }
 
-/// String or block tool_result entries in user messages, with their message index.
+/// The pinned json-min version of an encoded decision, or `None` for `unchanged: true`.
+/// Any other shape is an explicit error, never a silent replay as unchanged.
+fn pinned_version(decision: &Value, id: &str) -> Result<Option<u64>, ReplayError> {
+    if decision["unchanged"] == true && decision.get("encoded").is_none() {
+        return Ok(None);
+    }
+    let encoded = &decision["encoded"];
+    match (encoded["transform"].as_str(), encoded["version"].as_u64()) {
+        (Some("json-min"), Some(version)) => Ok(Some(version)),
+        (Some(_), Some(_)) => Err(ReplayError::RetiredTransform(id.to_owned())),
+        _ => Err(ReplayError::CorruptDecision(id.to_owned())),
+    }
+}
+
+/// String or block tool_result entries in any message, with their message index.
 fn tool_results(req: &mut Value) -> Vec<(usize, &mut Value)> {
     let Some(messages) = req["messages"].as_array_mut() else {
         return Vec::new();
@@ -492,6 +509,61 @@ async fn digest_mismatch_and_undecided_history_are_explicit_errors() {
     );
     println!("replay: {changed:?}; {skipped:?}");
     fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn pinned_decision_forms_are_validated() {
+    let replay = Replay {
+        dir: temp_dir(),
+        policy: POLICY_V1,
+        overloaded: false,
+    };
+    let body = conversation(&[("toolu_1", R1)]);
+    let retired = Err(ReplayError::RetiredTransform("toolu_1".into()));
+    let corrupt = Err(ReplayError::CorruptDecision("toolu_1".into()));
+    let cases: [(Value, Result<String, ReplayError>); 10] = [
+        (json!({"unchanged": true}), Ok(R1.into())),
+        (
+            json!({"encoded": {"transform": "json-min", "version": 1}}),
+            Ok(transform(1, R1).unwrap()),
+        ),
+        (
+            json!({"encoded": {"transform": "json-min", "version": 2}}),
+            Ok(transform(2, R1).unwrap()),
+        ),
+        (
+            json!({"encoded": {"transform": "other", "version": 1}}),
+            retired,
+        ),
+        (json!({"encoded": {"version": 1}}), corrupt.clone()),
+        (
+            json!({"encoded": {"transform": "json-min", "version": 1.0}}),
+            corrupt.clone(),
+        ),
+        (
+            json!({"encoded": {"transform": "json-min", "version": "1"}}),
+            corrupt.clone(),
+        ),
+        (
+            json!({"encoded": {"transform": "json-min", "version": -1}}),
+            corrupt.clone(),
+        ),
+        (json!({}), corrupt.clone()),
+        (json!({"unchanged": false}), corrupt),
+    ];
+    let path = replay.manifest_path("session-a");
+    for (form, want) in &cases {
+        let mut decision = form.clone();
+        decision["digest"] = digest(R1.as_bytes()).into();
+        let manifest = json!({"decisions": {"toolu_1": decision}});
+        fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+        let got = replay
+            .apply(Some("session-a"), &body)
+            .map(|b| content_of(&Bytes::from(b), "toolu_1"));
+        assert_eq!(&got, want, "decision {form}");
+    }
+    println!("replay: 10 pinned decision forms, 3 replayed, 7 explicit errors");
+    fs::remove_dir_all(&replay.dir).unwrap();
 }
 
 #[test]

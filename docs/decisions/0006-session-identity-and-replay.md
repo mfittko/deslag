@@ -35,7 +35,7 @@ Per session manifest:
 | --- | --- |
 | Scope digest | Session identity; the raw session id is not stored in exported data |
 | Owner | `hook`, `proxy` or `none` |
-| Mode | `observe` or `safe`; a mode change applies to new sessions only |
+| Mode | `off`, `observe` or `safe`; a mode change applies to new sessions only. An `off` session transforms nothing and writes no manifest |
 | Model profile | Model in use when the manifest was created |
 | Policy version | Policy in force when the manifest was created |
 
@@ -76,7 +76,8 @@ This is the decided design. One configuration value, `owner = hook | proxy | non
 | Proxy removed mid-session | Not applicable | The client resends originals. Content stays correct, the cached prefix is lost. Start a new session (design, untested) |
 | Manifest missing or corrupt | Not applicable | Explicit error when the request carries tool results. A manifest that does not parse or has no `decisions` object counts as corrupt (offline) |
 | Source digest mismatch | Not applicable | Explicit error; the known id gets no new decision (offline) |
-| Pinned transform version unknown to the binary | Not applicable | Explicit error (offline) |
+| Pinned transform id or version unknown to the binary | Not applicable | Explicit error (offline) |
+| Malformed pinned decision | Not applicable | Explicit error. Only `unchanged: true` or `encoded` with a transform id and an unsigned integer version is valid (offline) |
 | Unknown result outside the newest message | Not applicable | Explicit error (offline) |
 
 Hook mode therefore needs no replay manifest for history. The client stores and resubmits the replacement. The decision record matters only for proxy mode.
@@ -116,14 +117,14 @@ Scenarios:
 - Multi-turn resend and restart: three turns and an identical resend of the third, then a process restart and a fourth turn. Each upstream body starts with every message byte of the previous body. An identical resend is byte-identical.
 - Policy upgrade: a session built under policy v1 is resent under policy v2 with transform v2. Results decided under v1 keep their v1 bytes. This includes `toolu_2`, which v1 left unchanged and which a fresh v2 decision encodes; the test asserts both premises. A new result uses v2.
 - First decision unchanged: a result left unchanged under simulated load stays unchanged after the load drops.
-- Manifest loss: a corrupt or deleted manifest with tool results in the request is an explicit error. Corrupt covers bytes that do not parse and a manifest with no `decisions` object. A pinned transform version that the binary does not know is an explicit error too. The replay layer rejects the request before the proxy is called.
+- Manifest loss: a corrupt or deleted manifest with tool results in the request is an explicit error. Corrupt covers bytes that do not parse and a manifest with no `decisions` object. A pinned transform id or version that the binary does not know is an explicit error too. So is a malformed pinned decision: one that is neither `unchanged: true` nor `encoded` with a transform id and an unsigned integer version, such as version `1.0`, `"1"` or `-1`. A malformed decision never replays as unchanged. The replay layer rejects the request before the proxy is called.
 - Digest mismatch and undecided history: changed source bytes under a known `tool_use_id`, or an unknown result outside the newest message, is an explicit error. The replay layer rejects the request before the proxy is called.
 - No scope: the body passes through byte-identical and no manifest is written.
 
 Recorded output of `cargo test --locked -p deslag-proxy --test replay_experiment -- --nocapture --test-threads=1`:
 
 ```text
-running 6 tests
+running 7 tests
 test digest_mismatch_and_undecided_history_are_explicit_errors ... replay: Err(DigestMismatch("toolu_1")); Err(UndecidedHistory("toolu_9"))
 ok
 test first_unchanged_decision_stays_unchanged ... replay: toolu_1 left unchanged under load stayed unchanged after load dropped
@@ -133,10 +134,12 @@ ok
 test multi_turn_resend_and_restart_keep_prefix_byte_stable ... replay: 4 turns + restart, upstream body bytes [87, 364, 586, 838], toolu_1 73 -> 57 bytes
 ok
 test no_scope_passes_bytes_through ... ok
+test pinned_decision_forms_are_validated ... replay: 10 pinned decision forms, 3 replayed, 7 explicit errors
+ok
 test policy_upgrade_replays_pinned_decisions ... replay: upgrade v1->v2 kept toolu_1@v1 and toolu_2 unchanged; toolu_3 used v2
 ok
 
-test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
 ```
 
 A mutation that re-decides known results under the current policy fails the upgrade and first-unchanged scenarios on the prefix assertion.
