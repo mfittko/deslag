@@ -28,9 +28,9 @@ localImplementation:
   issueless: true
   lightMode:
     enabled: true
-    maxFiles: 2
-    maxLines: 40
-    # 2 files / 40 lines matches the dev-loops repo's own micro-PR ceiling (dev-loops ADR 0108).
+    maxFiles: 5
+    maxLines: 200
+    # 5 files / 200 lines: see docs/decisions/0003-light-mode-cap.md.
     # Supply-chain, release, autonomy-config and CI surfaces always get full
     # gate fan-out.
     riskPaths:
