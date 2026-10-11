@@ -186,9 +186,11 @@ crates/
   deslag-core/
     src/{classify,transforms,policy,report}.rs
   deslag-runtime/
-    src/{cli,hook,proxy,session,local}.rs
+    src/{hook,proxy,session,local}.rs
   deslag-telemetry/
     src/{metrics,report_sink,otlp}.rs
+  deslag-cli/
+    src/main.rs
 plugins/
   claude/
     .claude-plugin/plugin.json
@@ -773,7 +775,7 @@ Require checksums, release provenance, pinned dependencies/toolchains, private l
 
 Before reusing Headroom or `llm-proxy` source, inspect the exact pinned revision's license and notices. Record copied/adapted files and preserve required notices and attribution. Choosing a project license and verifying reuse obligations are explicit release tasks; this plan is not a substitute for that review.
 
-The public product name is **deslag** (renamed from deflate, see [ADR 0002](decisions/0002-rename-to-deslag.md)). The crates.io name `deslag` belongs to an unrelated crate, so publish crates as `deslag-*` and document `cargo install deslag-cli`. Do not rename the project again without a decision record.
+The public product name is **deslag** (see [ADR 0002](decisions/0002-rename-to-deslag.md)). The crates.io name `deslag` belongs to an unrelated crate, so publish crates as `deslag-*` and document `cargo install deslag-cli`. Do not rename the project again without a decision record.
 
 ## 16. Ordered implementation backlog
 

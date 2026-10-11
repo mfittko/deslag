@@ -8,7 +8,7 @@
 
 The working name "deflate" reads as HTTP/gzip DEFLATE compression. PLAN §1 has to state that transport compression is not the product. The crates.io name `deflate` belongs to an unrelated compression crate.
 
-PLAN §4 requires namespace checks and forbids a silent rename.
+PLAN §15 requires namespace checks and forbids a silent rename.
 
 ## Decision
 
