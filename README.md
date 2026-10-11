@@ -43,4 +43,8 @@ Work runs through [dev-loops](https://github.com/mfittko/dev-loops). Repository 
 
 ## License
 
-Dual-licensed under `MIT OR Apache-2.0`, as decided in the [M0 epic](https://github.com/mfittko/deslag/issues/2). The `LICENSE-MIT` and `LICENSE-APACHE` files and the upstream reuse notes are pending in [DF-001](https://github.com/mfittko/deslag/issues/5).
+deslag is dual-licensed under the [MIT License](LICENSE-MIT) or the [Apache License 2.0](LICENSE-APACHE), at your option (`MIT OR Apache-2.0`). The license was decided in the [M0 epic](https://github.com/mfittko/deslag/issues/2).
+
+Unless you explicitly state otherwise, any contribution you intentionally submit for inclusion in deslag is dual-licensed as above, without any additional terms or conditions.
+
+Upstream reuse obligations for Headroom and llm-proxy are recorded in [ADR 0004](docs/decisions/0004-reference-revisions-and-licenses.md).
