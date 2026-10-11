@@ -4,7 +4,7 @@ A small, native, deterministic context-compression layer for AI agents.
 
 deslag reduces the representation overhead of tool results before a model sees them. It does not change executed tool calls, it does not silently drop evidence, and telemetry stays off the request path.
 
-> **Status:** early development. The M0 Claude Code plugin and a no-op `PostToolUse` hook adapter (`deslag hook claude`) exist. A first JSON-minification slice is available behind an opt-in `--minify-json` flag on `deslag hook claude` and `deslag-proxy`; it applies to Bash results only and is untested against a live client. The [implementation plan](docs/PLAN.md) is the product brief and backlog. Progress is tracked in the [v0.1 epic](https://github.com/mfittko/deslag/issues/1).
+> **Status:** early development. The M0 Claude Code plugin and a no-op `PostToolUse` hook adapter (`deslag hook claude`) exist. A first JSON-minification slice is available behind an opt-in `--minify-json` flag on `deslag hook claude` and `deslag proxy`; it applies to Bash results only and is untested against a live client. The [implementation plan](docs/PLAN.md) is the product brief and backlog. Progress is tracked in the [v0.1 epic](https://github.com/mfittko/deslag/issues/1).
 
 ## Planned v0.1
 
@@ -20,7 +20,7 @@ Structural encodings stay opt-in until paired task evaluations pass. See [PLAN Â
 
 ## Proxy limits
 
-`deslag-proxy` bounds connections and waiting time. The defaults are constants in `crates/deslag-proxy/src/lib.rs`:
+`deslag proxy --upstream <url> [--listen <addr>] [--minify-json]` runs the proxy. It listens on `127.0.0.1:8789` by default. `--listen` takes a literal `IP:port`, for example `127.0.0.1:8789` or `[::1]:8789`, and the IP must be a loopback address. It bounds connections and waiting time. The defaults are constants in `crates/deslag-proxy/src/lib.rs`:
 
 | Limit | Default | Effect |
 | --- | --- | --- |
