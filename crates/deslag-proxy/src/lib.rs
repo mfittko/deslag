@@ -50,7 +50,9 @@ impl Upstream {
         if url.contains('#') {
             return Err("upstream URL must not have a fragment".into());
         }
-        if authority.as_str().len() > authority.host().len() && authority.port_u16().is_none() {
+        if authority.as_str().len() > authority.host().len()
+            && matches!(authority.port_u16(), None | Some(0))
+        {
             return Err("upstream URL port is invalid".into());
         }
         if uri.query().is_some() {
@@ -209,6 +211,11 @@ mod tests {
             "https://example.com/?a=1",
             "https://example.com#frag",
             "https://example.com:99999",
+            "https://example.com:0",
+            "https://example.com:",
+            "http://localhost.attacker.example",
+            "http://127.0.0.1.attacker.example",
+            "http://[::ffff:127.0.0.1]:9",
             "/relative",
             "not a url",
         ] {
@@ -216,6 +223,7 @@ mod tests {
         }
         for good in [
             "https://api.anthropic.com",
+            "https://example.com:443",
             "http://127.0.0.1:9",
             "http://[::1]:9",
             "http://localhost:9",
