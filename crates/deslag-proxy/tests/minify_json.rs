@@ -308,3 +308,26 @@ async fn chunked_request_is_rewritten_with_content_length() {
     );
     assert!(up.headers.get("transfer-encoding").is_none());
 }
+
+#[tokio::test]
+async fn request_with_trailers_is_not_rewritten() {
+    let (input, _) = render(TURN_1);
+    let (p, mut seen) = proxy(true).await;
+    let stream = TcpStream::connect(p).await.unwrap();
+    let (mut tx, conn) = hyper::client::conn::http1::handshake(TokioIo::new(stream))
+        .await
+        .unwrap();
+    tokio::spawn(conn);
+    let (mut sender, body) = Channel::<Bytes, Infallible>::new(2);
+    let data = Bytes::from(input.clone());
+    tokio::spawn(async move {
+        sender.send_data(data).await.unwrap();
+        let mut trailers = HeaderMap::new();
+        trailers.insert("content-digest", "sha-256=:x:".parse().unwrap());
+        sender.send_trailers(trailers).await.unwrap();
+    });
+    let req = messages().header("trailer", "content-digest");
+    let resp = tx.send_request(req.body(body).unwrap()).await.unwrap();
+    assert_eq!(resp.status(), 200);
+    assert_eq!(seen.recv().await.unwrap().body, input);
+}

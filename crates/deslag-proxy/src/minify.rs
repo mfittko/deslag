@@ -12,7 +12,7 @@
 //! change. Do not enable the hook and proxy flags at the same time: one
 //! component owns compression. Requests with `content-encoding` pass through,
 //! so a client that compresses only some requests would see drift. Requests
-//! with a body-integrity header also pass through. `/v1/messages/count_tokens`
+//! with a body-integrity header or with trailers also pass through. `/v1/messages/count_tokens`
 //! is not rewritten, so its counts can overstate.
 
 use std::{
@@ -25,7 +25,7 @@ use std::{
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper::{
-    Method, Request, StatusCode,
+    HeaderMap, Method, Request, StatusCode,
     body::{Body, Frame, Incoming, SizeHint},
     header,
     http::request::Parts,
@@ -65,10 +65,12 @@ const INTEGRITY_HEADERS: [&str; 5] = [
     "repr-digest",
 ];
 
-/// Request body: an optional buffered prefix followed by the rest of the original body.
+/// Request body: an optional buffered prefix followed by the rest of the original
+/// body, or by the buffered trailers when the body was read to the end.
 pub(crate) struct ReqBody {
     prefix: Option<Bytes>,
     rest: Option<Incoming>,
+    trailers: Option<HeaderMap>,
 }
 
 impl Body for ReqBody {
@@ -85,13 +87,14 @@ impl Body for ReqBody {
         }
         match this.rest.as_mut() {
             Some(rest) => Pin::new(rest).poll_frame(cx),
-            None => Poll::Ready(None),
+            None => Poll::Ready(this.trailers.take().map(|t| Ok(Frame::trailers(t)))),
         }
     }
 
     fn is_end_stream(&self) -> bool {
         self.prefix.as_ref().is_none_or(Bytes::is_empty)
             && self.rest.as_ref().is_none_or(Body::is_end_stream)
+            && self.trailers.is_none()
     }
 
     fn size_hint(&self) -> SizeHint {
@@ -131,6 +134,7 @@ pub(crate) async fn prepare(
         let body = ReqBody {
             prefix: None,
             rest: Some(body),
+            trailers: None,
         };
         return Ok(Request::from_parts(parts, body));
     }
@@ -147,14 +151,21 @@ pub(crate) async fn prepare(
 }
 
 /// Buffers up to `MAX_INSPECT_BYTES` of `body` and rewrites it once complete.
+/// A body with trailers is never rewritten, because a trailer such as
+/// `content-digest` can pin its bytes. Its trailers are replayed after it.
 async fn buffer(mut parts: Parts, mut body: Incoming) -> Result<Request<ReqBody>, hyper::Error> {
     let hint = body.size_hint().exact().unwrap_or(0);
     let mut buf = Vec::with_capacity(hint.min(MAX_INSPECT_BYTES as u64 + 1) as usize);
+    let mut trailers: Option<HeaderMap> = None;
     while let Some(frame) = body.frame().await {
-        // ponytail: request trailers are dropped on the buffered path; Messages
-        // clients do not send them. Forward them if a client ever does.
-        let Ok(data) = frame?.into_data() else {
-            continue;
+        let data = match frame?.into_data() {
+            Ok(data) => data,
+            Err(frame) => {
+                if let Ok(t) = frame.into_trailers() {
+                    trailers.get_or_insert_default().extend(t);
+                }
+                continue;
+            }
         };
         buf.extend_from_slice(&data);
         if buf.len() > MAX_INSPECT_BYTES {
@@ -162,9 +173,18 @@ async fn buffer(mut parts: Parts, mut body: Incoming) -> Result<Request<ReqBody>
             let body = ReqBody {
                 prefix: Some(buf.into()),
                 rest: Some(body),
+                trailers: None,
             };
             return Ok(Request::from_parts(parts, body));
         }
+    }
+    if trailers.is_some() {
+        let body = ReqBody {
+            prefix: Some(buf.into()),
+            rest: None,
+            trailers,
+        };
+        return Ok(Request::from_parts(parts, body));
     }
     if let Some(rewritten) = rewrite(&buf) {
         buf = rewritten;
@@ -175,6 +195,7 @@ async fn buffer(mut parts: Parts, mut body: Incoming) -> Result<Request<ReqBody>
     let body = ReqBody {
         prefix: Some(buf.into()),
         rest: None,
+        trailers: None,
     };
     Ok(Request::from_parts(parts, body))
 }
@@ -294,7 +315,24 @@ impl<'de> Deserialize<'de> for Obj<'de> {
 
 #[cfg(test)]
 mod tests {
-    use super::rewrite;
+    use http_body_util::BodyExt;
+    use hyper::HeaderMap;
+
+    use super::{ReqBody, rewrite};
+
+    #[tokio::test]
+    async fn buffered_body_replays_its_trailers() {
+        let mut trailers = HeaderMap::new();
+        trailers.insert("content-digest", "sha-256=:x:".parse().unwrap());
+        let body = ReqBody {
+            prefix: Some("{}".into()),
+            rest: None,
+            trailers: Some(trailers.clone()),
+        };
+        let collected = body.collect().await.unwrap();
+        assert_eq!(collected.trailers(), Some(&trailers));
+        assert_eq!(collected.to_bytes(), "{}");
+    }
 
     #[test]
     fn rewrite_skips_unchanged_and_invalid_bodies() {
