@@ -302,11 +302,11 @@ fn enough_gain(minified: &str, encoded: &str, opts: &TableOptions) -> bool {
         return false;
     }
     opts.token_counter.is_none_or(|c| {
-        let saved = c
-            .count(minified)
+        // checked_sub: a token regression fails even when the minimum is zero.
+        c.count(minified)
             .count
-            .saturating_sub(c.count(encoded).count);
-        saved >= opts.min_token_savings
+            .checked_sub(c.count(encoded).count)
+            .is_some_and(|saved| saved >= opts.min_token_savings)
     })
 }
 
