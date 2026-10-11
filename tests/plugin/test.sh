@@ -206,6 +206,11 @@ for d in data-partial data-empty; do
   rc=0; out=$(echo '{"tool_name":"Bash"}' | run_hook "$tmp/$d" 2>&1) || rc=$?
   expect_eq "hook with $d exits 0 with no output" "0:" "$rc:$out"
 done
+# Without a binary the wrapper must read all input, so a large write never hits a broken pipe.
+for d in data-gone data-old; do
+  rc=0; out=$( { head -c 1048576 /dev/zero; echo "writer=$?" >"$tmp/writer-$d"; } | run_hook "$tmp/$d" 2>&1) || rc=$?
+  expect_eq "hook with $d drains 1 MiB of input and exits 0 silently" "0::writer=0" "$rc:$out:$(cat "$tmp/writer-$d")"
+done
 rc=0; out=$(echo '{"tool_name":"Bash"}' | env -i PATH=/usr/bin:/bin "$hook_sh" 2>&1) || rc=$?
 expect_eq "hook without plugin env exits 0 silently" "0:" "$rc:$out"
 expect_eq "hook runs the installed binary with stdin" \

@@ -1,9 +1,15 @@
 #!/bin/sh
 # PostToolUse hook wrapper. Runs the deslag binary installed for this plugin
-# version by /deslag:install. When that binary is missing, it exits 0 without
-# output, which leaves the tool result unchanged. It uses shell builtins only
-# and never downloads anything.
-[ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -n "${CLAUDE_PLUGIN_DATA:-}" ] || exit 0
+# version by /deslag:install. When that binary is missing, it reads and discards
+# the hook input, then exits 0 without output, which leaves the tool result
+# unchanged. Reading the input keeps the client from a broken pipe on large tool
+# results. It never downloads anything.
+pass() {
+  # ponytail: cat drains megabytes at once; a shell read loop takes minutes for 1 MiB.
+  cat >/dev/null 2>&1
+  exit 0
+}
+[ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -n "${CLAUDE_PLUGIN_DATA:-}" ] || pass
 version=
 while IFS= read -r line || [ -n "$line" ]; do
   case $line in
@@ -16,5 +22,5 @@ while IFS= read -r line || [ -n "$line" ]; do
   esac
 done 2>/dev/null <"$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json"
 bin=$CLAUDE_PLUGIN_DATA/bin/$version/deslag
-[ -n "$version" ] && [ -f "$bin" ] && [ -x "$bin" ] || exit 0
+[ -n "$version" ] && [ -f "$bin" ] && [ -x "$bin" ] || pass
 exec "$bin" hook claude
