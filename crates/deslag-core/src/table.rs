@@ -4,11 +4,7 @@
 //! `docs/compression-formats.md` specifies the format. The round-trip contract
 //! is `decode(&encode(x)?) == minified(x)`, byte for byte.
 
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Write,
-    iter,
-};
+use std::{collections::HashMap, fmt::Write, iter};
 
 use crate::{Limits, Reason, Scanner, TokenCounter, minify};
 
@@ -217,33 +213,36 @@ struct Column<'t> {
 /// object's columns are contiguous.
 fn columns(specs: &str) -> Option<Vec<Column<'_>>> {
     let mut cols = Vec::new();
-    // Every object path and leaf path seen so far.
-    let mut seen = HashSet::new();
-    let mut stack: Vec<&str> = Vec::new();
+    // Every object and leaf seen so far, keyed by (parent node id, name), so
+    // each segment costs O(1) and parsing is linear in header length.
+    // Node 0 is the root.
+    let mut nodes: HashMap<(usize, &str), usize> = HashMap::new();
+    // Open objects, outermost first, with their node ids.
+    let mut stack: Vec<(&str, usize)> = Vec::new();
     for spec in specs.split(',') {
         let (path, ty) = spec.rsplit_once(':')?;
         if !valid_path(path) {
             return None;
         }
         let segs: Vec<&str> = path.split('.').collect();
-        // Bounds the per-column prefix joins below, which are quadratic in depth.
         if segs.len() >= crate::MAX_JSON_DEPTH_CEILING {
             return None;
         }
         let (leaf, groups) = segs.split_last()?;
-        let common = stack.iter().zip(groups).take_while(|(a, b)| a == b).count();
+        let common = stack
+            .iter()
+            .zip(groups)
+            .take_while(|((a, _), b)| a == *b)
+            .count();
         let close = stack.len() - common;
         stack.truncate(common);
-        for k in common..groups.len() {
+        let mut parent = stack.last().map_or(0, |&(_, id)| id);
+        for &name in &groups[common..] {
             // A reopened object is either a duplicate or not contiguous.
-            if !seen.insert(groups[..=k].join(".")) {
-                return None;
-            }
-            stack.push(groups[k]);
+            parent = insert_node(&mut nodes, parent, name)?;
+            stack.push((name, parent));
         }
-        if !seen.insert(path.to_string()) {
-            return None;
-        }
+        insert_node(&mut nodes, parent, leaf)?;
         cols.push(Column {
             close,
             open: groups[common..].to_vec(),
@@ -253,6 +252,17 @@ fn columns(specs: &str) -> Option<Vec<Column<'_>>> {
         });
     }
     Some(cols)
+}
+
+/// Adds `name` under `parent` and returns its new node id. `None` when the
+/// node already exists.
+fn insert_node<'t>(
+    nodes: &mut HashMap<(usize, &'t str), usize>,
+    parent: usize,
+    name: &'t str,
+) -> Option<usize> {
+    let id = nodes.len() + 1;
+    nodes.insert((parent, name), id).is_none().then_some(id)
 }
 
 /// Parses the minified array into rows of dotted leaf keys. `None` when the

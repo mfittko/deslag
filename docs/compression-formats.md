@@ -107,7 +107,7 @@ This decodes to:
 [{"id":1,"meta":{"region":"eu","zone":3}},{"id":2,"meta":{"region":"us","zone":null}}]
 ```
 
-A nested leaf may hold `null`, but it is never missing. Only a top-level field can be missing. Arrays stay ineligible at any depth. Nesting depth is bounded by `max_depth`.
+A nested leaf may hold `null`. Only a top-level field can be missing. Arrays stay ineligible at any depth. Nesting depth is bounded by `max_depth`.
 
 The decoder splits each column path at `.`. The paths must form one tree, or the decoder returns no value:
 
@@ -115,7 +115,9 @@ The decoder splits each column path at `.`. The paths must form one tree, or the
 - The columns under each object path are contiguous, for example `a.x,b,a.y` is invalid.
 - No segment of a dotted path is empty, for example `.a`, `a.` and `a..b` are invalid.
 - An empty unquoted cell in a dotted column is invalid.
-- A column path has fewer than `MAX_JSON_DEPTH_CEILING` (1024) segments. This bounds decoder work for hostile headers.
+- A column path has fewer than `MAX_JSON_DEPTH_CEILING` (1024) segments.
+
+The decoder tracks each object by its parent and its name, so header parsing is linear in header length.
 
 ### Lexeme preservation
 
