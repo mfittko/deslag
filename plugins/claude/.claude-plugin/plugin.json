@@ -1,5 +1,5 @@
 {
   "name": "deslag",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "description": "PostToolUse hook adapter for deslag (currently a no-op; compression not yet enabled). Requires the deslag binary on PATH."
 }
