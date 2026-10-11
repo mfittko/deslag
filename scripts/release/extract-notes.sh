@@ -4,6 +4,7 @@
 # trailing blank lines. Fails when the section is missing or empty.
 # CRLF line endings are read as LF.
 set -euo pipefail
+export LC_ALL=C
 version=${1:?usage: extract-notes.sh <version|Unreleased> [<changelog>]}
 
 awk -v v="$version" '

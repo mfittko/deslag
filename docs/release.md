@@ -20,24 +20,27 @@ Two files carry the version, and they must always agree:
 - `Cargo.toml`: `[workspace.package] version`
 - `plugins/claude/.claude-plugin/plugin.json`: `version`
 
-`scripts/release/check-versions.sh` fails when they differ. CI runs it on every
-pull request and push. The release workflow also fails unless the tag equals
-both surfaces.
+`scripts/release/check-versions.sh` fails when they differ or when the version
+is no SemVer `X.Y.Z` or `X.Y.Z-pre` version. It refuses build metadata (`+...`).
+CI runs it on every pull request and every push to `main`. The release workflow
+also fails unless the tag equals both surfaces.
 
 ## Tooling
 
 The release scripts in `scripts/release/` are bash with `jq`, `awk` and `git`.
 They need no Node or Python and run on GNU and BSD (macOS) userland.
 `scripts/release/test.sh` tests them; CI runs it together with `shellcheck`.
+The tooling is plain bash scripts and no cargo xtask, because scripts are the
+smallest working option and need no extra build step or toolchain.
 
 | Script | Purpose |
 | --- | --- |
 | `check-versions.sh [<tag>]` | Print the version; fail on a surface mismatch or a tag mismatch. |
 | `check-changelog-fragment.sh <base>` | Fail a `crates/` or `plugins/` change without a valid fragment or `changelog: none`. |
-| `lib.sh` | The fragment format rules, sourced by `bump.sh` and `check-changelog-fragment.sh`. |
+| `lib.sh` | The fragment format rules and the SemVer pattern, sourced by `bump.sh`, `check-changelog-fragment.sh` and `check-versions.sh`. |
 | `bump.sh <version>` | Set both surfaces, refresh `Cargo.lock`, assemble fragments, stamp the changelog, stage the result. |
 | `extract-notes.sh <version>` | Print a `CHANGELOG.md` section body; fail when it is missing or empty. |
-| `verify-approval.sh <version> <owner/repo>` | Fail a stable release without an operator approval comment. |
+| `verify-approval.sh <version> <owner/repo> [<since>]` | Fail a stable release without an operator approval comment. |
 | `package.sh <version> <target>` | Pack a built binary into `dist/deslag-<version>-<target>.tar.gz`. |
 | `checksums.sh <dir>` | Write `<dir>/SHA256SUMS` for every archive in `<dir>`. |
 
@@ -119,9 +122,11 @@ The Linux binary links against glibc. Ubuntu 22.04 sets the baseline at
 glibc 2.35, so the binary runs on Linux distributions with glibc 2.35 or newer.
 
 A failed `verify` job stops the run before any build or release. Re-running a
-tag run is safe: when the release already exists, the run uploads only the
-assets that the release does not have yet. It never replaces an existing asset
-and keeps the notes as created.
+tag run is safe. When the release already has every asset, the run changes
+nothing. When it has none of the assets, the run uploads all of them and keeps
+the notes as created. When it has only some, the run fails, because rebuilt
+archives do not match the published ones byte for byte. Delete the partial
+release (`gh release delete v<version>`) and re-run.
 
 ## Dry run
 
@@ -160,4 +165,5 @@ gh attestation verify deslag-0.1.0-alpha.1-aarch64-apple-darwin.tar.gz --repo mf
 - Protect `main` so that only reviewed pull requests change it. The release
   trusts every commit on `main`.
 - Add a tag ruleset for `v*` that restricts tag creation to maintainers.
-- Make the `ci` and `changelog` checks required for pull requests into `main`.
+- Make the `check` (ci workflow) and `fragment` (changelog workflow) checks
+  required for pull requests into `main`.

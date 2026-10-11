@@ -160,7 +160,8 @@ jobs:
         with:
           subject-path: dist/*.tar.gz
       # A re-run never replaces an asset or the notes of an existing release.
-      # It uploads only the assets that the release does not have yet.
+      # Rebuilt archives are not byte-identical, so a re-run uploads only into
+      # a release that has none of the assets. A partial release fails.
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -176,12 +177,15 @@ jobs:
             done
             if [ ${#missing[@]} -eq 0 ]; then
               echo "release $tag already has every asset"
+            elif [ ${#missing[@]} -eq ${#assets[@]} ]; then
+              gh release upload "$tag" "${assets[@]}"
             else
-              gh release upload "$tag" "${missing[@]}"
+              echo "::error::release $tag is partial (missing: ${missing[*]#dist/}); rebuilt archives would not match it. Run 'gh release delete $tag' and re-run this workflow."
+              exit 1
             fi
           else
             flags=()
-            case $VERSION in *-*) flags+=(--prerelease) ;; esac
+            case ${VERSION%%+*} in *-*) flags+=(--prerelease) ;; esac
             gh release create "$tag" "${assets[@]}" \
               --verify-tag --title "$tag" --notes-file release-notes.md "${flags[@]}"
           fi

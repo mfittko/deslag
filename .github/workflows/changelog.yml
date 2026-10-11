@@ -18,8 +18,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # HEAD is the PR merge commit. Its first parent is the current base tip,
+      # so the diff holds exactly this PR's changes whenever the event fired.
       - name: Require a changelog fragment
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_BODY: ${{ github.event.pull_request.body }}
-        run: scripts/release/check-changelog-fragment.sh "$BASE_SHA"
+        run: scripts/release/check-changelog-fragment.sh HEAD^1

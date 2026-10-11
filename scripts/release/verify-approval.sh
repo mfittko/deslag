@@ -4,7 +4,7 @@
 # default: the repo owner) that has a line reading exactly
 # `approve release v<version>` (trimmed, case-insensitive) and was created
 # after <since> (ISO-8601 UTC or epoch seconds; default: HEAD committer date).
-# A prerelease version (one with a `-` suffix) needs no approval.
+# A prerelease version (a `-` before any `+` build metadata) needs no approval.
 # Any lookup failure fails closed.
 set -euo pipefail
 version=${1:?usage: verify-approval.sh <version> <owner/repo> [<since>]}
@@ -12,7 +12,7 @@ repo=${2:?usage: verify-approval.sh <version> <owner/repo> [<since>]}
 since=${3:-$(git log -1 --format=%ct HEAD)}
 operator=${RELEASE_OPERATOR:-${repo%%/*}}
 
-case $version in *-*)
+case ${version%%+*} in *-*)
   echo "notice: $version is a prerelease; no operator approval needed"
   exit 0
   ;;

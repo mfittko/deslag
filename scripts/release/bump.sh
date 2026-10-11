@@ -7,10 +7,11 @@
 # The checks run before the first write. Until Cargo.lock is refreshed, any
 # failure restores the original files, so a refusal or a failure changes no file.
 set -euo pipefail
+# Fragment order (the glob) and character classes must not depend on the locale.
+export LC_ALL=C
 version=${1:?usage: bump.sh <version>}
 plugin=plugins/claude/.claude-plugin/plugin.json
 files=(CHANGELOG.md Cargo.toml "$plugin" Cargo.lock)
-semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
 # shellcheck source=scripts/release/lib.sh
 . "$(dirname "$0")/lib.sh"
 

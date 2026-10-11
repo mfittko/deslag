@@ -69,6 +69,18 @@ expect_ok "check-versions accepts a matching bare version" "$r" "$here/check-ver
 expect_fail "check-versions rejects a tag that differs" "does not match" "$r" "$here/check-versions.sh" v0.2.0
 printf '{\n  "version": "0.1.1"\n}\n' >"$r/plugins/claude/.claude-plugin/plugin.json"
 expect_fail "check-versions rejects mismatched surfaces" "differ" "$r" "$here/check-versions.sh"
+set_version() {
+  sed "s/^version = .*/version = \"$1\"/" "$r/Cargo.toml" >"$r/Cargo.toml.new" && command mv -f "$r/Cargo.toml.new" "$r/Cargo.toml"
+  printf '{\n  "version": "%s"\n}\n' "$1" >"$r/plugins/claude/.claude-plugin/plugin.json"
+}
+for v in 0.1.0-alpha.1 1.0.0-rc.1 1.0.0; do
+  set_version "$v"
+  expect_ok "check-versions accepts $v" "$r" "$here/check-versions.sh" "v$v"
+done
+for v in 1.0.0+build 1.0.0+build-1; do
+  set_version "$v"
+  expect_fail "check-versions refuses build metadata ($v)" "not a semver" "$r" "$here/check-versions.sh" "v$v"
+done
 
 # --- check-changelog-fragment.sh --------------------------------------------
 r=$(new_repo fragments)
@@ -114,6 +126,12 @@ rename_base=$(git -C "$r" rev-parse HEAD)
 git -C "$r" mv changes/old.md changes/new.md; echo "// r" >>"$r/crates/a/src/lib.rs"; commit rename
 expect_ok "fragment check counts a renamed fragment" "$r" env PR_BODY= "$here/check-changelog-fragment.sh" "$rename_base"
 
+branch bad-base; echo "// q" >>"$r/crates/a/src/lib.rs"; commit code
+expect_fail "fragment check fails closed on an unresolvable base" "deadbeef" "$r" env PR_BODY= "$here/check-changelog-fragment.sh" deadbeef
+if out=$(cd "$r" && PR_BODY='' "$here/check-changelog-fragment.sh" deadbeef 2>&1) || [[ $out == *"ok: no changes"* ]]; then
+  not_ok "fragment check never reports 'ok: no changes' for an unresolvable base" "$out"
+else ok "fragment check never reports 'ok: no changes' for an unresolvable base"; fi
+
 # --- bump.sh -----------------------------------------------------------------
 r=$(new_repo bump-empty)
 expect_fail "bump rejects a non-SemVer version" "semver" "$r" "$here/bump.sh" 1.2
@@ -121,17 +139,19 @@ expect_fail "bump refuses an empty release" "nothing to release" "$r" "$here/bum
 expect_eq "bump leaves the tree untouched on refusal" "" "$(git -C "$r" status --porcelain)"
 
 r=$(new_repo bump)
-head_before=$(git -C "$r" rev-parse HEAD)
 printf '# Changelog\n\nIntro.\n\n## Unreleased\n\n- Loose entry.\n\n### Fixed\n\n- Old fix.\n\n## 0.0.1 - 2020-01-01\n\n- First.\n' >"$r/CHANGELOG.md"
 printf -- '### Added\n\n- New feature.\n' >"$r/changes/feature.md"
 printf -- '- Tweak.\n' >"$r/changes/tweak.md"
 printf -- '### Fixed\n- New fix.\n' >"$r/changes/zfix.md"
 git -C "$r" add -A && git -C "$r" commit -qm pending
 head_before=$(git -C "$r" rev-parse HEAD)
+# A run across UTC midnight may stamp the date from before the bump.
+day_before=$(date -u +%Y-%m-%d)
 expect_ok "bump succeeds with fragments" "$r" "$here/bump.sh" 0.2.0-alpha.1
 expect_eq "bump sets both version surfaces" "0.2.0-alpha.1" "$(cd "$r" && "$here/check-versions.sh")"
 expect_eq "bump refreshes Cargo.lock" "1" "$(grep -c '^version = "0.2.0-alpha.1"' "$r/Cargo.lock")"
 today=$(date -u +%Y-%m-%d)
+! grep -qxF "## 0.2.0-alpha.1 - $day_before" "$r/CHANGELOG.md" || today=$day_before
 expected="# Changelog
 
 Intro.
@@ -220,6 +240,9 @@ c() { printf '{"user":{"login":"%s"},"created_at":"%s","body":"%s","html_url":"u
 approve() { PATH="$tmp/bin:$PATH" "$here/verify-approval.sh" "$1" mfittko/deslag "$since"; }
 
 FAKE_GH_FAIL=1 expect_ok "approval skips prereleases without calling gh" "$r" approve 1.0.0-rc.1
+FAKE_GH_FAIL=1 expect_ok "approval skips an alpha prerelease without calling gh" "$r" approve 0.1.0-alpha.1
+FAKE_GH_FAIL=1 expect_fail "approval checks a stable version" "could not list" "$r" approve 1.0.0
+FAKE_GH_FAIL=1 expect_fail "approval treats hyphenated build metadata as stable" "could not list" "$r" approve 1.0.0+build-1
 comments "[$(c MFittko 2026-01-02T00:00:00Z 'LGTM.\r\n  Approve Release V1.0.0 \r\n')]"
 expect_ok "approval accepts the owner's exact line" "$r" approve 1.0.0
 comments "[$(c someone 2026-01-02T00:00:00Z 'approve release v1.0.0')]"
@@ -235,6 +258,12 @@ comments "[$(c x 2026-01-02T00:00:00Z a)]" "[$(c mfittko 2026-01-03T00:00:00Z 'a
 expect_ok "approval reads every paginated page" "$r" approve 1.0.0
 FAKE_GH_FAIL=1 expect_fail "approval fails closed when gh fails" "could not list" "$r" approve 1.0.0
 expect_fail "approval rejects a malformed since" "since" "$r" "$here/verify-approval.sh" 1.0.0 mfittko/deslag yesterday
+# release.yml passes no <since>: the HEAD committer date (epoch seconds) is the cutoff.
+approve_default() { PATH="$tmp/bin:$PATH" "$here/verify-approval.sh" "$1" mfittko/deslag; }
+comments "[$(c mfittko 2099-01-01T00:00:00Z 'approve release v1.0.0')]"
+expect_ok "approval by default accepts a comment after the HEAD commit" "$r" approve_default 1.0.0
+comments "[$(c mfittko 2020-01-01T00:00:00Z 'approve release v1.0.0')]"
+expect_fail "approval by default rejects a comment before the HEAD commit" "no approval" "$r" approve_default 1.0.0
 
 # --- package.sh + checksums.sh -----------------------------------------------
 r=$tmp/package; mkdir -p "$r/target/x-test/release"

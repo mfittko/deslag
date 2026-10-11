@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
 # Usage: PR_BODY=<text> check-changelog-fragment.sh <base-ref>
 # A change under crates/ or plugins/ needs a changes/<slug>.md fragment in the
-# same diff, or a PR body line that reads `changelog: none`. Every added or
+# same diff, or a PR body line `changelog: none` (trimmed, case-insensitive). Every added or
 # modified fragment must pass the format rules bump.sh applies (lib.sh) and
 # hold at least one entry.
 set -euo pipefail
+export LC_ALL=C
 base=${1:?usage: check-changelog-fragment.sh <base-ref>}
 # shellcheck source=scripts/release/lib.sh
 . "$(dirname "$0")/lib.sh"
 
 # --no-renames lists a renamed file under its new name as an addition.
+# Both lists are captured up front: under set -e a git failure (for example an
+# unresolvable base) aborts the check before any "ok".
 changed() { git diff --no-renames --name-only "$@" "$base...HEAD"; }
+files=$(changed)
+fragments=$(changed --diff-filter=AM)
 
-# grep reads all input (no -q) so pipefail never sees a SIGPIPE from git.
-if ! changed | grep -E '^(crates|plugins)/' >/dev/null; then
+if ! grep -E '^(crates|plugins)/' >/dev/null <<<"$files"; then
   echo "ok: no changes under crates/ or plugins/"
   exit 0
 fi
@@ -37,7 +41,7 @@ while IFS= read -r f; do
   else
     bad=1
   fi
-done < <(changed --diff-filter=AM)
+done <<<"$fragments"
 
 if [ "$bad" = 1 ]; then
   echo "error: fix the fragment format; see changes/README.md" >&2
