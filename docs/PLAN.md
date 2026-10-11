@@ -258,7 +258,7 @@ validation_outcome
 
 Count absence as unknown, not zero. Keep identifiers and timestamps that belong to the integration outside the pure transformation result. In observe mode, candidate savings are hypothetical; emitted content remains original.
 
-DF-010 finalized this contract in `deslag-core` (`compress`, `CompressionContext`, `CompressionReport`). `CompressionReport::to_json` writes the fields above as snake_case keys; `compression_duration` is whole nanoseconds and every absent value is `null`. The core owns the §11 limits `min_candidate_bytes`, `max_candidate_bytes` and `max_json_depth` (`Limits::default()` uses the §11 values) and the `json_minify` and `exact_line_runs` switches. `max_table_rows` arrives with table-v1 (DF-012). Token gain thresholds wait for token estimation (DF-014). The processing budget and parallel job limit belong to adapter-side bounded execution (DF-015). The supported output category and the transform/format version selection in the context arrive with the first structural format (table-v1).
+DF-010 finalized this contract in `deslag-core` (`compress`, `CompressionContext`, `CompressionReport`). `CompressionReport::to_json` writes the fields above as snake_case keys; `compression_duration` is whole nanoseconds and every absent value is `null`. The core owns the §11 limits `min_candidate_bytes`, `max_candidate_bytes` and `max_json_depth` (`Limits::default()` uses the §11 values) and the `json_minify`, `exact_line_runs` and `line_templates` switches. `max_table_rows` arrives with table-v1 (DF-012). Token gain thresholds wait for token estimation (DF-014). The processing budget and parallel job limit belong to adapter-side bounded execution (DF-015). The supported output category and the transform/format version selection in the context arrive with the first structural format (table-v1).
 
 ### 6.2 Pipeline
 
@@ -348,6 +348,8 @@ Do not merge similar lines with different timestamps, IDs, paths, counts, or err
 A decoder must reconstruct the original text bytes exactly. Mixed LF/CRLF, empty lines, partial final lines, and strings resembling encoding markers need tests.
 
 DF-013 implements this as `lines-v1`, specified in [compression-formats.md](compression-formats.md).
+
+The line-template codec implements templates for consecutive lines that differ only in variable tokens as `lines-v2`, specified in [compression-formats.md](compression-formats.md). It is a separate opt-in transform, and a constant token that differs still ends a template.
 
 ### 7.4 Transform composition and exactness
 
@@ -540,6 +542,7 @@ max_parallel_jobs = 4
 json_minify = true
 json_table = false
 exact_line_runs = false
+line_templates = false
 
 [proxy]
 listen = "127.0.0.1:8789"
@@ -556,7 +559,7 @@ export_timeout_ms = 2000
 shutdown_timeout_ms = 2000
 ```
 
-`json_table` and `exact_line_runs` are enabled explicitly only for approved profiles after evaluation. Their default can change in a later release with evidence and release notes.
+`json_table`, `exact_line_runs` and `line_templates` are enabled explicitly only for approved profiles after evaluation. Their default can change in a later release with evidence and release notes.
 
 The processing budget is cooperative, not a promise that cancelling an async waiter terminates blocking CPU work. Enforce byte/depth/work limits and bounded concurrency as well. Never spawn unlimited background work when a time budget expires.
 

@@ -69,5 +69,91 @@ The encoded text is the header line followed by the body.
   reports that reason, even when lines that are not JSON follow.
 - The core decodes the candidate and compares it with the input. A mismatch
   yields `failed` / `invalid_candidate`.
-- The header, prefix, escape and unit splitting are shared, so a later
-  line-template codec can add its own directive to the same container.
+- The prefix, escape, run directive and unit splitting are shared with
+  `lines-v2`.
+
+## lines-v2
+
+Exact codec for runs of consecutive lines that share a template, such as log
+lines that differ only in timestamps, IDs, counts or paths. `lines-v2` is
+`lines-v1` plus the template directive. The decoder reconstructs the original
+bytes exactly. Transform identity: `line-templates`, transform version 1,
+report `format_version` 2.
+
+### Units and tokens
+
+- Units are as in `lines-v1`.
+- The template directive applies only to units that end with `\n`. The content
+  is the unit without that final `\n`. A `\r` before it belongs to the content.
+- Space and tab are the only delimiters. The content splits into alternating
+  gaps and tokens: `gap0 tok0 gap1 ... tok(n-1) gapn`. Only the first and the
+  last gap may be empty. Tokens are never empty.
+- A token is variable-class when it contains an ASCII digit, `/` or `\`.
+
+### Encoded text
+
+The encoded text is the header line followed by the body.
+
+- Header: `#!deslag lines-v2\n`.
+- The reserved prefix, the escape and the run directive are as in `lines-v1`.
+- Template directive: `#!deslag t<N> <p1>,<p2>,...\n`. N is canonical decimal
+  and N >= 2. It means: the unit directly above is the base, and the group has
+  N lines in total, the base included. The base is a literal or escaped unit
+  and ends with `\n`.
+- Each `p` is a canonical decimal token index of the base. Index 0 is the
+  first token, and `0` is the only number that may start with `0`. There is
+  at least one index. The indices ascend strictly, and each is below the
+  base's token count.
+- N-1 rows follow the directive, one per line of the group after the base.
+  A row holds that line's tokens at the listed indices, in index order,
+  joined by one space and followed by `\n`. Values are non-empty and contain
+  no space or tab.
+- A row that starts with the reserved prefix is written with the escape.
+- A run directive or a template directive never directly follows a template
+  group.
+
+### Decoder
+
+- The decoder accepts both headers. Under the `lines-v1` header a template
+  directive is rejected, so every `lines-v1` text decodes as before.
+- Each row line is the base with the row's values in place of the tokens at
+  the listed indices. The gaps and the other tokens come from the base.
+- The decoder rejects a template directive that is not canonical, has no base
+  directly above it, has indices that do not ascend or are out of range, or
+  lacks rows. It also rejects a row with the wrong number of values, an empty
+  value, a missing `\n`, or the reserved prefix without the escape.
+- The output bound applies as in `lines-v1`.
+
+### Encoder
+
+At each unit, in input order:
+
+1. Count the identical consecutive copies. When there are at least 2 and the
+   `lines-v1` run rule pays, write the unit and a run directive.
+2. Otherwise grow a group greedily from this unit as the base. A following
+   unit joins when it ends with `\n`, has the same gaps byte for byte and the
+   same token count as the base, and each of its tokens equals the base token
+   or both tokens are variable-class. A constant token that differs ends the
+   group, so lines that differ in an error message never share a template.
+3. The variable indices are the indices where any row differs from the base.
+   The group is written only when the directive and the rows are shorter than
+   the rows' literal bytes, escapes included. Otherwise the base is written
+   literally, and no group starts at the other units of that group. Run
+   directives still apply to them.
+
+- Line order never changes and no line is dropped.
+- A partial final unit is always literal.
+- The candidate is emitted only when it is shorter than the input
+  (`insufficient_gain` otherwise).
+- Input that already starts with the `lines-v1` or `lines-v2` header is
+  skipped as `unsupported_format`.
+
+### Integration
+
+- The transform is opt-in: `CompressionContext::line_templates` is `false` in
+  `FIRST_SLICE_JSON_MINIFY_CONTEXT`.
+- Routing is as for `exact_line_runs`. With `line_templates` on, plain text
+  goes to this encoder, which also writes run directives. With only
+  `exact_line_runs` on, the codec stays `lines-v1`.
+- The core decodes the candidate and compares it with the input. A mismatch
+  yields `failed` / `invalid_candidate`.
