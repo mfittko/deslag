@@ -24,10 +24,13 @@ With this change merged, the repository tracks these files:
 | `rust-toolchain.toml` | Toolchain pin `1.96.0` with `rustfmt` and `clippy` |
 | `crates/deslag-core/` | The only member crate (library, `publish = false`) |
 | `README.md` | Project overview |
+| `LICENSE-MIT` | MIT license text |
+| `LICENSE-APACHE` | Apache License 2.0 text |
 | `docs/PLAN.md` | Implementation plan and backlog |
 | `docs/decisions/0001` to `0003` | Earlier decision records |
+| `docs/decisions/0004-reference-revisions-and-licenses.md` | This record |
 
-This change adds `LICENSE-MIT`, `LICENSE-APACHE` and this record. It also updates the README license section.
+This change adds `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `crates/deslag-core/`, `LICENSE-MIT`, `LICENSE-APACHE` and this record. It edits `.github/workflows/ci.yml`, `.devloops` and `README.md`.
 
 ### Pinned reference revisions
 
