@@ -21,7 +21,7 @@ This ADR records the decision, a live hook-mode resume experiment, and an offlin
 
 Use deterministic replay with persisted per-result decisions. Do not store tool bodies.
 
-- The first time an adapter sees a result, it decides `unchanged` or `encoded(transform id, transform version)` under the current policy. It records that decision before it forwards a changed request.
+- The first time an adapter sees a result, it decides `unchanged` or `encoded(transform id, transform version)` under the current policy. It records every new decision, including `unchanged`, atomically before it forwards the request that carries the result.
 - On every later request, a known result gets its recorded decision, applied with the recorded transform version. The adapter never decides a known result again.
 - An `unchanged` decision is recorded like any other. A result left unchanged because of load, size or parse failure stays unchanged for the life of the session.
 
@@ -52,27 +52,27 @@ Per result:
 
 The per-result key is `(scope, tool_use_id, source digest)`.
 
-- Hook mode: scope is `session_id` from the hook stdin. Observed in runs A and D.
+- Hook mode: scope is `session_id` from the hook stdin. Observed in run D.
 - Proxy mode: scope is the `X-Claude-Code-Session-Id` request header. Claude Code 2.1.296 sets that header to its session id, and `metadata.user_id` carries a JSON string with `device_id`, `account_uuid`, `session_id` and an optional `parent_session_id`. This was read from the client, not tested.
 - The key includes the scope. Run C showed that a fork keeps the parent's `tool_use_id` under a new session id.
 - A request without a trusted scope passes through unchanged. The proxy never invents provider-visible fields.
 
 ### Ownership
 
-One configuration value, `owner = hook | proxy | none`, selects the owner. The launcher and doctor workflow writes it. Both adapters read it, and each adapter transforms only when it is the owner. The manifest records the owner. A session whose manifest names a different owner passes through. Tool-result content is never evidence of ownership. Unverifiable ownership means `none`.
+This is the decided design. One configuration value, `owner = hook | proxy | none`, selects the owner. The launcher and doctor workflow will write it; no launcher or doctor writes `owner` yet. Both adapters read it, and each adapter transforms only when it is the owner. The manifest records the owner. A session whose manifest names a different owner passes through. Tool-result content is never evidence of ownership. Unverifiable ownership means `none`. Owner selection and owner-mismatch passthrough are untested.
 
 ### Behavior by event
 
 | Event | Hook mode | Proxy mode |
 | --- | --- | --- |
 | Multi-turn resend | Client resends the replacement it stored (run B) | Replay recorded decisions; prefix byte-stable (offline) |
-| Resume (`--resume`) | Client resends the stored replacement; session id unchanged (run B) | Same scope, same manifest; replay as for resend. Live proxy resume is pending |
-| Fork (`--fork-session`) | Fork copies the stored replacement under a new session id (runs C and D) | New scope with no manifest, history already contains results: explicit error, start a fresh session. Unsupported |
-| Process restart | No state needed for history | Reload manifest from disk (offline) |
-| Policy or software upgrade | History unaffected; new results use the new policy | Known results replay with the pinned transform version; new results use the new policy (offline) |
-| Model switch | New results only | New results only; the pinned profile stays |
-| Compression disabled | Stop replacing new results | Keep replaying pinned decisions; new results unchanged |
-| Proxy removed mid-session | Not applicable | The client resends originals. Content stays correct, the cached prefix is lost. Start a new session |
+| Resume (`--resume`) | Client resends the stored replacement; session id unchanged (run B) | Same scope, same manifest; replay as for resend (design, untested live) |
+| Fork (`--fork-session`) | Fork copies the stored replacement under a new session id (runs C and D) | New scope with no manifest, history already contains results: explicit error, start a fresh session. Unsupported (design, untested) |
+| Process restart | No state needed for history; run B resumed in a new client process (run B) | Reload manifest from disk (offline) |
+| Policy or software upgrade | History unaffected; new results use the new policy (design, untested) | Known results replay with the pinned transform version; new results use the new policy (offline) |
+| Model switch | New results only (design, untested) | New results only; the pinned profile stays (design, untested) |
+| Compression disabled | Stop replacing new results (design, untested) | Keep replaying pinned decisions; new results unchanged (design, untested) |
+| Proxy removed mid-session | Not applicable | The client resends originals. Content stays correct, the cached prefix is lost. Start a new session (design, untested) |
 | Manifest missing or corrupt | Not applicable | Explicit error when the request carries tool results (offline) |
 | Source digest mismatch | Not applicable | Explicit error (offline) |
 | Unknown result outside the newest message | Not applicable | Explicit error (offline) |
@@ -95,7 +95,7 @@ The replacing plugin used a `jq` PostToolUse hook on `Bash` that kept the other 
 | C | `--resume <A> --fork-session`, empty plugin, same question | 2.1.296 | claude-haiku-5-5 | Answered `REPLACED-BY-HOOK`; new `session_id` | 0.00532302 |
 | D | `--resume <A> --fork-session` with the replacing hook, one new Bash call | 2.1.296 | claude-haiku-5-5 | Hook stdin `session_id` was the new fork id | 0.00582497 |
 
-Total: USD 0.01922686, within the USD 2.50 allotted to this item from the shared M0 budget of USD 5.
+Total: USD 0.01922686. The operator (mfittko) allotted USD 2.50 of the shared M0 budget of USD 5 to DF-004. Cumulative M0 live spend against the USD 5 cap is USD 0.0038538 (DF-002) + USD 0.01922686 (DF-004) = USD 0.02308066.
 
 Transcript inspection (read only, `~/.claude/projects/<project>/<session>.jsonl`):
 
@@ -112,27 +112,27 @@ Transcript inspection (read only, `~/.claude/projects/<project>/<session>.jsonl`
 Scenarios:
 
 - Multi-turn resend and restart: four turns with a process restart before the fourth. Each upstream body starts with every message byte of the previous body. An identical resend is byte-identical.
-- Policy upgrade: a session built under policy v1 is resent under policy v2 with transform v2. Results decided under v1 keep their v1 bytes, including a result v2 would have encoded. A new result uses v2.
+- Policy upgrade: a session built under policy v1 is resent under policy v2 with transform v2. Results decided under v1 keep their v1 bytes. This includes `toolu_2`, which v1 left unchanged and which a fresh v2 decision encodes; the test asserts both premises. A new result uses v2.
 - First decision unchanged: a result left unchanged under simulated load stays unchanged after the load drops.
-- Manifest loss: a corrupt or deleted manifest with tool results in the request is an explicit error. Nothing is forwarded.
-- Digest mismatch and undecided history: changed source bytes under a known `tool_use_id`, or an unknown result outside the newest message, is an explicit error. Nothing is forwarded.
+- Manifest loss: a corrupt or deleted manifest with tool results in the request is an explicit error. The replay layer rejects the request before the proxy is called.
+- Digest mismatch and undecided history: changed source bytes under a known `tool_use_id`, or an unknown result outside the newest message, is an explicit error. The replay layer rejects the request before the proxy is called.
 - No scope: the body passes through byte-identical and no manifest is written.
 
-Recorded output of `cargo test --locked -p deslag-proxy --test replay_experiment -- --nocapture`:
+Recorded output of `cargo test --locked -p deslag-proxy --test replay_experiment -- --nocapture --test-threads=1`:
 
 ```text
 running 6 tests
+test digest_mismatch_and_undecided_history_are_explicit_errors ... replay: Err(DigestMismatch("toolu_1")); Err(UndecidedHistory("toolu_9"))
+ok
+test first_unchanged_decision_stays_unchanged ... replay: toolu_1 left unchanged under load stayed unchanged after load dropped
+ok
+test manifest_loss_is_an_explicit_error ... replay: corrupt and missing manifest -> Err(MissingManifest)
+ok
+test multi_turn_resend_and_restart_keep_prefix_byte_stable ... replay: 4 turns + restart, upstream body bytes [87, 364, 586, 838], toolu_1 73 -> 57 bytes
+ok
 test no_scope_passes_bytes_through ... ok
-replay: Err(DigestMismatch("toolu_1")); Err(UndecidedHistory("toolu_9"))
-replay: corrupt and missing manifest -> Err(MissingManifest)
-replay: toolu_1 left unchanged under load stayed unchanged after load dropped
-test manifest_loss_is_an_explicit_error ... ok
-test digest_mismatch_and_undecided_history_are_explicit_errors ... ok
-test first_unchanged_decision_stays_unchanged ... ok
-replay: upgrade v1->v2 kept toolu_1@v1 and toolu_2 unchanged; toolu_3 used v2
-test policy_upgrade_replays_pinned_decisions ... ok
-replay: 4 turns + restart, upstream body bytes [87, 364, 586, 838], toolu_1 73 -> 57 bytes
-test multi_turn_resend_and_restart_keep_prefix_byte_stable ... ok
+test policy_upgrade_replays_pinned_decisions ... replay: upgrade v1->v2 kept toolu_1@v1 and toolu_2 unchanged; toolu_3 used v2
+ok
 
 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
 ```
@@ -150,11 +150,13 @@ A mutation that re-decides known results under the current policy fails the upgr
 - Manifest loss, corruption or expiry for a session with established history. Explicit error; there is no recovery path.
 - Removing the proxy from a session with encoded history. The client resends originals and the cached prefix is lost.
 - Changing `owner` or `mode` inside a running session. It applies to new sessions only.
+- Owner enforcement: owner selection, the `owner` configuration write, and owner-mismatch passthrough. Untested.
+- Proxy-mode model switch and compression-disabled replay. Untested.
 - `--continue`, Linux and Windows clients, and client versions other than 2.1.296. Untested.
 
 ## Consequences
 
 - Hook mode is the simpler owner for Claude Code: the client keeps the replacement across resume and fork, so history needs no deslag state.
-- Proxy mode needs a manifest write before it forwards a changed request, a retained transform version for every pinned decision, and an explicit error path. Production manifests, retention and the atomic-write cost are the next step for proxy replay.
+- Proxy mode needs an atomic manifest write before it forwards any request that carries a new result, a retained transform version for every pinned decision, and an explicit error path. Production manifests, retention and the atomic-write cost are the next step for proxy replay.
 - Proxy-mode generic mutation stays limited to sessions with a trusted session id that are neither forked nor recovered without a manifest.
 - A canonicalizing JSON round trip is acceptable only in the experiment. Production replay must splice changed blocks into the original request bytes, so unknown fields and key order stay intact.
