@@ -105,8 +105,9 @@ therefore underestimates savings from whitespace removal. This bias is
 deliberate: a gain decision based on the estimate does not overstate the gain.
 
 Characters outside the Basic Multilingual Plane, such as emoji, cost two
-tokens each. Other non-ASCII characters cost one token each. Five U+1F600
-characters estimate 10 tokens, and `cl100k_base` gives 10. The ZWJ family
+tokens each. Other non-ASCII, non-whitespace characters cost one token each.
+Whitespace of any script, such as U+00A0 or U+3000, follows the whitespace-run
+rule. Five U+1F600 characters estimate 10 tokens, and `cl100k_base` gives 10. The ZWJ family
 U+1F468 U+200D U+1F469 U+200D U+1F467 estimates 8 tokens. The references give
 8 (`o200k_base`) and 13 (`cl100k_base`).
 
