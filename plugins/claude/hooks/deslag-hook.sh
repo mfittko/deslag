@@ -9,7 +9,7 @@ pass() {
   cat >/dev/null 2>&1
   exit 0
 }
-[ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -n "${CLAUDE_PLUGIN_DATA:-}" ] || pass
+if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ] || [ -z "${CLAUDE_PLUGIN_DATA:-}" ]; then pass; fi
 version=
 while IFS= read -r line || [ -n "$line" ]; do
   case $line in
@@ -22,5 +22,5 @@ while IFS= read -r line || [ -n "$line" ]; do
   esac
 done 2>/dev/null <"$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json"
 bin=$CLAUDE_PLUGIN_DATA/bin/$version/deslag
-[ -n "$version" ] && [ -f "$bin" ] && [ -x "$bin" ] || pass
+if [ -z "$version" ] || [ ! -f "$bin" ] || [ ! -x "$bin" ]; then pass; fi
 exec "$bin" hook claude
