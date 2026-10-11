@@ -5,7 +5,9 @@
 # section as `## <version> - <UTC date>` under a fresh empty `## Unreleased`,
 # and stages exactly those files. It never commits, tags or pushes.
 # The checks run before the first write. Until Cargo.lock is refreshed, any
-# failure restores the original files, so a refusal or a failure changes no file.
+# failure restores the original files, so a refusal, or a failure up to and
+# including `cargo update`, changes no file. A later failure (git add, rm,
+# git rm) can leave the rewritten files in the tree.
 set -euo pipefail
 # Fragment order (the glob) and character classes must not depend on the locale.
 export LC_ALL=C
@@ -15,7 +17,7 @@ files=(CHANGELOG.md Cargo.toml "$plugin" Cargo.lock)
 # shellcheck source=scripts/release/lib.sh
 . "$(dirname "$0")/lib.sh"
 
-if ! grep -qE "$semver" <<<"$version"; then
+if ! [[ $version =~ $semver ]]; then
   echo "error: '$version' is not a SemVer version (X.Y.Z or X.Y.Z-pre)" >&2
   exit 1
 fi
@@ -58,6 +60,7 @@ awk -v ver="$version" '
   /^\[/ { in_pkg = ($0 == "[workspace.package]") }
   in_pkg && !done && /^version[[:space:]]*=/ { $0 = "version = \"" ver "\""; done = 1 }
   { print }
+  END { if (!done) { print "error: Cargo.toml has no version line under an exact \"[workspace.package]\" header" > "/dev/stderr"; exit 1 } }
 ' Cargo.toml >"$work/Cargo.toml"
 jq --arg v "$version" '.version = $v' "$plugin" >"$work/plugin.json"
 

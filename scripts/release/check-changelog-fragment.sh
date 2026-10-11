@@ -10,10 +10,11 @@ base=${1:?usage: check-changelog-fragment.sh <base-ref>}
 # shellcheck source=scripts/release/lib.sh
 . "$(dirname "$0")/lib.sh"
 
+# core.quotePath=false prints non-ASCII paths raw, so the filters see them.
 # --no-renames lists a renamed file under its new name as an addition.
 # Both lists are captured up front: under set -e a git failure (for example an
 # unresolvable base) aborts the check before any "ok".
-changed() { git diff --no-renames --name-only "$@" "$base...HEAD"; }
+changed() { git -c core.quotePath=false diff --no-renames --name-only "$@" "$base...HEAD"; }
 files=$(changed)
 fragments=$(changed --diff-filter=AM)
 

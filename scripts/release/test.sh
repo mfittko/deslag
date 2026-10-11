@@ -103,6 +103,12 @@ expect_fail "fragment check fails plugins/ change without fragment" "changes/" "
 branch with-fragment; echo "// y" >>"$r/crates/a/src/lib.rs"; printf -- '- Thing.\n' >"$r/changes/thing.md"; commit frag
 expect_ok "fragment check accepts a non-empty fragment" "$r" check ""
 
+branch non-ascii-code; echo "// x" >"$r/crates/a/src/café.rs"; commit code
+expect_fail "fragment check fails a non-ASCII crates/ path without fragment" "changes/" "$r" check ""
+
+branch non-ascii-fragment; echo "// x" >"$r/crates/a/src/café.rs"; printf -- '- Thing.\n' >"$r/changes/café.md"; commit frag
+expect_ok "fragment check counts a non-ASCII fragment name" "$r" check ""
+
 branch empty-fragment; echo "// z" >>"$r/crates/a/src/lib.rs"; printf '\n  \n' >"$r/changes/empty.md"; commit empty
 expect_fail "fragment check rejects an empty fragment" "changes/" "$r" check ""
 
@@ -135,6 +141,8 @@ else ok "fragment check never reports 'ok: no changes' for an unresolvable base"
 # --- bump.sh -----------------------------------------------------------------
 r=$(new_repo bump-empty)
 expect_fail "bump rejects a non-SemVer version" "semver" "$r" "$here/bump.sh" 1.2
+expect_fail "bump rejects a version with an embedded newline" "semver" "$r" "$here/bump.sh" $'1.0.0\nx'
+expect_fail "bump rejects build metadata" "semver" "$r" "$here/bump.sh" 1.0.0+build-1
 expect_fail "bump refuses an empty release" "nothing to release" "$r" "$here/bump.sh" 0.2.0
 expect_eq "bump leaves the tree untouched on refusal" "" "$(git -C "$r" status --porcelain)"
 
@@ -200,6 +208,13 @@ expect_fail "bump rejects a line that is no entry" "expected a" "$r" "$here/bump
 r=$(new_repo bump-undated)
 printf '# Changelog\n\n## Unreleased\n\n- Pending.\n\n## 0.3.0\n\n## 0.0.1 - 2020-01-01\n\n- First.\n' >"$r/CHANGELOG.md"
 expect_fail "bump refuses a version with an empty undated heading" "already" "$r" "$here/bump.sh" 0.3.0
+
+r=$(new_repo bump-header)
+printf -- '- Change.\n' >"$r/changes/change.md"
+sed 's/^\[workspace\.package\]$/[workspace.package] # shared/' "$r/Cargo.toml" >"$r/Cargo.toml.new" && command mv -f "$r/Cargo.toml.new" "$r/Cargo.toml"
+git -C "$r" add -A && git -C "$r" commit -qm pending
+expect_fail "bump refuses a Cargo.toml it cannot rewrite" "workspace.package" "$r" "$here/bump.sh" 0.2.0
+expect_eq "bump leaves the tree untouched when Cargo.toml is not rewritten" "" "$(git -C "$r" status --porcelain)"
 
 r=$(new_repo bump-cargo-fail)
 printf -- '- Change.\n' >"$r/changes/change.md"

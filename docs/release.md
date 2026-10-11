@@ -30,16 +30,17 @@ also fails unless the tag equals both surfaces.
 The release scripts in `scripts/release/` are bash with `jq`, `awk` and `git`.
 They need no Node or Python and run on GNU and BSD (macOS) userland.
 `scripts/release/test.sh` tests them; CI runs it together with `shellcheck`.
-The tooling is plain bash scripts and no cargo xtask, because scripts are the
-smallest working option and need no extra build step or toolchain.
+The release tooling is plain bash scripts. A cargo xtask was the alternative;
+scripts are the smallest working option and need no extra build step or
+toolchain.
 
 | Script | Purpose |
 | --- | --- |
 | `check-versions.sh [<tag>]` | Print the version; fail on a surface mismatch or a tag mismatch. |
-| `check-changelog-fragment.sh <base>` | Fail a `crates/` or `plugins/` change without a valid fragment or `changelog: none`. |
+| `PR_BODY=<text> check-changelog-fragment.sh <base>` | Fail a `crates/` or `plugins/` change without a valid fragment or a `changelog: none` line in `PR_BODY`. |
 | `lib.sh` | The fragment format rules and the SemVer pattern, sourced by `bump.sh`, `check-changelog-fragment.sh` and `check-versions.sh`. |
 | `bump.sh <version>` | Set both surfaces, refresh `Cargo.lock`, assemble fragments, stamp the changelog, stage the result. |
-| `extract-notes.sh <version>` | Print a `CHANGELOG.md` section body; fail when it is missing or empty. |
+| `extract-notes.sh <version\|Unreleased> [<changelog>]` | Print a `CHANGELOG.md` section body; fail when it is missing or empty. |
 | `verify-approval.sh <version> <owner/repo> [<since>]` | Fail a stable release without an operator approval comment. |
 | `package.sh <version> <target>` | Pack a built binary into `dist/deslag-<version>-<target>.tar.gz`. |
 | `checksums.sh <dir>` | Write `<dir>/SHA256SUMS` for every archive in `<dir>`. |
@@ -66,8 +67,11 @@ tags or pushes. It refuses an invalid SemVer version, a version that
 `CHANGELOG.md` already has, a fragment or `## Unreleased` line that breaks the
 fragment format in `changes/README.md`, and an empty release (empty
 `## Unreleased` and no fragments). The refusals happen before the first write.
-When a later step fails, for example `cargo update`, the script restores the
-original files. A refusal or a failure therefore changes no file.
+When a later step up to and including `cargo update` fails, the script
+restores the original files. A refusal, or a failure up to and including
+`cargo update`, therefore changes no file. A later failure (`git add`, `rm`,
+`git rm`) can leave the rewritten files in the tree. Check `git status` before
+you re-run.
 
 Edit the stamped section if the wording needs work. Then commit, open a pull
 request and merge it to `main`.
@@ -112,6 +116,8 @@ The workflow then runs four jobs:
 2. `build` runs only after `verify` passes. It builds `deslag` with
    `cargo build --release --locked` for `aarch64-apple-darwin` (macOS 14) and
    `x86_64-unknown-linux-gnu` (Ubuntu 22.04), and packs each into a `.tar.gz`.
+   The release archives contain only the `deslag` binary. `deslag-proxy` is
+   not distributed in this release.
 3. `checksums` writes `SHA256SUMS` for both archives.
 4. `publish` creates a build provenance attestation for each archive, then
    creates the GitHub Release with both archives, `SHA256SUMS` and the

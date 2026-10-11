@@ -23,7 +23,7 @@ if [ "$cargo_version" != "$plugin_version" ]; then
   echo "error: version surfaces differ: Cargo.toml=$cargo_version plugin.json=${plugin_version:-<missing>}" >&2
   exit 1
 fi
-if ! grep -qE "$semver" <<<"$cargo_version"; then
+if ! [[ $cargo_version =~ $semver ]]; then
   echo "error: '$cargo_version' is not a SemVer version (X.Y.Z or X.Y.Z-pre, no build metadata)" >&2
   exit 1
 fi
