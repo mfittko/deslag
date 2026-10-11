@@ -34,7 +34,21 @@ Each run used a throwaway project directory, `--setting-sources project,local`, 
 
 Total: USD 0.0038538. The shared M0 live-run budget is USD 5; the operator allotted USD 2.50 of it to this item.
 
-Runs 2 and 3 used throwaway `jq` hooks to characterize the client. The deslag adapter does not emit replacements yet. Its `replacement` helper applies the same shape rule, and unit tests cover the accepted and rejected cases.
+Runs 2 and 3 used throwaway `jq` hooks to characterize the client. The deslag adapter emits replacements only with `--minify-json`. Its `replacement` helper applies the same shape rule, and unit tests cover the accepted and rejected cases.
+
+### JSON minification (opt-in)
+
+`deslag hook claude --minify-json` and `deslag-proxy --minify-json` remove insignificant whitespace from JSON in Bash tool results only. Both call `deslag_core::minify_json`. The plugin hook in `plugins/claude` does not pass the flag, so it stays a no-op. Neither flag has been run against a live client. Token savings from whitespace removal have not been measured.
+
+Status: experimental. The proxy rewrite is stateless and keeps no replay manifest yet.
+
+- Enabling, disabling or upgrading `--minify-json` mid-session rewrites already-submitted history on resend. Start a new session after any such change.
+- Do not enable the hook flag and the proxy flag at the same time. One component owns compression.
+- The proxy passes requests with `content-encoding` through unchanged. A client that compresses only some requests would see drift.
+- The proxy passes requests with a body-integrity header (`content-digest`, `digest`, `content-md5`, `x-amz-content-sha256`, `repr-digest`) through unchanged.
+- The proxy passes a request with trailers through unchanged. Its trailers are not forwarded upstream. A client that sends trailers on only some requests would see drift.
+- The proxy does not rewrite `/v1/messages/count_tokens`. Its token counts can overstate the rewritten request.
+- The proxy buffers and rewrites at most 4 eligible requests at once (`INSPECT_PERMITS`). Others wait for a permit. A body over 32 MiB (`MAX_INSPECT_BYTES`) is forwarded unrewritten. A buffered body that does not arrive within `BODY_READ_TIMEOUT` (300 s) of its permit fails with `408`. The deadline covers only the first 32 MiB. For a larger body the permit is released and the rest streams without a deadline. See the README proxy limits.
 
 ### Pending
 

@@ -13,4 +13,9 @@ name = "deslag"
 path = "src/main.rs"
 
 [dependencies]
+deslag-core = { path = "../deslag-core" }
 serde_json = "1.0.152"
+
+[[bench]]
+name = "hook"
+harness = false

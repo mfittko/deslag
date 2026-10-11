@@ -1,11 +1,11 @@
 //! `deslag` command-line entry point.
 
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::process::ExitCode;
 
 use serde_json::{Value, json};
 
-const USAGE: &str = "usage: deslag hook claude";
+const USAGE: &str = "usage: deslag hook claude [--minify-json]";
 
 // Exit 2 from a Claude Code hook is blocking and feeds stderr to the model; usage errors avoid it.
 const EX_USAGE: u8 = 64;
@@ -22,9 +22,12 @@ fn main() -> ExitCode {
         .collect::<Vec<_>>()
         .as_slice()
     {
-        ["hook", "claude"] => {
-            if let Err(message) = claude_hook(io::stdin().lock()) {
-                eprintln!("deslag: {message}");
+        ["hook", "claude", flags @ ..] if matches!(flags, [] | ["--minify-json"]) => {
+            match claude_hook(io::stdin().lock(), !flags.is_empty()) {
+                // A failed write leaves the tool output unchanged, which is the safe default.
+                Ok(Some(output)) => drop(writeln!(io::stdout().lock(), "{output}")),
+                Ok(None) => {}
+                Err(message) => eprintln!("deslag: {message}"),
             }
             ExitCode::SUCCESS
         }
@@ -35,11 +38,13 @@ fn main() -> ExitCode {
     }
 }
 
-/// Validates a Claude Code PostToolUse event and leaves the tool output unchanged.
+/// Validates a Claude Code PostToolUse event. With `minify_json`, returns the hook
+/// output that replaces a Bash result whose stdout is minifiable JSON. `None`
+/// leaves the tool output unchanged.
 ///
 /// Errors are diagnostics only. The caller reports them on stderr and still exits 0,
 /// so the hook never blocks the tool.
-fn claude_hook(mut input: impl Read) -> Result<(), String> {
+fn claude_hook(mut input: impl Read, minify_json: bool) -> Result<Option<Value>, String> {
     let mut buf = Vec::new();
     input
         .by_ref()
@@ -60,14 +65,28 @@ fn claude_hook(mut input: impl Read) -> Result<(), String> {
         Some(other) => return Err(format!("unsupported hook event: {other:?}")),
         None => return Err("hook input has no hook_event_name".to_string()),
     }
-    if event.get("tool_name").and_then(Value::as_str).is_none() {
+    let Some(tool_name) = event.get("tool_name").and_then(Value::as_str) else {
         return Err("hook input has no tool_name".to_string());
-    }
+    };
     // MCP tools return strings or content-block arrays, so any non-null value is valid.
     if event.get("tool_response").is_none_or(Value::is_null) {
         return Err("hook input has no tool_response".to_string());
     }
-    Ok(())
+    // Only Bash stdout is eligible. Read output stays byte-exact because Edit matches on it.
+    if !minify_json || tool_name != "Bash" {
+        return Ok(None);
+    }
+    let response = &event["tool_response"];
+    let Some(minified) = response
+        .get("stdout")
+        .and_then(Value::as_str)
+        .and_then(deslag_core::minify_json)
+    else {
+        return Ok(None);
+    };
+    let mut updated = response.clone();
+    updated["stdout"] = Value::String(minified);
+    Ok(replacement(&event, updated))
 }
 
 /// Builds the PostToolUse output that replaces the tool result with `updated`.
@@ -75,7 +94,6 @@ fn claude_hook(mut input: impl Read) -> Result<(), String> {
 /// Claude Code drops an `updatedToolOutput` that does not match the tool's output
 /// schema, so this returns `None` unless `updated` has the same shape as the
 /// original `tool_response`.
-#[cfg_attr(not(test), allow(dead_code))]
 fn replacement(event: &Value, updated: Value) -> Option<Value> {
     if !same_shape(event.get("tool_response")?, &updated) {
         return None;
@@ -184,7 +202,7 @@ mod tests {
     fn valid_events_pass() {
         for name in ["posttooluse-bash.json", "posttooluse-read.json"] {
             let bytes = serde_json::to_vec(&fixture(name)).unwrap();
-            assert_eq!(claude_hook(bytes.as_slice()), Ok(()));
+            assert_eq!(claude_hook(bytes.as_slice(), false), Ok(None));
         }
     }
 
@@ -192,7 +210,7 @@ mod tests {
     fn oversize_input_is_rejected() {
         let bytes = vec![b' '; MAX_HOOK_INPUT_BYTES as usize + 1];
         assert!(
-            claude_hook(bytes.as_slice())
+            claude_hook(bytes.as_slice(), false)
                 .unwrap_err()
                 .contains("exceeds")
         );
@@ -202,7 +220,7 @@ mod tests {
     fn input_at_the_cap_is_read() {
         let bytes = vec![b' '; MAX_HOOK_INPUT_BYTES as usize];
         assert!(
-            claude_hook(bytes.as_slice())
+            claude_hook(bytes.as_slice(), false)
                 .unwrap_err()
                 .contains("malformed")
         );
@@ -217,7 +235,7 @@ mod tests {
             r#"{"hook_event_name":"PostToolUse","tool_name":"Bash"}"#,
             r#"{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":null}"#,
         ] {
-            assert!(claude_hook(input.as_bytes()).is_err(), "{input}");
+            assert!(claude_hook(input.as_bytes(), false).is_err(), "{input}");
         }
     }
 
@@ -227,7 +245,7 @@ mod tests {
             r#"{"hook_event_name":"PostToolUse","tool_name":"mcp__x__y","tool_response":"x"}"#,
             r#"{"hook_event_name":"PostToolUse","tool_name":"mcp__x__y","tool_response":[{"type":"text","text":"x"}]}"#,
         ] {
-            assert_eq!(claude_hook(input.as_bytes()), Ok(()), "{input}");
+            assert_eq!(claude_hook(input.as_bytes(), true), Ok(None), "{input}");
         }
     }
 }
