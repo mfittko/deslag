@@ -65,6 +65,8 @@ struct Replay {
     policy: Policy,
     /// Simulated resource bypass: new results stay unchanged while set.
     overloaded: bool,
+    /// Configured mode `off` for new sessions; otherwise `safe`.
+    off: bool,
 }
 
 // ponytail: FNV-1a 64 is stable across toolchains but not collision resistant; production
@@ -109,6 +111,21 @@ impl Replay {
             // A manifest without a `decisions` object is as corrupt as one that does not parse.
             .filter(|m| m["decisions"].is_object());
         let has_results = !tool_results(&mut req).is_empty();
+        // The mode is pinned per session. An off session stays off after the configuration
+        // changes, so its results are never transformed.
+        if loaded.as_ref().is_some_and(|m| m["mode"] == "off") {
+            return Ok(body.to_vec());
+        }
+        if self.off && loaded.is_none() {
+            // Mark only a fresh session. A session with results and no manifest may have lost
+            // a safe manifest, which must stay an explicit error under `safe`.
+            if !has_results && !path.exists() {
+                let marker = json!({"scope_digest": digest(scope.as_bytes()), "owner": "proxy",
+                    "mode": "off", "decisions": {}});
+                write_atomic(&path, &serde_json::to_vec(&marker).unwrap());
+            }
+            return Ok(body.to_vec());
+        }
         let mut manifest = match loaded {
             Some(m) => m,
             None if has_results => return Err(ReplayError::MissingManifest),
@@ -122,6 +139,7 @@ impl Replay {
             }),
         };
         let mut dirty = !path.exists();
+        let model = req["model"].clone();
         let last = req["messages"]
             .as_array()
             .map_or(0, |m| m.len().saturating_sub(1));
@@ -141,7 +159,7 @@ impl Replay {
                 Some(d) => d.clone(),
                 None if msg_idx != last => return Err(ReplayError::UndecidedHistory(id)),
                 None => {
-                    let d = self.decide(&content, &source);
+                    let d = self.decide(&content, &source, &model);
                     manifest["decisions"][&id] = d.clone();
                     dirty = true;
                     d
@@ -163,16 +181,18 @@ impl Replay {
         Ok(serde_json::to_vec(&req).unwrap())
     }
 
-    fn decide(&self, content: &str, source: &str) -> Value {
+    /// `model` is the model of the request that first carries the result.
+    fn decide(&self, content: &str, source: &str, model: &Value) -> Value {
         let p = self.policy;
         let encoded = !self.overloaded
             && content.len() >= p.min_len
             && transform(p.transform_version, content).is_some_and(|t| t.len() < content.len());
         if encoded {
-            json!({"digest": source, "policy_version": p.version,
+            json!({"digest": source, "policy_version": p.version, "model_profile": model,
                    "encoded": {"transform": "json-min", "version": p.transform_version}})
         } else {
-            json!({"digest": source, "policy_version": p.version, "unchanged": true})
+            json!({"digest": source, "policy_version": p.version, "model_profile": model,
+                   "unchanged": true})
         }
     }
 }
@@ -261,6 +281,7 @@ impl Session {
             dir: dir.to_path_buf(),
             policy,
             overloaded: false,
+            off: false,
         };
         Self {
             replay,
@@ -421,8 +442,9 @@ async fn policy_upgrade_replays_pinned_decisions() {
         dir: dir.clone(),
         policy: POLICY_V2,
         overloaded: false,
+        off: false,
     };
-    assert_eq!(fresh.decide(R4, "")["encoded"]["version"], 2);
+    assert_eq!(fresh.decide(R4, "", &json!("m"))["encoded"]["version"], 2);
 
     // Upgrade: new policy version, lower threshold, new transform version.
     let mut s = Session::start(&dir, POLICY_V2).await;
@@ -521,6 +543,7 @@ fn pinned_decision_forms_are_validated() {
         dir: temp_dir(),
         policy: POLICY_V1,
         overloaded: false,
+        off: false,
     };
     let body = conversation(&[("toolu_1", R1)]);
     let retired = Err(ReplayError::RetiredTransform("toolu_1".into()));
@@ -578,12 +601,89 @@ fn pinned_decision_forms_are_validated() {
     fs::remove_dir_all(&replay.dir).unwrap();
 }
 
+/// `conversation` with the request model replaced.
+fn conversation_on(model: &str, results: &[(&str, &str)]) -> Vec<u8> {
+    let mut req: Value = serde_json::from_slice(&conversation(results)).unwrap();
+    req["model"] = model.into();
+    serde_json::to_vec(&req).unwrap()
+}
+
+#[test]
+fn model_switch_records_model_per_decision() {
+    let replay = Replay {
+        dir: temp_dir(),
+        policy: POLICY_V1,
+        overloaded: false,
+        off: false,
+    };
+    replay
+        .apply(Some("session-a"), &conversation_on("m", &[]))
+        .unwrap();
+    replay
+        .apply(Some("session-a"), &conversation_on("m", &[("toolu_1", R1)]))
+        .unwrap();
+    // The model switches mid-session; the next result is decided under the new model.
+    let after = replay
+        .apply(
+            Some("session-a"),
+            &conversation_on("m2", &[("toolu_1", R1), ("toolu_3", R3)]),
+        )
+        .unwrap();
+    let after = Bytes::from(after);
+    assert_eq!(content_of(&after, "toolu_1"), transform(1, R1).unwrap());
+    let manifest: Value =
+        serde_json::from_slice(&fs::read(replay.manifest_path("session-a")).unwrap()).unwrap();
+    assert_eq!(manifest["model_profile"], "m");
+    assert_eq!(manifest["decisions"]["toolu_1"]["model_profile"], "m");
+    assert_eq!(manifest["decisions"]["toolu_3"]["model_profile"], "m2");
+    println!("replay: model switch m->m2 kept toolu_1@m; toolu_3 recorded m2");
+    fs::remove_dir_all(&replay.dir).unwrap();
+}
+
+#[test]
+fn off_session_stays_off_after_mode_change() {
+    let dir = temp_dir();
+    let off = Replay {
+        dir: dir.clone(),
+        policy: POLICY_V1,
+        overloaded: false,
+        off: true,
+    };
+    let first = conversation(&[]);
+    assert_eq!(off.apply(Some("session-a"), &first).unwrap(), first);
+    let marker: Value =
+        serde_json::from_slice(&fs::read(off.manifest_path("session-a")).unwrap()).unwrap();
+    assert_eq!(marker["mode"], "off");
+    let with_result = conversation(&[("toolu_1", R1)]);
+    assert_eq!(
+        off.apply(Some("session-a"), &with_result).unwrap(),
+        with_result
+    );
+
+    // The configuration changes to `safe`; the existing off session keeps passing through.
+    let safe = Replay { off: false, ..off };
+    let later = conversation(&[("toolu_1", R1), ("toolu_3", R3)]);
+    assert_eq!(safe.apply(Some("session-a"), &later).unwrap(), later);
+    // A new session under `safe` transforms.
+    safe.apply(Some("session-b"), &conversation(&[])).unwrap();
+    let fresh = safe
+        .apply(Some("session-b"), &conversation(&[("toolu_1", R1)]))
+        .unwrap();
+    assert_eq!(
+        content_of(&Bytes::from(fresh), "toolu_1"),
+        transform(1, R1).unwrap()
+    );
+    println!("replay: off session passed through after mode changed to safe");
+    fs::remove_dir_all(dir).unwrap();
+}
+
 #[test]
 fn no_scope_passes_bytes_through() {
     let replay = Replay {
         dir: temp_dir(),
         policy: POLICY_V1,
         overloaded: false,
+        off: false,
     };
     let body = conversation(&[("toolu_1", R1)]);
     assert_eq!(replay.apply(None, &body).unwrap(), body);

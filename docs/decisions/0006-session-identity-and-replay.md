@@ -35,8 +35,8 @@ Per session manifest:
 | --- | --- |
 | Scope digest | Session identity; the raw session id is not stored in exported data |
 | Owner | `hook`, `proxy` or `none` |
-| Mode | `off`, `observe` or `safe`; a mode change applies to new sessions only. An `off` session transforms nothing and writes no manifest |
-| Model profile | Model in use when the manifest was created |
+| Mode | `off`, `observe` or `safe`; a mode change applies to new sessions only. An `off` session transforms nothing and records no decisions. Its first request without tool results writes a manifest with mode `off` and no decisions. That manifest marks the session boundary, so the session keeps passing through after the configuration changes to `safe` |
+| Model profile | Model in use when the manifest was created; each decision records its own model profile |
 | Policy version | Policy in force when the manifest was created |
 
 Per result:
@@ -47,7 +47,7 @@ Per result:
 | Source digest | Integrity check; changed source bytes under a known id are an explicit error |
 | Decision | `unchanged`, or `encoded` with transform id and transform version |
 | Policy version | Policy that made the decision |
-| Model profile | Model in use when the decision was made |
+| Model profile | Model of the request that first carried the result |
 
 ### Identity key
 
@@ -71,7 +71,8 @@ This is the decided design. One configuration value, `owner = hook | proxy | non
 | Fork (`--fork-session`) | Fork copies the stored replacement under a new session id (runs C and D) | New scope with no manifest, history already contains results: explicit error, start a fresh session. Unsupported (design, untested) |
 | Process restart | No state needed for history; run B resumed in a new client process (run B) | Reload manifest from disk (offline) |
 | Policy or software upgrade | History unaffected; new results use the new policy (design, untested) | Known results replay with the pinned transform version; new results use the new policy (offline) |
-| Model switch | New results only (design, untested) | Known results keep their pinned decisions; each new decision records the new model profile (design, untested) |
+| Model switch | New results only (design, untested) | Known results keep their pinned decisions; each new decision records the new model profile (offline) |
+| Mode changed from `off` to `safe` | Not applicable | An existing `off` session keeps passing through; new sessions use `safe` (offline) |
 | Compression disabled | Stop replacing new results (design, untested) | Keep replaying pinned decisions; new results unchanged (design, untested) |
 | Proxy removed mid-session | Not applicable | The client resends originals. Content stays correct, the cached prefix is lost. Start a new session (design, untested) |
 | Manifest missing or corrupt | Not applicable | Explicit error when the request carries tool results. A manifest that does not parse or has no `decisions` object counts as corrupt (offline) |
@@ -119,27 +120,33 @@ Scenarios:
 - First decision unchanged: a result left unchanged under simulated load stays unchanged after the load drops.
 - Manifest loss: a corrupt or deleted manifest with tool results in the request is an explicit error. Corrupt covers bytes that do not parse and a manifest with no `decisions` object. A pinned transform id or version that the binary does not know is an explicit error too. So is a malformed pinned decision: one that does not carry exactly one of `unchanged: true` or `encoded` with a transform id and an unsigned integer version. Examples are version `1.0`, `"1"` or `-1`, and a decision with both `unchanged` and `encoded`. A malformed decision never replays as unchanged. The replay layer rejects the request before the proxy is called.
 - Digest mismatch and undecided history: changed source bytes under a known `tool_use_id`, or an unknown result outside the newest message, is an explicit error. The replay layer rejects the request before the proxy is called.
+- Model switch: a result decided under model `m` keeps its decision after the request model changes to `m2`. A new result records `m2` as its model profile. The session manifest keeps `m`.
+- Off session: an `off` session writes a manifest with mode `off` and no decisions. After the configuration changes to `safe`, that session still passes through byte-identical, and a new session transforms.
 - No scope: the body passes through byte-identical and no manifest is written.
 
 Recorded output of `cargo test --locked -p deslag-proxy --test replay_experiment -- --nocapture --test-threads=1`:
 
 ```text
-running 7 tests
+running 9 tests
 test digest_mismatch_and_undecided_history_are_explicit_errors ... replay: Err(DigestMismatch("toolu_1")); Err(UndecidedHistory("toolu_9"))
 ok
 test first_unchanged_decision_stays_unchanged ... replay: toolu_1 left unchanged under load stayed unchanged after load dropped
 ok
 test manifest_loss_and_retired_transform_are_explicit_errors ... replay: corrupt and missing manifest -> Err(MissingManifest)
 ok
+test model_switch_records_model_per_decision ... replay: model switch m->m2 kept toolu_1@m; toolu_3 recorded m2
+ok
 test multi_turn_resend_and_restart_keep_prefix_byte_stable ... replay: 4 turns + restart, upstream body bytes [87, 364, 586, 838], toolu_1 73 -> 57 bytes
 ok
 test no_scope_passes_bytes_through ... ok
+test off_session_stays_off_after_mode_change ... replay: off session passed through after mode changed to safe
+ok
 test pinned_decision_forms_are_validated ... replay: 12 pinned decision forms, 3 replayed, 9 explicit errors
 ok
 test policy_upgrade_replays_pinned_decisions ... replay: upgrade v1->v2 kept toolu_1@v1 and toolu_2 unchanged; toolu_3 used v2
 ok
 
-test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
 ```
 
 A mutation that re-decides known results under the current policy fails the upgrade and first-unchanged scenarios on the prefix assertion.
@@ -156,7 +163,7 @@ A mutation that re-decides known results under the current policy fails the upgr
 - Removing the proxy from a session with encoded history. The client resends originals and the cached prefix is lost.
 - Changing `owner` or `mode` inside a running session. It applies to new sessions only.
 - Owner enforcement: owner selection, the `owner` configuration write, and owner-mismatch passthrough. Untested.
-- Proxy-mode model switch and compression-disabled replay. Untested.
+- Proxy-mode compression-disabled replay. Untested. Model switch and the `off` session marker are covered offline only.
 - `--continue`, Linux and Windows clients, and client versions other than 2.1.296. Untested.
 
 ## Consequences
