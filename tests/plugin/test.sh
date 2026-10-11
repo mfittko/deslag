@@ -75,7 +75,7 @@ expect_eq "install puts the binary under bin/<version>" "fake-deslag --version" 
 expect_eq "data dir is private" 700 "$(mode "$data")"
 expect_eq "bin dir is private" 700 "$(mode "$data/bin")"
 expect_eq "install prunes other versions" "$version" "$(ls "$data/bin")"
-expect_eq "install leaves no staging dir" "bin" "$(ls "$data")"
+expect_eq "install leaves no staging dir" "" "$(find "$data" -maxdepth 1 -name ".stage.*")"
 expect_ok "install is repeatable" run_install "$good" "$data" install
 
 tampered=$tmp/tampered && make_release "$tampered" fake-deslag
@@ -98,6 +98,25 @@ expect_fail "install refuses a relative CLAUDE_PLUGIN_DATA" "absolute" run_insta
 expect_ok "install falls back to CLAUDE_PLUGIN_DATA" run_install_env "$good" "$tmp/data-env" install
 expect_eq "env fallback installs under bin/<version>" "fake-deslag --version" "$("$tmp/data-env/bin/$version/deslag" --version </dev/null)"
 expect_fail "install rejects an unknown subcommand" "usage" run_install "$good" "$data" frobnicate
+expect_fail "install.sh without a subcommand prints usage" "usage" env -u CLAUDE_PLUGIN_DATA "$install_sh"
+
+# A data path with a space and a quote must not break the cleanup trap.
+odd="$tmp/odd dir's data"
+expect_ok "install accepts a data path with a space and a quote" run_install "$good" "$odd" install
+expect_eq "odd data path leaves no staging dir" "" "$(find "$odd" -maxdepth 1 -name ".stage.*")"
+
+# A symlinked old version dir is removed as a link; its target survives.
+mkdir -p "$tmp/linked-old" && echo keep >"$tmp/linked-old/deslag"
+mkdir -p "$tmp/data-link/bin" && ln -s "$tmp/linked-old" "$tmp/data-link/bin/0.0.1"
+expect_ok "install with a symlinked old version dir succeeds" run_install "$good" "$tmp/data-link" install
+expect_eq "install removes the old version link" "absent" "$([ -L "$tmp/data-link/bin/0.0.1" ] && echo present || echo absent)"
+expect_eq "install keeps the link target" keep "$(cat "$tmp/linked-old/deslag")"
+
+# A symlinked current version dir is user-managed; install never writes through it.
+mkdir -p "$tmp/linked-cur" && echo keep >"$tmp/linked-cur/deslag"
+mkdir -p "$tmp/data-curlink/bin" && ln -s "$tmp/linked-cur" "$tmp/data-curlink/bin/$version"
+expect_fail "install refuses a symlinked current version dir" "symlink" run_install "$good" "$tmp/data-curlink" install
+expect_eq "refused install leaves the link target unchanged" "deslag:keep" "$(ls -A "$tmp/linked-cur"):$(cat "$tmp/linked-cur/deslag")"
 
 # A user-managed binary on PATH is never touched.
 mkdir -p "$tmp/userbin" && printf '#!/bin/sh\necho user\n' >"$tmp/userbin/deslag" && chmod 755 "$tmp/userbin/deslag"
@@ -109,8 +128,15 @@ expect_eq "install leaves a user-managed binary unchanged" "$before" "$(sha256 "
 expect_match "status reports an installed binary" "installed" "$(run_install "$good" "$data" status)"
 out=$(run_install "$good" "$tmp/data-none" status)
 expect_match "status reports a missing binary and the fix" "missing.*/deslag:install" "$(tr '\n' ' ' <<<"$out")"
+# data-old holds a working binary for another version only.
+[ "$version" != 0.0.1 ] || { echo "fixture version 0.0.1 collides with the plugin version" >&2; exit 1; }
 mkdir -p "$tmp/data-old/bin/0.0.1"
+printf '#!/bin/sh\necho old-deslag "$@"\n' >"$tmp/data-old/bin/0.0.1/deslag" && chmod 755 "$tmp/data-old/bin/0.0.1/deslag"
 expect_match "status reports a version mismatch" "mismatch.*/deslag:install" "$(run_install "$good" "$tmp/data-old" status | tr '\n' ' ')"
+mkdir -p "$tmp/data-empty/bin/$version" "$tmp/data-empty/bin/0.0.1"
+expect_match "status reports empty version dirs as missing" "missing.*/deslag:install" "$(run_install "$good" "$tmp/data-empty" status | tr '\n' ' ')"
+mkdir -p "$tmp/data-partial/bin/$version" && echo partial >"$tmp/data-partial/bin/$version/deslag"
+expect_match "status reports a non-executable binary as missing" "missing.*/deslag:install" "$(run_install "$good" "$tmp/data-partial" status | tr '\n' ' ')"
 
 # --- hook ----------------------------------------------------------------------
 # Fake network tools record any call.
@@ -130,6 +156,10 @@ expect_eq "hook without plugin env exits 0 silently" "0:" "$rc:$out"
 expect_eq "hook runs the installed binary with stdin" \
   "$(printf 'fake-deslag hook claude\n{"tool_name":"Bash"}')" \
   "$(echo '{"tool_name":"Bash"}' | run_hook "$data")"
+# install.sh and the hook wrapper parse the same version from the real plugin.json.
+run_install "$good" "$tmp/data-shared" install >/dev/null
+expect_eq "hook runs the binary that install.sh installed" "fake-deslag hook claude" \
+  "$(run_hook "$tmp/data-shared" </dev/null)"
 expect_eq "hook makes no network call" "" "$(cat "$tmp/network.log" 2>/dev/null || true)"
 
 hooks_json=$root/hooks/hooks.json
@@ -144,7 +174,7 @@ expect_eq "hooks.json runs only the wrapper" '["\"${CLAUDE_PLUGIN_ROOT}/hooks/de
 for c in install status uninstall; do
   # shellcheck disable=SC2016 # the literal placeholder is expected
   expect_eq "commands/$c.md passes the data dir as an argument" \
-    '!`${CLAUDE_PLUGIN_ROOT}/scripts/install.sh '"$c"' "${CLAUDE_PLUGIN_DATA}"`' \
+    '!`"${CLAUDE_PLUGIN_ROOT}/scripts/install.sh" '"$c"' "${CLAUDE_PLUGIN_DATA}"`' \
     "$(grep '^!`' "$root/commands/$c.md")"
 done
 
@@ -155,6 +185,17 @@ mkdir -p "$tmp/foreign" && echo keep >"$tmp/foreign/file"
 expect_fail "uninstall refuses a dir without the marker" "refus" run_install "$good" "$tmp/foreign" uninstall
 expect_eq "refused uninstall keeps the dir" keep "$(cat "$tmp/foreign/file")"
 expect_ok "uninstall of a missing data dir is a no-op" run_install "$good" "$tmp/data-gone" uninstall
+# The client creates the data dir on demand, so an empty one without a marker is fine.
+mkdir -p "$tmp/data-blank"
+expect_match "uninstall of an empty unmarked dir reports nothing installed" "nothing installed" \
+  "$(run_install "$good" "$tmp/data-blank" uninstall)"
+expect_ok "uninstall of an empty unmarked dir exits 0" run_install "$good" "$tmp/data-blank" uninstall
+# Content that install.sh did not create stops uninstall after its own files are gone.
+run_install "$good" "$tmp/data-extra" install >/dev/null
+echo keep >"$tmp/data-extra/user-file"
+expect_fail "uninstall leaves a data dir with unknown content" "did not create" run_install "$good" "$tmp/data-extra" uninstall
+expect_eq "uninstall keeps unknown content" keep "$(cat "$tmp/data-extra/user-file")"
+expect_eq "uninstall still removes what install created" "user-file" "$(ls -A "$tmp/data-extra")"
 
 if [ "$failures" -ne 0 ]; then echo "$failures test(s) failed" >&2; exit 1; fi
 echo "all plugin tests passed"

@@ -9,13 +9,16 @@
 #   install    Download the release archive for the plugin version and this
 #              platform, verify it against SHA256SUMS and install it.
 #   status     Report whether the matching binary is installed.
-#   uninstall  Remove the data directory.
+#   uninstall  Remove what install created, then the data directory if it is
+#              empty.
 # DESLAG_RELEASE_BASE_URL overrides the release download base (tests use file://).
 set -euo pipefail
 export LC_ALL=C
 umask 077
 
 die() { echo "error: $*" >&2; exit 1; }
+usage="usage: install.sh <install|status|uninstall> <data-dir>"
+case "${1:-}" in install | status | uninstall) ;; *) die "$usage" ;; esac
 
 root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 data=${2:-${CLAUDE_PLUGIN_DATA:-}}
@@ -27,13 +30,20 @@ version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ro
 bin=$data/bin/$version/deslag
 fix="Run /deslag:install to install deslag $version."
 
+stage=
+trap '[ -z "$stage" ] || command rm -rf "$stage"' EXIT
+
+# has_bin <dir>: <dir> holds an executable regular deslag file.
+has_bin() { [ -f "$1/deslag" ] && [ -x "$1/deslag" ]; }
+
 install() {
-  local target base proto name stage sum expected actual
+  local target base proto name sum expected actual dir
   case "$(uname -s)/$(uname -m)" in
     Darwin/arm64) target=aarch64-apple-darwin ;;
     Linux/x86_64) target=x86_64-unknown-linux-gnu ;;
-    *) die "no deslag release for $(uname -s) $(uname -m); build it with cargo install --path crates/deslag-cli --locked" ;;
+    *) die "no deslag release for $(uname -s) $(uname -m); build it with cargo build --release -p deslag-cli and copy target/release/deslag to $bin" ;;
   esac
+  [ ! -L "$data/bin/$version" ] || die "refusing to install: $data/bin/$version is a symlink"
   base=${DESLAG_RELEASE_BASE_URL:-https://github.com/mfittko/deslag/releases/download}
   proto='=https'
   [ -z "${DESLAG_RELEASE_BASE_URL:-}" ] || proto='=https,file'
@@ -43,11 +53,9 @@ install() {
   chmod 700 "$data" "$data/bin"
   : >"$marker"
   stage=$(mktemp -d "$data/.stage.XXXXXX")
-  # shellcheck disable=SC2064 # expand $stage now
-  trap "command rm -rf '$stage'" EXIT
 
   for file in "$name.tar.gz" SHA256SUMS; do
-    curl -fsSL --proto "$proto" --proto-redir "$proto" -o "$stage/$file" "$base/v$version/$file" ||
+    curl -fsSL --connect-timeout 15 --max-time 300 --proto "$proto" --proto-redir "$proto" -o "$stage/$file" "$base/v$version/$file" ||
       die "download failed: $base/v$version/$file"
   done
   expected=$(awk -v f="$name.tar.gz" '$2 == f || $2 == "*" f { print $1; exit }' "$stage/SHA256SUMS")
@@ -62,18 +70,20 @@ install() {
   mkdir -p "$data/bin/$version"
   chmod 700 "$data/bin/$version"
   command mv -f "$stage/$name/deslag" "$bin"
-  for dir in "$data"/bin/*/; do
-    [ "$dir" = "$data/bin/$version/" ] || command rm -rf "$dir"
+  # No trailing slash: rm removes a symlinked version dir as a link and never
+  # follows it into the target.
+  for dir in "$data"/bin/*; do
+    [ "$dir" = "$data/bin/$version" ] || command rm -rf "$dir"
   done
   echo "Installed deslag $version for $target at $bin"
 }
 
 status() {
-  local found=
+  local found='' dir
   for dir in "$data"/bin/*/; do
-    [ -d "$dir" ] && found="$found $(basename "$dir")"
+    ! has_bin "$dir" || found="$found $(basename "$dir")"
   done
-  if [ -x "$bin" ]; then
+  if has_bin "$data/bin/$version"; then
     echo "deslag $version: installed at $bin"
   elif [ -n "$found" ]; then
     echo "deslag $version: version mismatch (installed:$found). The hook is inactive. $fix"
@@ -87,14 +97,19 @@ uninstall() {
     echo "Nothing to remove: $data does not exist."
     return
   fi
-  [ -f "$marker" ] || die "refusing to remove $data: it has no $(basename "$marker") marker"
-  command rm -rf "$data"
+  if [ ! -f "$marker" ]; then
+    # The client creates the data dir on demand, so an empty one is not ours.
+    if [ -d "$data" ] && [ -z "$(ls -A "$data")" ]; then
+      echo "Nothing installed in $data."
+      return
+    fi
+    die "refusing to remove $data: it has no $(basename "$marker") marker"
+  fi
+  # Remove only what install creates; rmdir fails on anything else.
+  command rm -rf "$data/bin" "$data"/.stage.*
+  command rm -f "$marker"
+  rmdir "$data" || die "left $data in place: it holds files that install.sh did not create"
   echo "Removed $data. claude plugin uninstall also removes it."
 }
 
-case "${1:-install}" in
-  install) install ;;
-  status) status ;;
-  uninstall) uninstall ;;
-  *) die "usage: install.sh <install|status|uninstall> <data-dir>" ;;
-esac
+"$1"

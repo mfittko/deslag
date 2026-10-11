@@ -16,5 +16,5 @@ while IFS= read -r line || [ -n "$line" ]; do
   esac
 done 2>/dev/null <"$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json"
 bin=$CLAUDE_PLUGIN_DATA/bin/$version/deslag
-[ -n "$version" ] && [ -x "$bin" ] || exit 0
+[ -n "$version" ] && [ -f "$bin" ] && [ -x "$bin" ] || exit 0
 exec "$bin" hook claude
