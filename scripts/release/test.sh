@@ -348,5 +348,25 @@ expect_eq "SHA256SUMS lists the archive" "deslag-1.0.0-x-test.tar.gz" "$(awk '{p
 if command -v sha256sum >/dev/null; then verify=(sha256sum -c); else verify=(shasum -a 256 -c); fi
 expect_ok "SHA256SUMS verifies" "$r/dist" "${verify[@]}" SHA256SUMS
 
+# --- release-state.sh --------------------------------------------------------
+# A fake `gh release view`: FAKE_VIEW_ERR set -> exit 1 with that stderr, else
+# print FAKE_VIEW_ASSETS (one name per line).
+mkdir -p "$tmp/viewbin"
+cat >"$tmp/viewbin/gh" <<'EOF'
+#!/usr/bin/env bash
+[ -z "${FAKE_VIEW_ERR:-}" ] || { echo "$FAKE_VIEW_ERR" >&2; exit 1; }
+printf '%s' "${FAKE_VIEW_ASSETS:-}"
+EOF
+chmod +x "$tmp/viewbin/gh"
+state() { PATH="$tmp/viewbin:$PATH" "$here/release-state.sh" v1.0.0 dist/a.tar.gz dist/b.tar.gz dist/SHA256SUMS; }
+expect_eq "release-state creates when the release is not found" create "$(FAKE_VIEW_ERR='release not found' state 2>/dev/null)"
+FAKE_VIEW_ERR='HTTP 502: Bad Gateway (https://api.github.com/graphql)' expect_fail "release-state fails on an HTTP 5xx" "could not look up" "$tmp" state
+FAKE_VIEW_ERR='HTTP 401: Bad credentials (https://api.github.com/graphql)' expect_fail "release-state fails on HTTP 401" "could not look up" "$tmp" state
+FAKE_VIEW_ERR='HTTP 403: Resource not accessible by integration' expect_fail "release-state fails on HTTP 403" "could not look up" "$tmp" state
+FAKE_VIEW_ERR='error connecting to api.github.com' expect_fail "release-state fails on any other gh error" "could not look up" "$tmp" state
+expect_eq "release-state skips a complete release" skip "$(FAKE_VIEW_ASSETS=$'a.tar.gz\nb.tar.gz\nSHA256SUMS\n' state 2>/dev/null)"
+expect_eq "release-state uploads into an empty release" upload "$(FAKE_VIEW_ASSETS='' state 2>/dev/null)"
+FAKE_VIEW_ASSETS=$'a.tar.gz\n' expect_fail "release-state fails on a partial release" "partial \(missing: b.tar.gz SHA256SUMS\)" "$tmp" state
+
 if [ "$failures" -ne 0 ]; then echo "$failures test(s) failed" >&2; exit 1; fi
 echo "all release script tests passed"

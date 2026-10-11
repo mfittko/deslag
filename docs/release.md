@@ -139,7 +139,9 @@ tag run is safe. When the release already has every asset, the run changes
 nothing. When it has none of the assets, the run uploads all of them and keeps
 the notes as created. When it has only some, the run fails, because rebuilt
 archives do not match the published ones byte for byte. Delete the partial
-release (`gh release delete v<version>`) and re-run.
+release (`gh release delete v<version>`) and re-run. The run creates a release
+only when `gh release view` reports "release not found". Any other lookup
+error, such as an HTTP 5xx or an auth error, fails the run before attestation.
 
 ## Dry run
 
