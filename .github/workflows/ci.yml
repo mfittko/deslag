@@ -34,7 +34,7 @@ jobs:
             YAML.safe_load(File.read(ARGV[0]))
           ' .devloops
       # Installs the toolchain and components pinned in rust-toolchain.toml.
-      # ponytail: no cargo cache. Dependencies are exact-pinned and Cargo.lock is committed,
+      # ponytail: no cargo cache. Cargo.lock is committed and CI builds with --locked,
       # so a cold build of hyper, tokio and rustls is reproducible and its time is acceptable.
       # Add a cargo registry and target cache when CI build time becomes a bottleneck.
       - name: Install Rust toolchain
