@@ -99,7 +99,8 @@ approve release v1.0.0
 - One line of the body, trimmed and compared case-insensitively, equals the
   phrase. The phrase inside a longer sentence does not count.
 - The comment was created after the committer date of the tagged commit. Post
-  the approval after the bump commit lands on `main`.
+  the approval after the commit you will tag is on `main`. If `main` moves
+  before you tag, tag the approved commit or post a new approval.
 - The comment is on an issue. A comment on a pull request does not count.
 - The comment was never edited. An edited approval comment does not count,
   so post a new comment instead.
@@ -112,6 +113,13 @@ Any lookup failure fails the release.
 git switch main && git pull --ff-only
 git tag -a v0.1.0-alpha.1 -m v0.1.0-alpha.1
 git push origin v0.1.0-alpha.1
+```
+
+A stable release tags the approved commit by its SHA, not a newer `main` tip:
+
+```sh
+git tag -a v1.0.0 -m v1.0.0 <sha>
+git push origin v1.0.0
 ```
 
 The workflow then runs four jobs:
