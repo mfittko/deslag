@@ -3,7 +3,7 @@
 use std::{convert::Infallible, net::SocketAddr, time::Duration};
 
 use bytes::Bytes;
-use deslag_proxy::{Limits, Upstream, serve_with};
+use deslag_proxy::{Limits, Upstream, available_inspect_permits, serve_with};
 use http_body_util::Full;
 use hyper::{Request, Response, body::Incoming, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
@@ -49,9 +49,14 @@ async fn proxy(upstream: &str, limits: Limits) -> SocketAddr {
     addr
 }
 
-/// Sends one request on `stream` and reads until the response head is complete.
+/// Sends `REQUEST` on `stream` and returns the response head.
 async fn exchange(stream: &mut TcpStream) -> String {
-    stream.write_all(REQUEST).await.unwrap();
+    send(stream, REQUEST).await
+}
+
+/// Sends `request` on `stream` and reads until the response head is complete.
+async fn send(stream: &mut TcpStream, request: &[u8]) -> String {
+    stream.write_all(request).await.unwrap();
     let mut buf = Vec::new();
     let mut chunk = [0; 1024];
     while !buf.windows(4).any(|w| w == b"\r\n\r\n") {
@@ -172,4 +177,67 @@ async fn idle_upstream_connection_is_closed() {
         .expect("idle upstream connection not closed")
         .unwrap();
     drop(client);
+}
+
+#[tokio::test]
+async fn stalled_minify_uploads_release_permits_at_body_read_timeout() {
+    let (up, _) = mock().await;
+    // ponytail: waits on the hidden permit count instead of a fixed sleep. The
+    // healthy request can only finish after a stalled permit times out.
+    let body_read_timeout = Duration::from_secs(1);
+    let limits = Limits {
+        body_read_timeout,
+        ..Limits::default()
+    };
+    let upstream = Upstream::parse(&format!("http://{up}"))
+        .unwrap()
+        .with_json_minification();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(serve_with(listener, upstream, limits));
+
+    // Taken before any permit is granted, so no stalled permit can time out
+    // before start + body_read_timeout.
+    let start = std::time::Instant::now();
+    // Four uploads take every inspection permit, then stall mid-body.
+    let stalled: Vec<_> = (0..4)
+        .map(|_| {
+            tokio::spawn(async move {
+                let mut client = TcpStream::connect(addr).await.unwrap();
+                send(
+                    &mut client,
+                    b"POST /v1/messages HTTP/1.1\r\nhost: proxy\r\ncontent-length: 1000\r\n\r\n{\"messages\"",
+                )
+                .await
+            })
+        })
+        .collect();
+    // Waits until the stalled uploads hold every permit.
+    timeout(WAIT, async {
+        while available_inspect_permits() > 0 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("stalled uploads never took every permit");
+
+    let mut healthy = TcpStream::connect(addr).await.unwrap();
+    let head = timeout(
+        WAIT,
+        send(
+            &mut healthy,
+            b"POST /v1/messages HTTP/1.1\r\nhost: proxy\r\ncontent-length: 2\r\n\r\n{}",
+        ),
+    )
+    .await
+    .expect("healthy request still blocked after the body-read timeout");
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    assert!(
+        start.elapsed() >= body_read_timeout,
+        "healthy request did not queue behind the stalled uploads"
+    );
+    for task in stalled {
+        let head = timeout(WAIT, task).await.unwrap().unwrap();
+        assert!(head.starts_with("HTTP/1.1 408"), "{head}");
+    }
 }

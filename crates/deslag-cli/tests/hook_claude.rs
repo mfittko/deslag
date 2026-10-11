@@ -39,11 +39,16 @@ fn malformed_input_fails_open_with_diagnostic_on_stderr() {
         b"[]",
         b"{\"hook_event_name\":\"Post\\nX\"}",
     ] {
-        let output = run(&["hook", "claude"], input);
-        assert_eq!(output.status.code(), Some(0));
-        assert!(output.stdout.is_empty());
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        assert_eq!(stderr.lines().count(), 1, "{stderr}");
+        for args in [
+            &["hook", "claude"][..],
+            &["hook", "claude", "--minify-json"],
+        ] {
+            let output = run(args, input);
+            assert_eq!(output.status.code(), Some(0));
+            assert!(output.stdout.is_empty());
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert_eq!(stderr.lines().count(), 1, "{stderr}");
+        }
     }
 }
 
@@ -54,6 +59,8 @@ fn unknown_arguments_print_usage_and_exit_64() {
         &["hook"],
         &["hook", "codex"],
         &["hook", "claude", "x"],
+        &["hook", "claude", "--minify-json", "x"],
+        &["hook", "claude", "--minify-json", "--minify-json"],
     ] {
         let output = run(args, b"");
         assert_eq!(output.status.code(), Some(64), "{args:?}");
@@ -71,4 +78,54 @@ fn oversize_input_is_drained_and_fails_open() {
     assert!(output.stdout.is_empty());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(stderr.lines().count(), 1, "{stderr}");
+}
+
+fn json(bytes: &[u8]) -> serde_json::Value {
+    serde_json::from_slice(bytes).unwrap()
+}
+
+#[test]
+fn minify_flag_replaces_pretty_json_bash_stdout() {
+    let input = fixture("posttooluse-bash-json.json");
+    let output = run(&["hook", "claude", "--minify-json"], &input);
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+    assert_eq!(output.stdout.iter().filter(|&&b| b == b'\n').count(), 1);
+
+    let mut expected = json(&input)["tool_response"].clone();
+    expected["stdout"] = r#"{"name":"deslag","tags":["a b","c"],"size":1.50}"#.into();
+    assert_eq!(
+        json(&output.stdout),
+        serde_json::json!({
+            "hookSpecificOutput": {
+                "hookEventName": "PostToolUse",
+                "updatedToolOutput": expected,
+            }
+        })
+    );
+
+    let again = run(&["hook", "claude", "--minify-json"], &input);
+    assert_eq!(again.stdout, output.stdout);
+}
+
+#[test]
+fn minify_flag_leaves_ineligible_results_alone() {
+    let mut read_json = json(&fixture("posttooluse-read.json"));
+    read_json["tool_response"]["file"]["content"] = "{\n  \"a\": 1\n}\n".into();
+    for input in [
+        fixture("posttooluse-bash.json"),
+        serde_json::to_vec(&read_json).unwrap(),
+    ] {
+        let output = run(&["hook", "claude", "--minify-json"], &input);
+        assert_eq!(output.status.code(), Some(0));
+        assert!(output.stdout.is_empty());
+        assert!(output.stderr.is_empty());
+    }
+}
+
+#[test]
+fn without_flag_pretty_json_is_untouched() {
+    let output = run(&["hook", "claude"], &fixture("posttooluse-bash-json.json"));
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stdout.is_empty());
 }

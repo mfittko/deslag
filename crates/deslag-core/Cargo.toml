@@ -7,3 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
+
+[dev-dependencies]
+serde_json = "=1.0.152"
+
+[[bench]]
+name = "minify"
+harness = false

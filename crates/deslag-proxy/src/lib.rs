@@ -1,8 +1,10 @@
 //! Transparent Anthropic Messages reverse proxy to one configured upstream.
 //!
 //! Request and response bodies stream through unchanged as hyper bodies; nothing
-//! is buffered, parsed or logged. The upstream authority comes only from
-//! configuration, never from the request target, `Host` header or credentials.
+//! is buffered, parsed or logged. The one exception is opt-in JSON minification,
+//! which buffers and patches `POST /v1/messages` request bodies (see `minify`).
+//! The upstream authority comes only from configuration, never from the request
+//! target, `Host` header or credentials.
 
 use std::{convert::Infallible, fmt, io, net::IpAddr, sync::Arc, time::Duration};
 
@@ -21,7 +23,12 @@ use hyper_util::{
 };
 use tokio::{net::TcpListener, sync::Semaphore};
 
-type HttpsClient = Client<hyper_rustls::HttpsConnector<HttpConnector>, Incoming>;
+mod minify;
+
+#[doc(hidden)]
+pub use minify::available_inspect_permits;
+
+type HttpsClient = Client<hyper_rustls::HttpsConnector<HttpConnector>, minify::ReqBody>;
 type ProxyBody = Either<Incoming, Full<Bytes>>;
 
 /// The single trusted upstream. Plain `http` is accepted only for loopback hosts.
@@ -30,6 +37,7 @@ pub struct Upstream {
     scheme: &'static str,
     authority: String,
     base_path: String,
+    minify_json: bool,
 }
 
 impl Upstream {
@@ -62,7 +70,14 @@ impl Upstream {
             scheme,
             authority: authority.to_string(),
             base_path: uri.path().trim_end_matches('/').to_string(),
+            minify_json: false,
         })
+    }
+
+    /// Enables minification of JSON in Bash tool results of `POST /v1/messages`.
+    pub fn with_json_minification(mut self) -> Self {
+        self.minify_json = true;
+        self
     }
 
     /// Joins the configured base with the request's path and query. Only an
@@ -137,6 +152,9 @@ pub const HEADER_READ_TIMEOUT: Duration = Duration::from_secs(30);
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 /// Default time an unused pooled upstream connection stays open.
 pub const POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
+/// Default time a `--minify-json` request has to deliver its buffered body
+/// once it holds an inspection permit. About 1 Mbit/s for a 32 MiB body.
+pub const BODY_READ_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Connection and timeout bounds. None of them limits how long a response
 /// body may stream once the upstream has answered.
@@ -148,6 +166,9 @@ pub struct Limits {
     pub header_read_timeout: Duration,
     pub connect_timeout: Duration,
     pub pool_idle_timeout: Duration,
+    /// Bounds the buffered body read of a `--minify-json` request, so a stalled
+    /// upload cannot hold an inspection permit forever. Other bodies stream.
+    pub body_read_timeout: Duration,
 }
 
 impl Default for Limits {
@@ -157,6 +178,7 @@ impl Default for Limits {
             header_read_timeout: HEADER_READ_TIMEOUT,
             connect_timeout: CONNECT_TIMEOUT,
             pool_idle_timeout: POOL_IDLE_TIMEOUT,
+            body_read_timeout: BODY_READ_TIMEOUT,
         }
     }
 }
@@ -171,6 +193,7 @@ impl Limits {
                 self.header_read_timeout,
                 self.connect_timeout,
                 self.pool_idle_timeout,
+                self.body_read_timeout,
             ]
             .iter()
             .all(|d| !d.is_zero() && *d <= MAX_TIMEOUT);
@@ -238,7 +261,14 @@ pub async fn serve_with(
         };
         let _ = stream.set_nodelay(true);
         let (client, upstream) = (client.clone(), upstream.clone());
-        let svc = service_fn(move |req| forward(client.clone(), upstream.clone(), req));
+        let svc = service_fn(move |req| {
+            forward(
+                client.clone(),
+                upstream.clone(),
+                limits.body_read_timeout,
+                req,
+            )
+        });
         tokio::spawn(async move {
             // Client disconnects end this future, which drops the upstream body and connection.
             let _ = http1::Builder::new()
@@ -254,7 +284,8 @@ pub async fn serve_with(
 async fn forward(
     client: HttpsClient,
     upstream: Upstream,
-    mut req: Request<Incoming>,
+    body_read_timeout: Duration,
+    req: Request<Incoming>,
 ) -> Result<Response<ProxyBody>, Infallible> {
     let target = (req.method() != Method::CONNECT)
         .then(|| upstream.target(req.uri()))
@@ -265,6 +296,16 @@ async fn forward(
             "invalid_request_error",
             "unsupported request target",
         ));
+    };
+    let mut req = match minify::prepare(req, upstream.minify_json, body_read_timeout).await {
+        Ok(req) => req,
+        Err(status) => {
+            return Ok(error(
+                status,
+                "invalid_request_error",
+                "deslag: request body read failed",
+            ));
+        }
     };
     *req.uri_mut() = target;
     // Upstream always speaks HTTP/1.1, whatever version the client used.
@@ -475,6 +516,10 @@ mod tests {
             },
             Limits {
                 pool_idle_timeout: Duration::MAX,
+                ..d
+            },
+            Limits {
+                body_read_timeout: Duration::ZERO,
                 ..d
             },
         ] {
