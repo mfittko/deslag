@@ -6,6 +6,10 @@
 
 use std::{borrow::Cow, collections::HashSet, fmt::Write, time::Duration, time::Instant};
 
+pub mod table;
+
+pub use table::TableOptions;
+
 /// Crate version, as set in the workspace manifest.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -13,6 +17,12 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const JSON_MINIFY_ID: &str = "json-minify";
 /// Bumped whenever `minify_json` output can change for some input.
 pub const JSON_MINIFY_VERSION: u32 = 1;
+/// Stable transform identity for the table-v1 encoder.
+pub const JSON_TABLE_ID: &str = "json-table";
+/// Bumped whenever `table::encode` output can change for some input.
+pub const JSON_TABLE_VERSION: u32 = 1;
+/// Format version of table-v1 output, as reported in `format_version`.
+pub const JSON_TABLE_FORMAT_VERSION: u32 = 1;
 /// Bumped whenever a [`CompressionReport`] field or its serialized form changes.
 pub const REPORT_SCHEMA_VERSION: u32 = 1;
 
@@ -71,6 +81,7 @@ pub enum Reason {
     AboveMaxBytes,
     /// Bare scalar, invalid or truncated JSON, or trailing data, when no depth
     /// or key-policy reason occurs earlier in the input.
+    /// Also any input that is not eligible for table-v1.
     UnsupportedFormat,
     DepthLimit,
     /// Consumers disagree on which duplicate wins.
