@@ -22,7 +22,7 @@ use hyper_util::{
 use tokio::net::TcpListener;
 
 type HttpsClient = Client<hyper_rustls::HttpsConnector<HttpConnector>, Incoming>;
-pub type ProxyBody = Either<Incoming, Full<Bytes>>;
+type ProxyBody = Either<Incoming, Full<Bytes>>;
 
 /// The single trusted upstream. Plain `http` is accepted only for loopback hosts.
 #[derive(Clone, Debug)]

@@ -157,6 +157,8 @@ async fn relays_request_and_response_faithfully() {
         resp.headers()["anthropic-ratelimit-requests-remaining"],
         "9"
     );
+    assert!(!resp.headers().contains_key("x-upstream-hop"));
+    assert!(!resp.headers().contains_key("keep-alive"));
     assert_eq!(
         body_bytes(resp).await,
         r#"{"id":"msg_1", "unknown":true}"#.as_bytes()
