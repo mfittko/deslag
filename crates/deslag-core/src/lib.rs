@@ -59,13 +59,18 @@ impl Outcome {
 }
 
 /// Bounded skip or failure reason. Only `InvalidCandidate` pairs with `Failed`.
+///
+/// The first reason the scanner meets wins. `DepthLimit`, `EscapedKey` and
+/// `DuplicateKey` are reported as soon as the scanner reaches them, so they
+/// take precedence over a syntax error later in the input.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reason {
     ModeOff,
     TransformDisabled,
     BelowMinBytes,
     AboveMaxBytes,
-    /// Bare scalar, invalid or truncated JSON, or trailing data.
+    /// Bare scalar, invalid or truncated JSON, or trailing data, when no depth
+    /// or key-policy reason occurs earlier in the input.
     UnsupportedFormat,
     DepthLimit,
     /// Consumers disagree on which duplicate wins.
@@ -157,7 +162,8 @@ impl TokenMethod {
 pub struct TokenCount {
     pub count: u64,
     pub method: TokenMethod,
-    /// Tokenizer name and version, as a plain ASCII identifier.
+    /// Tokenizer name and version. Any string is accepted; an ASCII identifier
+    /// is recommended. [`CompressionReport::to_json`] escapes it.
     pub tokenizer: &'static str,
 }
 

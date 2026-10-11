@@ -78,14 +78,18 @@ fn defaults_match_plan() {
 #[test]
 fn report_schema_has_every_field_for_each_outcome() {
     let cases = [
-        (ctx(Mode::Safe), PRETTY, "changed"),
-        (ctx(Mode::Observe), PRETTY, "would_change"),
-        (ctx(Mode::Off), PRETTY, "skipped"),
-        (ctx(Mode::Safe), "[1,2]", "skipped"),
+        (ctx(Mode::Safe), PRETTY, ("changed", "safe", "passed")),
+        (
+            ctx(Mode::Observe),
+            PRETTY,
+            ("would_change", "observe", "passed"),
+        ),
+        (ctx(Mode::Off), PRETTY, ("skipped", "off", "not_run")),
+        (ctx(Mode::Safe), "[1,2]", ("skipped", "safe", "passed")),
     ];
-    let mut reports: Vec<(CompressionReport, &str)> = cases
+    let mut reports: Vec<(CompressionReport, (&str, &str, &str))> = cases
         .into_iter()
-        .map(|(ctx, input, outcome)| (compress(input, &ctx).report, outcome))
+        .map(|(ctx, input, want)| (compress(input, &ctx).report, want))
         .collect();
     // No input reaches `failed`, so that report is built directly.
     reports.push((
@@ -107,9 +111,9 @@ fn report_schema_has_every_field_for_each_outcome() {
             compression_duration: Duration::from_nanos(5),
             validation_outcome: ValidationOutcome::Failed,
         },
-        "failed",
+        ("failed", "safe", "failed"),
     ));
-    for (report, outcome) in reports {
+    for (report, (outcome, mode, validation)) in reports {
         let map = report_map(&report);
         let mut keys: Vec<&str> = map.keys().map(String::as_str).collect();
         let mut want = FIELDS.to_vec();
@@ -117,6 +121,8 @@ fn report_schema_has_every_field_for_each_outcome() {
         want.sort_unstable();
         assert_eq!(keys, want, "{outcome}");
         assert_eq!(map["outcome"], outcome);
+        assert_eq!(map["mode"], mode, "{outcome}");
+        assert_eq!(map["validation_outcome"], validation, "{outcome}");
         assert_eq!(map["schema_version"], 1);
         assert_eq!(map["transform_id"], "json-minify");
         assert_eq!(map["transform_version"], 1);
@@ -321,4 +327,12 @@ fn report_json_escapes_tokenizer_names() {
         assert_eq!(map[key]["tokenizer"], "evil\"name\\v1\n", "{key}");
         assert_eq!(map[key]["method"], "exact", "{key}");
     }
+}
+
+#[test]
+fn key_policy_reason_precedes_later_syntax_error() {
+    let input = "{ \"a\": 1, \"a\": 2";
+    let result = compress(input, &ctx(Mode::Safe));
+    assert_eq!(result.report.reason, Some(Reason::DuplicateKey));
+    assert!(is_borrowed_from(&result, input));
 }
