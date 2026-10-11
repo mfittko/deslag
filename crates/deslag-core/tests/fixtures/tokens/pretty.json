@@ -1,0 +1,30 @@
+{
+  "service": "inventory-api",
+  "version": "2.4.1",
+  "healthy": true,
+  "uptime_seconds": 86412,
+  "regions": ["eu-central-1", "us-east-2", "ap-southeast-1"],
+  "limits": {
+    "max_connections": 512,
+    "timeout_ms": 2500,
+    "retry": {
+      "attempts": 3,
+      "backoff": "exponential",
+      "jitter": 0.25
+    }
+  },
+  "owners": [
+    {
+      "name": "Platform Team",
+      "email": "platform@example.com",
+      "on_call": false
+    },
+    {
+      "name": "Storage Team",
+      "email": "storage@example.com",
+      "on_call": true
+    }
+  ],
+  "notes": "Rotate keys monthly. Escalate \"P1\" incidents within 15 minutes.",
+  "last_deploy": null
+}
