@@ -130,7 +130,7 @@ A quoted field starts and ends with `"`. A `"` inside it is written as `""`. A q
 | `str` | Every value is a JSON string. |
 | `bool` | Every value is `true` or `false`. |
 
-Any column may also hold `null` or a missing field. A column whose rows are all `null` or missing is typed `str`.
+Any column may hold `null`. Only an undotted column may hold a missing field. A column whose rows are all `null` or missing is typed `str`.
 
 ### Cells
 
