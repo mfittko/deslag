@@ -19,6 +19,7 @@ This file records only observed behavior. Untested versions and platforms are un
 - A Bash replacement whose shape matches the tool's output schema replaces the output the model sees.
 - A Bash replacement with the wrong shape is ignored. The client logs `PostToolUse hook returned updatedToolOutput that does not match Bash's output shape: reason=schema_invalid` and sends the original output to the model.
 - The client binary documents that hooks run in parallel on the original output and that rewrites from several hooks are last-write-wins. This was read from the client, not tested.
+- The client persists the replacement, and the original output is absent from the session transcript. `--resume` and `--resume --fork-session` resubmit the replacement. A fork gets a new `session_id` and keeps the parent's `tool_use_id`. Runs and costs are in [ADR 0006](decisions/0006-session-identity-and-replay.md).
 
 ### Live runs
 
@@ -42,4 +43,4 @@ Runs 2 and 3 used throwaway `jq` hooks to characterize the client. The deslag ad
 - MCP tool results, images and other non-text results.
 - Client behavior when the hook stops reading oversize input early (the adapter drains stdin, untested live).
 - Composition with other result-replacement hooks.
-- Resume and fork behavior of replaced results (DF-004).
+- `--continue` and proxy-mode resume and fork with a live client. Hook-mode resume and fork are recorded in [ADR 0006](decisions/0006-session-identity-and-replay.md).
