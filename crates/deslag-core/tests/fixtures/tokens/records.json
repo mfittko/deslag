@@ -1,0 +1,66 @@
+[
+  {
+    "id": 1001,
+    "sku": "WID-0001",
+    "name": "Small widget",
+    "price": 4.99,
+    "in_stock": true,
+    "warehouse": "north"
+  },
+  {
+    "id": 1002,
+    "sku": "WID-0002",
+    "name": "Medium widget",
+    "price": 7.49,
+    "in_stock": true,
+    "warehouse": "north"
+  },
+  {
+    "id": 1003,
+    "sku": "WID-0003",
+    "name": "Large widget",
+    "price": 12.0,
+    "in_stock": false,
+    "warehouse": "south"
+  },
+  {
+    "id": 1004,
+    "sku": "GAD-0101",
+    "name": "Pocket gadget",
+    "price": 19.95,
+    "in_stock": true,
+    "warehouse": "east"
+  },
+  {
+    "id": 1005,
+    "sku": "GAD-0102",
+    "name": "Desk gadget",
+    "price": 34.5,
+    "in_stock": true,
+    "warehouse": "east"
+  },
+  {
+    "id": 1006,
+    "sku": "GAD-0103",
+    "name": "Wall gadget",
+    "price": 41.0,
+    "in_stock": false,
+    "warehouse": "west"
+  },
+  {
+    "id": 1007,
+    "sku": "TOL-0201",
+    "name": "Hex key set",
+    "price": 9.25,
+    "in_stock": true,
+    "warehouse": "south"
+  },
+  {
+    "id": 1008,
+    "sku": "TOL-0202",
+    "name": "Torque driver",
+    "price": 58.75,
+    "in_stock": true,
+    "warehouse": "west"
+  }
+]

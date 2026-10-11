@@ -1,0 +1,10 @@
+2026-03-14T09:12:01.114Z INFO  [http] GET /api/v1/items?page=2 200 18ms req_id=7f3a91c2
+2026-03-14T09:12:01.287Z INFO  [http] GET /api/v1/items?page=3 200 21ms req_id=7f3a91c3
+2026-03-14T09:12:02.003Z WARN  [db] slow query: SELECT id, sku FROM items WHERE warehouse = $1 (412ms)
+2026-03-14T09:12:02.450Z ERROR [worker] job 5521 failed: connection reset by peer (attempt 2/3)
+2026-03-14T09:12:03.019Z INFO  [worker] job 5521 retry scheduled in 4000ms
+2026-03-14T09:12:07.022Z INFO  [worker] job 5521 completed in 1873ms
+2026-03-14T09:12:09.640Z DEBUG [cache] hit ratio=0.873 size=10432 evictions=17
+2026-03-14T09:12:10.001Z INFO  [http] POST /api/v1/orders 201 64ms req_id=7f3a91c9
+2026-03-14T09:12:10.338Z ERROR [http] POST /api/v1/orders 422 12ms req_id=7f3a91ca error="quantity must be positive"
+2026-03-14T09:12:11.905Z INFO  [scheduler] next run at 2026-03-14T09:15:00Z
