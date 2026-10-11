@@ -1,11 +1,16 @@
 //! `deslag` command-line entry point.
 
 use std::io::{self, Read, Write};
+use std::net::SocketAddr;
 use std::process::ExitCode;
 
+use deslag_proxy::{Upstream, serve};
 use serde_json::{Value, json};
+use tokio::net::TcpListener;
 
-const USAGE: &str = "usage: deslag hook claude [--minify-json]";
+const USAGE: &str = "usage: deslag hook claude [--minify-json]\n       \
+                     deslag proxy --upstream <url> [--listen <addr>] [--minify-json]";
+const PROXY_USAGE: &str = "usage: deslag proxy --upstream <url> [--listen <addr>] [--minify-json]";
 
 // Exit 2 from a Claude Code hook is blocking and feeds stderr to the model; usage errors avoid it.
 const EX_USAGE: u8 = 64;
@@ -31,11 +36,60 @@ fn main() -> ExitCode {
             }
             ExitCode::SUCCESS
         }
+        ["proxy", args @ ..] => match proxy(args) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(message) => {
+                eprintln!("deslag: {message}");
+                ExitCode::from(2)
+            }
+        },
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(EX_USAGE)
         }
     }
+}
+
+/// Runs the proxy until it fails. The tokio runtime exists only here, so
+/// `hook claude` stays synchronous.
+fn proxy(args: &[&str]) -> Result<(), String> {
+    let mut listen = "127.0.0.1:8789";
+    let mut upstream = None;
+    let mut minify_json = false;
+    let mut args = args.iter().copied();
+    while let Some(arg) = args.next() {
+        let mut value = || {
+            args.next()
+                .ok_or(format!("{arg} needs a value\n{PROXY_USAGE}"))
+        };
+        match arg {
+            "--listen" => listen = value()?,
+            "--upstream" => upstream = Some(value()?),
+            "--minify-json" => minify_json = true,
+            _ => return Err(format!("unknown argument: {arg}\n{PROXY_USAGE}")),
+        }
+    }
+    let mut upstream = Upstream::parse(upstream.ok_or(PROXY_USAGE)?)?;
+    if minify_json {
+        upstream = upstream.with_json_minification();
+    }
+    let addr: SocketAddr = listen
+        .parse()
+        .map_err(|e| format!("invalid --listen {listen}: {e}"))?;
+    // PLAN §15: desktop defaults bind loopback only; network exposure needs authentication first.
+    if !addr.ip().is_loopback() {
+        return Err(format!("--listen must be a loopback address, got {addr}"));
+    }
+    let runtime =
+        tokio::runtime::Runtime::new().map_err(|e| format!("cannot start async runtime: {e}"))?;
+    runtime.block_on(async {
+        let listener = TcpListener::bind(addr)
+            .await
+            .map_err(|e| format!("cannot listen on {addr}: {e}"))?;
+        let bound = listener.local_addr().map_err(|e| e.to_string())?;
+        eprintln!("deslag proxy listening on {bound}, upstream {upstream}");
+        serve(listener, upstream).await.map_err(|e| e.to_string())
+    })
 }
 
 /// Validates a Claude Code PostToolUse event. With `minify_json`, returns the hook
