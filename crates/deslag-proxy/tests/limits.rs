@@ -182,7 +182,9 @@ async fn idle_upstream_connection_is_closed() {
 #[tokio::test]
 async fn stalled_minify_uploads_release_permits_at_body_read_timeout() {
     let (up, _) = mock().await;
-    let body_read_timeout = SHORT * 3;
+    // ponytail: wall-clock margins, no public permit hook. The healthy request
+    // can only finish after a stalled permit times out, about 0.8 s after it starts.
+    let body_read_timeout = Duration::from_secs(1);
     let limits = Limits {
         body_read_timeout,
         ..Limits::default()
@@ -207,8 +209,10 @@ async fn stalled_minify_uploads_release_permits_at_body_read_timeout() {
             })
         })
         .collect();
-    tokio::time::sleep(SHORT).await;
+    // Lets the stalled uploads send headers and a partial body and take every permit.
+    tokio::time::sleep(SHORT * 2).await;
 
+    let start = std::time::Instant::now();
     let mut healthy = TcpStream::connect(addr).await.unwrap();
     let head = timeout(
         WAIT,
@@ -218,8 +222,12 @@ async fn stalled_minify_uploads_release_permits_at_body_read_timeout() {
         ),
     )
     .await
-    .expect("healthy request blocked behind stalled uploads");
+    .expect("healthy request still blocked after the body-read timeout");
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    assert!(
+        start.elapsed() >= body_read_timeout / 2,
+        "healthy request did not queue behind the stalled uploads"
+    );
     for task in stalled {
         let head = timeout(WAIT, task).await.unwrap().unwrap();
         assert!(head.starts_with("HTTP/1.1 408"), "{head}");

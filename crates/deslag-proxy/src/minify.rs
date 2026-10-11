@@ -45,6 +45,8 @@ const MAX_INSPECT_BYTES: usize = 32 * 1024 * 1024;
 /// for a permit and never stream through, so the decision never depends on load.
 /// A permit holder that does not deliver its body within
 /// `Limits::body_read_timeout` gets `408` and releases the permit.
+/// The deadline covers only the buffered part, up to `MAX_INSPECT_BYTES`. For a
+/// larger body the permit is released and the rest streams without a deadline.
 /// Make the permit count configurable via `Limits` if that ceiling is wrong.
 static INSPECT_PERMITS: Semaphore = Semaphore::const_new(4);
 

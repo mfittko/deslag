@@ -28,7 +28,7 @@ Structural encodings stay opt-in until paired task evaluations pass. See [PLAN Â
 | `HEADER_READ_TIMEOUT` | 30 s | A client that does not send a complete request head in time is disconnected. Idle keep-alive connections close after the same time. |
 | `CONNECT_TIMEOUT` | 10 s | A TCP connect to the upstream that does not complete in time fails with `502`. DNS and the TLS handshake are not covered. |
 | `POOL_IDLE_TIMEOUT` | 30 s | Unused pooled upstream connections close within about twice this time. |
-| `BODY_READ_TIMEOUT` | 300 s | With `--minify-json`, a buffered `POST /v1/messages` body that does not arrive in time after its inspection permit is granted fails with `408`. The request is never forwarded unrewritten because of the timeout. |
+| `BODY_READ_TIMEOUT` | 300 s | With `--minify-json`, an eligible `POST /v1/messages` body must arrive in time after its inspection permit is granted, or the request fails with `408`. The deadline covers only the buffered part, up to `MAX_INSPECT_BYTES`. For a larger body the permit is released and the rest streams without a deadline, like a request that is not inspected. The request is never forwarded unrewritten because of the timeout. |
 
 With `--minify-json`, two more constants in `crates/deslag-proxy/src/minify.rs` apply to eligible `POST /v1/messages` requests:
 
