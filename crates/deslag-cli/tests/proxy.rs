@@ -1,5 +1,9 @@
 use std::io::{BufRead, BufReader};
-use std::process::{Command, Stdio};
+use std::net::TcpStream;
+use std::process::{Child, Command, Stdio};
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 fn deslag(args: &[&str]) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_deslag"));
@@ -10,30 +14,50 @@ fn deslag(args: &[&str]) -> Command {
     cmd
 }
 
-#[test]
-fn valid_start_reports_bound_address_and_redacted_upstream() {
-    let mut child = deslag(&[
-        "proxy",
-        "--upstream",
-        "https://gw.example/token-secret/",
-        "--listen",
-        "127.0.0.1:0",
-    ])
-    .spawn()
-    .expect("spawn deslag");
-    let mut line = String::new();
-    BufReader::new(child.stderr.take().unwrap())
-        .read_line(&mut line)
-        .unwrap();
-    child.kill().unwrap();
-    child.wait().unwrap();
+/// Kills and reaps the proxy on drop, so a failing assertion never orphans it.
+struct KillOnDrop(Child);
+
+impl Drop for KillOnDrop {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+/// Starts the proxy with `extra` args, checks the listening line, and connects to the port.
+fn assert_valid_start(extra: &[&str], host: &str) {
+    let mut args = vec!["proxy", "--upstream", "https://gw.example/token-secret/"];
+    args.extend_from_slice(extra);
+    let mut child = KillOnDrop(deslag(&args).spawn().expect("spawn deslag"));
+    let stderr = child.0.stderr.take().unwrap();
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let mut line = String::new();
+        let _ = BufReader::new(stderr).read_line(&mut line);
+        let _ = tx.send(line);
+    });
+    let line = rx
+        .recv_timeout(Duration::from_secs(10))
+        .expect("no listening line within 10 s");
 
     let rest = line
-        .strip_prefix("deslag proxy listening on 127.0.0.1:")
+        .strip_prefix(&format!("deslag proxy listening on {host}:"))
         .unwrap_or_else(|| panic!("unexpected line: {line}"));
     let (port, upstream) = rest.split_once(", upstream ").unwrap();
-    assert_ne!(port.parse::<u16>().unwrap(), 0);
+    let port = port.parse::<u16>().unwrap();
+    assert_ne!(port, 0);
     assert_eq!(upstream.trim_end(), "https://gw.example/[redacted]");
+    TcpStream::connect(format!("{host}:{port}")).expect("connect to proxy");
+}
+
+#[test]
+fn valid_start_reports_bound_address_and_redacted_upstream() {
+    assert_valid_start(&["--listen", "127.0.0.1:0"], "127.0.0.1");
+}
+
+#[test]
+fn valid_start_with_minify_json_on_ipv6_loopback() {
+    assert_valid_start(&["--minify-json", "--listen", "[::1]:0"], "[::1]");
 }
 
 #[test]
