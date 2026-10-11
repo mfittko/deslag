@@ -115,10 +115,11 @@ These zero-cost CLI runs used an isolated `CLAUDE_CONFIG_DIR`. No global setting
 - `claude plugin marketplace add <worktree path>` added the marketplace `deslag`.
 - `claude plugin install deslag@deslag` installed version 0.1.0.
 - After `install.sh` seeded `plugins/data/deslag-deslag`, `claude plugin uninstall deslag@deslag` removed that data directory.
+- `claude plugin marketplace add mfittko/deslag#issue-40` (the GitHub source at the pull request branch) added the marketplace. `claude plugin install deslag@deslag` installed version 0.1.0. The cached plugin holds only `commands`, `hooks` and `scripts`.
 
 The pre-PR review fixes between runs 7 and 12 cover symlinked version dirs, the cleanup trap, quoted command paths, download timeouts, status detection, scoped uninstall and the missing-subcommand usage message.
 
 ### Pending
 
-- `/plugin marketplace add mfittko/deslag` against `main`. This needs the merge.
+- `/plugin marketplace add mfittko/deslag` against `main`. This needs the merge. The same GitHub source at the branch ref passed.
 - `/deslag:install` against a published release.
