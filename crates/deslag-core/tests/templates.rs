@@ -279,7 +279,7 @@ fn decoder_rejects_malformed_templates() {
 }
 
 #[test]
-fn decoder_accepts_canonical_templates() {
+fn decoder_accepts_valid_templates() {
     let ok = [
         ("a 1\n#!deslag t2 1\n2\n", "a 1\na 2\n"),
         ("a 1\n#!deslag t2 0\nb\n", "a 1\nb 1\n"),
@@ -360,4 +360,16 @@ fn generated_inputs_round_trip() {
 fn long_unprofitable_group_is_linear() {
     let input: String = (0..100_000).map(|i| format!("{i} {i}\n")).collect();
     assert_eq!(roundtrip(&input), format!("{HEADER}{input}"));
+}
+
+#[test]
+fn outlier_base_does_not_block_the_group_below() {
+    let rows: String = (0..1000)
+        .map(|i| format!("12:{:02}:{:02} 200 /a\n", i / 60, i % 60))
+        .collect();
+    let input = format!("12:00:00 500 /x\n{rows}");
+    let encoded = roundtrip(&input);
+    assert!(encoded.len() < input.len());
+    let r = compress(&input, &on(Mode::Safe));
+    assert_eq!(r.report.outcome, Outcome::Changed);
 }

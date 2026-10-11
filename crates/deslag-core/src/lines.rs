@@ -1,4 +1,6 @@
 //! `lines-v1`: exact codec for runs of byte-identical consecutive lines.
+//! [`decode_lines`] also decodes `lines-v2`. The template directive lives in
+//! `templates.rs`.
 //!
 //! The format is specified in `docs/compression-formats.md`.
 
@@ -22,7 +24,10 @@ const RUN: &str = "#!deslag x";
 pub enum DecodeError {
     MissingHeader,
     /// A reserved-prefix line that is neither a valid escape nor a canonical run
-    /// directive, or a directive with no unit directly above it.
+    /// directive, or a directive with no unit directly above it. For
+    /// `lines-v2` it also covers a non-canonical template directive, bad
+    /// positions, missing rows, and a row with the wrong value count, an empty
+    /// value or a tab in a value.
     InvalidDirective,
     /// The decoded output would exceed the caller's bound.
     OutputTooLarge,

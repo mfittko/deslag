@@ -26,10 +26,13 @@ pub fn encode_templates(input: &str) -> Option<String> {
     let units: Vec<&str> = input.split_inclusive('\n').collect();
     let mut out = String::from(HEADER_V2);
     let mut i = 0;
-    // ponytail: no group starts inside the span of a group that did not pay, so
-    // the encoder stays linear. A shorter group in that span could still pay; it
+    // ponytail: when a group does not pay, one retry starts at the next unit, so
+    // an outlier base does not block the lines below it. When the retry also
+    // fails, no group starts inside either span, so each unit is scanned a
+    // bounded number of times. A shorter group in that span could still pay; it
     // is left literal.
     let mut no_group_before = 0;
+    let mut retry_at = None;
     while i < units.len() {
         let unit = units[i];
         let count = units[i..].iter().take_while(|&&u| u == unit).count();
@@ -41,14 +44,20 @@ pub fn encode_templates(input: &str) -> Option<String> {
             i += count;
             continue;
         }
-        if i >= no_group_before {
+        if i >= no_group_before || retry_at == Some(i) {
             let (len, group) = template_group(&units[i..]);
             if let Some(group) = group {
                 out.push_str(&group);
+                retry_at = None;
                 i += len;
                 continue;
             }
-            no_group_before = i + len;
+            if retry_at.take() == Some(i) {
+                no_group_before = no_group_before.max(i + len);
+            } else {
+                no_group_before = i + len;
+                retry_at = Some(i + 1);
+            }
         }
         push_unit(&mut out, unit);
         i += 1;

@@ -121,7 +121,10 @@ The encoded text is the header line followed by the body.
 - The decoder rejects a template directive that is not canonical, has no base
   directly above it, has indices that do not ascend or are out of range, or
   lacks rows. It also rejects a row with the wrong number of values, an empty
-  value, a missing `\n`, or the reserved prefix without the escape.
+  value, a tab in a value, a missing `\n`, or the reserved prefix without the
+  escape.
+- The decoder does not check that some row differs from the base at each
+  listed index, or that each listed token is variable-class.
 - The output bound applies as in `lines-v1`.
 
 ### Encoder
@@ -134,12 +137,15 @@ At each unit, in input order:
    unit joins when it ends with `\n`, has the same gaps byte for byte and the
    same token count as the base, and each of its tokens equals the base token
    or both tokens are variable-class. A constant token that differs ends the
-   group, so lines that differ in an error message never share a template.
+   group. So lines that differ in a constant token (a token with no ASCII
+   digit, `/` or `\`) never share a template.
 3. The variable indices are the indices where any row differs from the base.
    The group is written only when the directive and the rows are shorter than
    the rows' literal bytes, escapes included. Otherwise the base is written
-   literally, and no group starts at the other units of that group. Run
-   directives still apply to them.
+   literally, and the encoder retries once with a group that starts at the
+   next unit. When the retry also fails, no group starts at the other units of
+   either group. A group that is written ends the retry. Run directives still
+   apply to all units.
 
 - Line order never changes and no line is dropped.
 - A partial final unit is always literal.
