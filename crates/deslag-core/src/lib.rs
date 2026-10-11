@@ -92,7 +92,8 @@ pub enum Reason {
     /// or key-policy reason occurs earlier in the input. On the
     /// `exact-line-runs` path, input that already starts with the `lines-v1`
     /// header, so the codec never encodes its own output.
-    /// Also any input that is not eligible for table-v1.
+    /// Also table-v1 shape ineligibility (see the eligibility table in
+    /// docs/compression-formats.md).
     UnsupportedFormat,
     DepthLimit,
     /// Consumers disagree on which duplicate wins. A duplicate in any object
