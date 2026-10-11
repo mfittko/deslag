@@ -132,7 +132,7 @@ The workflow then runs four jobs:
    `x86_64-unknown-linux-gnu` (Ubuntu 22.04), and packs each into a `.tar.gz`.
    Each archive holds a `deslag-<version>-<target>/` directory with the
    `deslag` binary, `LICENSE-MIT`, `LICENSE-APACHE` and `README.md`.
-   `deslag-proxy` is not distributed in this release.
+   The `deslag` binary includes the `deslag proxy` subcommand.
    The plugin's `/deslag:install` command (`plugins/claude/scripts/install.sh`)
    downloads `v<version>/deslag-<version>-<target>.tar.gz` and
    `v<version>/SHA256SUMS` from the release. Keep the tag, archive names,

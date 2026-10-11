@@ -35,7 +35,9 @@ name = "deslag-cli"
 version = "0.1.0"
 dependencies = [
  "deslag-core",
+ "deslag-proxy",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
