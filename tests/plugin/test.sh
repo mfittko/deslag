@@ -136,6 +136,8 @@ mkdir -p "$tmp/linked-data" && echo keep >"$tmp/linked-data/notes.txt" && chmod 
 ln -s "$tmp/linked-data" "$tmp/data-datalink"
 expect_fail "install refuses a symlinked data dir" "symlink" run_install "$good" "$tmp/data-datalink" install
 expect_fail "install refuses a symlinked data dir with a trailing slash" "symlink" run_install "$good" "$tmp/data-datalink/" install
+expect_fail "install refuses a data dir with a . component" "components" run_install "$good" "$tmp/data-datalink/." install
+expect_fail "install refuses a data dir with a .. component" "components" run_install "$good" "$tmp/data-datalink/sub/.." install
 expect_eq "refused install leaves the data link target unchanged" "notes.txt:keep:755" \
   "$(ls -A "$tmp/linked-data"):$(cat "$tmp/linked-data/notes.txt"):$(mode "$tmp/linked-data")"
 
@@ -251,6 +253,7 @@ expect_ok "uninstall of an empty unmarked dir exits 0" run_install "$good" "$tmp
 mkdir -p "$tmp/linked-udata/bin" && : >"$tmp/linked-udata/.deslag-data" && echo keep >"$tmp/linked-udata/bin/file"
 ln -s "$tmp/linked-udata" "$tmp/data-ulink"
 expect_fail "uninstall refuses a symlinked data dir" "symlink" run_install "$good" "$tmp/data-ulink" uninstall
+expect_fail "uninstall refuses a data dir with a . component" "components" run_install "$good" "$tmp/data-ulink/." uninstall
 expect_eq "refused uninstall keeps the link target" keep "$(cat "$tmp/linked-udata/bin/file")"
 expect_eq "refused uninstall keeps the target marker" present "$([ -f "$tmp/linked-udata/.deslag-data" ] && echo present || echo absent)"
 # Content that install.sh did not create stops uninstall after its own files are gone.

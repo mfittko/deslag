@@ -24,6 +24,8 @@ root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 data=${2:-${CLAUDE_PLUGIN_DATA:-}}
 [ -n "$data" ] || die "no data dir: pass it as the second argument or set CLAUDE_PLUGIN_DATA; run this through the deslag plugin commands"
 [[ $data == /* ]] || die "the data dir must be an absolute path: $data"
+# A . or .. component would hide a symlinked data dir from the symlink checks below.
+[[ /$data/ != */./* && /$data/ != */../* ]] || die "the data dir must not contain . or .. components: $data"
 # Strip trailing slashes so the symlink checks below see the link itself.
 while [[ $data == */ && $data != / ]]; do data=${data%/}; done
 marker=$data/.deslag-data
