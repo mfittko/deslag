@@ -44,16 +44,17 @@ Per result:
 | Field | Purpose |
 | --- | --- |
 | `tool_use_id` | Result identity within the scope |
-| Source digest | Detects changed source bytes under a known id |
+| Source digest | Integrity check; changed source bytes under a known id are an explicit error |
 | Decision | `unchanged`, or `encoded` with transform id and transform version |
 | Policy version | Policy that made the decision |
+| Model profile | Model in use when the decision was made |
 
 ### Identity key
 
-The per-result key is `(scope, tool_use_id, source digest)`.
+The per-result key is `(scope, tool_use_id)`. The source digest is a stored integrity check. A known id that arrives with a different digest is an explicit error and gets no new decision.
 
 - Hook mode: scope is `session_id` from the hook stdin. Observed in run D.
-- Proxy mode: scope is the `X-Claude-Code-Session-Id` request header. Claude Code 2.1.296 sets that header to its session id, and `metadata.user_id` carries a JSON string with `device_id`, `account_uuid`, `session_id` and an optional `parent_session_id`. This was read from the client, not tested.
+- Proxy mode: scope is the `X-Claude-Code-Session-Id` request header. Claude Code 2.1.296 sets that header to its session id, and `metadata.user_id` carries a JSON string with `device_id`, `account_uuid`, `session_id` and an optional `parent_session_id`. This was read from the client binary and is untested.
 - The key includes the scope. Run C showed that a fork keeps the parent's `tool_use_id` under a new session id.
 - A request without a trusted scope passes through unchanged. The proxy never invents provider-visible fields.
 
@@ -70,11 +71,12 @@ This is the decided design. One configuration value, `owner = hook | proxy | non
 | Fork (`--fork-session`) | Fork copies the stored replacement under a new session id (runs C and D) | New scope with no manifest, history already contains results: explicit error, start a fresh session. Unsupported (design, untested) |
 | Process restart | No state needed for history; run B resumed in a new client process (run B) | Reload manifest from disk (offline) |
 | Policy or software upgrade | History unaffected; new results use the new policy (design, untested) | Known results replay with the pinned transform version; new results use the new policy (offline) |
-| Model switch | New results only (design, untested) | New results only; the pinned profile stays (design, untested) |
+| Model switch | New results only (design, untested) | Known results keep their pinned decisions; each new decision records the new model profile (design, untested) |
 | Compression disabled | Stop replacing new results (design, untested) | Keep replaying pinned decisions; new results unchanged (design, untested) |
 | Proxy removed mid-session | Not applicable | The client resends originals. Content stays correct, the cached prefix is lost. Start a new session (design, untested) |
-| Manifest missing or corrupt | Not applicable | Explicit error when the request carries tool results (offline) |
-| Source digest mismatch | Not applicable | Explicit error (offline) |
+| Manifest missing or corrupt | Not applicable | Explicit error when the request carries tool results. A manifest that does not parse or has no `decisions` object counts as corrupt (offline) |
+| Source digest mismatch | Not applicable | Explicit error; the known id gets no new decision (offline) |
+| Pinned transform version unknown to the binary | Not applicable | Explicit error (offline) |
 | Unknown result outside the newest message | Not applicable | Explicit error (offline) |
 
 Hook mode therefore needs no replay manifest for history. The client stores and resubmits the replacement. The decision record matters only for proxy mode.
@@ -111,10 +113,10 @@ Transcript inspection (read only, `~/.claude/projects/<project>/<session>.jsonl`
 
 Scenarios:
 
-- Multi-turn resend and restart: four turns with a process restart before the fourth. Each upstream body starts with every message byte of the previous body. An identical resend is byte-identical.
+- Multi-turn resend and restart: three turns and an identical resend of the third, then a process restart and a fourth turn. Each upstream body starts with every message byte of the previous body. An identical resend is byte-identical.
 - Policy upgrade: a session built under policy v1 is resent under policy v2 with transform v2. Results decided under v1 keep their v1 bytes. This includes `toolu_2`, which v1 left unchanged and which a fresh v2 decision encodes; the test asserts both premises. A new result uses v2.
 - First decision unchanged: a result left unchanged under simulated load stays unchanged after the load drops.
-- Manifest loss: a corrupt or deleted manifest with tool results in the request is an explicit error. The replay layer rejects the request before the proxy is called.
+- Manifest loss: a corrupt or deleted manifest with tool results in the request is an explicit error. Corrupt covers bytes that do not parse and a manifest with no `decisions` object. A pinned transform version that the binary does not know is an explicit error too. The replay layer rejects the request before the proxy is called.
 - Digest mismatch and undecided history: changed source bytes under a known `tool_use_id`, or an unknown result outside the newest message, is an explicit error. The replay layer rejects the request before the proxy is called.
 - No scope: the body passes through byte-identical and no manifest is written.
 

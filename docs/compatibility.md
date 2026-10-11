@@ -18,7 +18,7 @@ This file records only observed behavior. Untested versions and platforms are un
 - A hook that exits 0 with empty stdout leaves the tool output unchanged.
 - A Bash replacement whose shape matches the tool's output schema replaces the output the model sees.
 - A Bash replacement with the wrong shape is ignored. The client logs `PostToolUse hook returned updatedToolOutput that does not match Bash's output shape: reason=schema_invalid` and sends the original output to the model.
-- The client binary documents that hooks run in parallel on the original output and that rewrites from several hooks are last-write-wins. This was read from the client, not tested.
+- The client binary documents that hooks run in parallel on the original output and that rewrites from several hooks are last-write-wins. This was read from the client binary and is untested.
 - The client persists the replacement, and the original output is absent from the session transcript. `--resume` and `--resume --fork-session` resubmit the replacement. A fork gets a new `session_id` and keeps the parent's `tool_use_id`. Runs and costs are in [ADR 0006](decisions/0006-session-identity-and-replay.md).
 
 ### Live runs

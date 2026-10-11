@@ -53,6 +53,8 @@ enum ReplayError {
     DigestMismatch(String),
     /// A tool result outside the newest message was never decided.
     UndecidedHistory(String),
+    /// A pinned decision names a transform version this binary does not keep.
+    RetiredTransform(String),
 }
 
 struct Replay {
@@ -100,7 +102,9 @@ impl Replay {
         let path = self.manifest_path(scope);
         let loaded = fs::read(&path)
             .ok()
-            .and_then(|b| serde_json::from_slice::<Value>(&b).ok());
+            .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+            // A manifest without a `decisions` object is as corrupt as one that does not parse.
+            .filter(|m| m["decisions"].is_object());
         let has_results = !tool_results(&mut req).is_empty();
         let mut manifest = match loaded {
             Some(m) => m,
@@ -142,9 +146,10 @@ impl Replay {
             };
             if let Some(version) = decision["encoded"]["version"].as_u64() {
                 // A retained transform version always succeeds on bytes it accepted before.
-                block["content"] = transform(version, &content)
-                    .expect("retained transform")
-                    .into();
+                let Some(encoded) = transform(version, &content) else {
+                    return Err(ReplayError::RetiredTransform(id));
+                };
+                block["content"] = encoded.into();
             }
         }
         if dirty {
@@ -314,7 +319,12 @@ fn temp_dir() -> PathBuf {
         std::process::id(),
         N.fetch_add(1, Ordering::Relaxed)
     ));
-    fs::create_dir_all(&dir).unwrap();
+    // Start empty: a panicked earlier run with the same pid may have left a manifest here.
+    match fs::remove_dir_all(&dir) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => panic!("clear {dir:?}: {e}"),
+        _ => {}
+    }
+    fs::create_dir(&dir).unwrap();
     dir
 }
 
@@ -438,6 +448,23 @@ async fn manifest_loss_is_an_explicit_error() {
     fs::write(&path, b"{ not json").unwrap();
     let corrupt = s.turn(&[("toolu_1", R1), ("toolu_2", R2)]).await;
     assert_eq!(corrupt, Err(ReplayError::MissingManifest));
+
+    // Parseable but wrong shape: no `decisions` object.
+    for shape in [&b"[]"[..], b"{}", b"\"x\""] {
+        fs::write(&path, shape).unwrap();
+        let wrong = s.turn(&[("toolu_1", R1), ("toolu_2", R2)]).await;
+        assert_eq!(wrong, Err(ReplayError::MissingManifest));
+    }
+
+    // A pinned transform version the binary does not keep.
+    let retired = json!({"decisions": {"toolu_1": {"digest": digest(R1.as_bytes()),
+        "policy_version": 1, "encoded": {"transform": "json-min", "version": 99}}}});
+    fs::write(&path, serde_json::to_vec(&retired).unwrap()).unwrap();
+    let unknown = s.turn(&[("toolu_1", R1), ("toolu_2", R2)]).await;
+    assert_eq!(
+        unknown,
+        Err(ReplayError::RetiredTransform("toolu_1".into()))
+    );
 
     fs::remove_file(&path).unwrap();
     let lost = s.turn(&[("toolu_1", R1), ("toolu_2", R2)]).await;
