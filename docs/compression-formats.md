@@ -143,9 +143,11 @@ At each unit, in input order:
    The group is written only when the directive and the rows are shorter than
    the rows' literal bytes, escapes included. Otherwise the base is written
    literally, and the encoder retries once with a group that starts at the
-   next unit. When the retry also fails, no group starts at the other units of
-   either group. A group that is written ends the retry. Run directives still
-   apply to all units.
+   next unit. When a run directive is written at the retry unit, the retry
+   moves to the first unit after the run. Until the retry, no other group
+   starts inside the failed group's span. When the retry also fails, no group
+   starts at the other units of either group. A group that is written ends the
+   retry. Run directives still apply to all units.
 
 - Line order never changes and no line is dropped.
 - A partial final unit is always literal.

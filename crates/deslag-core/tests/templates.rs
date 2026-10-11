@@ -75,6 +75,11 @@ fn line_endings_and_edges_round_trip() {
         format!("{crlf}partial"),
         "  a\t1  \n  a\t2  \n  a\t3  \n  a 4  \n".repeat(4),
         "a 1\na 2\n".to_string(),
+        "   \n\t\n \t \n".repeat(5),
+        "   \r\n\t\r\n \t \r\n".repeat(5),
+        format!("{lf} \t \n{lf}"),
+        format!("{crlf}\t\r\n  \r\n{crlf}"),
+        "a 1\n \n".repeat(6),
     ];
     for input in &cases {
         roundtrip(input);
@@ -321,8 +326,10 @@ fn decoder_respects_output_bound() {
 
 #[test]
 fn generated_inputs_round_trip() {
-    const UNITS: [&str; 14] = [
+    const UNITS: [&str; 16] = [
         "t=1 GET /a ok\n",
+        " \t \n",
+        "  \r\n",
         "t=22 GET /b ok\n",
         "t=3 GET /a fail\n",
         "t=4 GET  /c ok\r\n",
@@ -372,4 +379,19 @@ fn outlier_base_does_not_block_the_group_below() {
     assert!(encoded.len() < input.len());
     let r = compress(&input, &on(Mode::Safe));
     assert_eq!(r.report.outcome, Outcome::Changed);
+}
+
+#[test]
+fn retry_moves_past_a_run_at_the_retry_unit() {
+    let run = "12:00:00 200 /a\n".repeat(20);
+    let rows: String = (1..1000)
+        .map(|i| format!("12:{:02}:{:02} 200 /a\n", i / 60, i % 60))
+        .collect();
+    let input = format!("12:00:00 500 /x\n{run}{rows}");
+    let encoded = roundtrip(&input);
+    let after_run = encoded.split_once("#!deslag x20\n").expect("run").1;
+    assert!(
+        after_run.starts_with("12:00:01 200 /a\n#!deslag t999 "),
+        "{after_run:.80}"
+    );
 }
