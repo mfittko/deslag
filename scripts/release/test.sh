@@ -10,6 +10,7 @@ export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid
 export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 export LC_ALL=C
+unset RELEASE_OPERATOR FAKE_GH_FAIL
 failures=0
 
 ok() { echo "ok - $1"; }
@@ -132,6 +133,9 @@ expect_fail "fragment check rejects a malformed fragment next to a valid one" "e
 
 branch crlf-fragment; echo "// s" >>"$r/crates/a/src/lib.rs"; printf -- '### Fixed\r\n- Fine.\r\n' >"$r/changes/crlf.md"; commit crlf
 expect_ok "fragment check accepts a CRLF fragment" "$r" check ""
+
+branch symlink-fragment; echo "// q" >>"$r/crates/a/src/lib.rs"; ln -s ../README.md "$r/changes/link.md"; commit link
+expect_fail "fragment check refuses a symlinked fragment" "regular file" "$r" check ""
 
 branch rename-base; printf -- '- Old.\n' >"$r/changes/old.md"; commit old
 rename_base=$(git -C "$r" rev-parse HEAD)

@@ -74,7 +74,10 @@ restores the original files. A refusal, or a failure up to and including
 you re-run.
 
 Edit the stamped section if the wording needs work. Then commit, open a pull
-request and merge it to `main`.
+request and merge it to `main`. The release pull request body must contain the
+line `changelog: none`. `bump.sh` rewrites
+`plugins/claude/.claude-plugin/plugin.json` and deletes the fragments, so the
+`fragment` check fails without that line.
 
 ## 3. Approve a stable release
 
