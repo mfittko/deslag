@@ -162,7 +162,7 @@ A mutation that re-decides known results under the current policy fails the upgr
 - Tool results with block-array, image or other non-string content. The experiment passes them through undecided.
 - Manifest loss, corruption or expiry for a session with established history. Explicit error; there is no recovery path.
 - A `safe` session that loses its manifest before it records any decision, and then sends a request without tool results under configured `off`, looks like a fresh session. It gets an `off` marker. No decisions are lost.
-- Adding the proxy to a session with existing history, including sessions started before deslag was installed and sessions started without the proxy. Every request with tool results gets an explicit `MissingManifest` error in every configured mode, including `off`. The proxy does not pass these requests through. The user starts a new session.
+- Adding the proxy to a session with existing history, including sessions started before deslag was installed and sessions started without the proxy. A request whose scope has no manifest and that carries tool results gets an explicit `MissingManifest` error in every configured mode, including `off`. The proxy does not pass these requests through. The user starts a new session.
 - Removing the proxy from a session with encoded history. The client resends originals and the cached prefix is lost.
 - Changing `owner` or `mode` inside a running session. It applies to new sessions only.
 - Owner enforcement: owner selection, the `owner` configuration write, and owner-mismatch passthrough. Untested.
