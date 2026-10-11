@@ -33,14 +33,22 @@ fn noop_on_captured_payloads() {
 
 #[test]
 fn malformed_input_fails_open_with_diagnostic_on_stderr() {
-    let output = run(&["hook", "claude"], b"{not json");
-    assert_eq!(output.status.code(), Some(0));
-    assert!(output.stdout.is_empty());
-    assert!(!output.stderr.is_empty());
+    for input in [
+        &b"{not json"[..],
+        b"",
+        b"[]",
+        b"{\"hook_event_name\":\"Post\\nX\"}",
+    ] {
+        let output = run(&["hook", "claude"], input);
+        assert_eq!(output.status.code(), Some(0));
+        assert!(output.stdout.is_empty());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(stderr.lines().count(), 1, "{stderr}");
+    }
 }
 
 #[test]
-fn unknown_arguments_print_usage_and_exit_2() {
+fn unknown_arguments_print_usage_and_exit_64() {
     for args in [
         &[][..],
         &["hook"],
@@ -48,7 +56,7 @@ fn unknown_arguments_print_usage_and_exit_2() {
         &["hook", "claude", "x"],
     ] {
         let output = run(args, b"");
-        assert_eq!(output.status.code(), Some(2), "{args:?}");
+        assert_eq!(output.status.code(), Some(64), "{args:?}");
         assert!(output.stdout.is_empty());
         assert!(String::from_utf8_lossy(&output.stderr).contains("usage"));
     }

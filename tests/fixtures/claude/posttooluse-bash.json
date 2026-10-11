@@ -1,8 +1,8 @@
 {
-  "session_id": "d7704519-6765-49fb-bb09-9217a823c1af",
-  "transcript_path": "/home/user/.claude/projects/sanitized-project/d7704519-6765-49fb-bb09-9217a823c1af.jsonl",
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "transcript_path": "/home/user/.claude/projects/sanitized-project/00000000-0000-4000-8000-000000000001.jsonl",
   "cwd": "/home/user/project",
-  "prompt_id": "6b8f5167-6bf1-419b-b611-91e08505ebff",
+  "prompt_id": "00000000-0000-4000-8000-000000000002",
   "permission_mode": "default",
   "effort": {
     "level": "medium"
@@ -20,6 +20,6 @@
     "isImage": false,
     "noOutputExpected": false
   },
-  "tool_use_id": "toolu_013HBrasgqp5b6pUSRZ3vWzA",
+  "tool_use_id": "toolu_fixture_bash",
   "duration_ms": 486
 }

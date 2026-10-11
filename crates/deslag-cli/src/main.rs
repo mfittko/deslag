@@ -7,6 +7,9 @@ use serde_json::{Value, json};
 
 const USAGE: &str = "usage: deslag hook claude";
 
+// Exit 2 from a Claude Code hook is blocking and feeds stderr to the model; usage errors avoid it.
+const EX_USAGE: u8 = 64;
+
 // ponytail: fixed 16 MiB ceiling on hook input; larger payloads pass through untouched.
 // Make it configurable when real tool outputs routinely exceed it.
 const MAX_HOOK_INPUT_BYTES: u64 = 16 * 1024 * 1024;
@@ -27,7 +30,7 @@ fn main() -> ExitCode {
         }
         _ => {
             eprintln!("{USAGE}");
-            ExitCode::from(2)
+            ExitCode::from(EX_USAGE)
         }
     }
 }
@@ -36,13 +39,16 @@ fn main() -> ExitCode {
 ///
 /// Errors are diagnostics only. The caller reports them on stderr and still exits 0,
 /// so the hook never blocks the tool.
-fn claude_hook(input: impl Read) -> Result<(), String> {
+fn claude_hook(mut input: impl Read) -> Result<(), String> {
     let mut buf = Vec::new();
     input
+        .by_ref()
         .take(MAX_HOOK_INPUT_BYTES + 1)
         .read_to_end(&mut buf)
         .map_err(|err| format!("cannot read hook input: {err}"))?;
     if buf.len() as u64 > MAX_HOOK_INPUT_BYTES {
+        // Drain the rest so the client never sees a broken pipe on its write.
+        let _ = io::copy(&mut input, &mut io::sink());
         return Err(format!(
             "hook input exceeds {MAX_HOOK_INPUT_BYTES} bytes; passing through"
         ));
@@ -51,7 +57,7 @@ fn claude_hook(input: impl Read) -> Result<(), String> {
         serde_json::from_slice(&buf).map_err(|err| format!("malformed hook input: {err}"))?;
     match event.get("hook_event_name").and_then(Value::as_str) {
         Some("PostToolUse") => {}
-        Some(other) => return Err(format!("unsupported hook event: {other}")),
+        Some(other) => return Err(format!("unsupported hook event: {other:?}")),
         None => return Err("hook input has no hook_event_name".to_string()),
     }
     if event.get("tool_name").and_then(Value::as_str).is_none() {
@@ -82,6 +88,9 @@ fn replacement(event: &Value, updated: Value) -> Option<Value> {
 }
 
 /// Same JSON type; objects also need the same key set with same-shaped values.
+// ponytail: arrays compare by type only, so an array element of the wrong shape still
+// passes and the client then ignores the replacement. Compare elements before wiring
+// replacement into a tool whose output contains arrays.
 fn same_shape(original: &Value, updated: &Value) -> bool {
     match (original, updated) {
         (Value::Object(a), Value::Object(b)) => {
@@ -169,6 +178,16 @@ mod tests {
             claude_hook(bytes.as_slice())
                 .unwrap_err()
                 .contains("exceeds")
+        );
+    }
+
+    #[test]
+    fn input_at_the_cap_is_read() {
+        let bytes = vec![b' '; MAX_HOOK_INPUT_BYTES as usize];
+        assert!(
+            claude_hook(bytes.as_slice())
+                .unwrap_err()
+                .contains("malformed")
         );
     }
 
