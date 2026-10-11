@@ -24,6 +24,8 @@ root=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 data=${2:-${CLAUDE_PLUGIN_DATA:-}}
 [ -n "$data" ] || die "no data dir: pass it as the second argument or set CLAUDE_PLUGIN_DATA; run this through the deslag plugin commands"
 [[ $data == /* ]] || die "the data dir must be an absolute path: $data"
+# Strip trailing slashes so the symlink checks below see the link itself.
+while [[ $data == */ && $data != / ]]; do data=${data%/}; done
 marker=$data/.deslag-data
 version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$root/.claude-plugin/plugin.json" | head -n 1)
 [ -n "$version" ] || die "no version in $root/.claude-plugin/plugin.json"
@@ -43,10 +45,10 @@ install() {
     Linux/x86_64) target=x86_64-unknown-linux-gnu ;;
     *) die "no deslag release for $(uname -s) $(uname -m); build it with cargo build --release -p deslag-cli and copy target/release/deslag to $bin, then run touch $marker so that uninstall removes it" ;;
   esac
-  # chmod, the marker write, the mv onto $bin and the prune loop would follow a
-  # symlink out of the data dir, so refuse each symlinked path before touching
-  # anything.
-  for dir in "$data/bin" "$data/bin/$version" "$bin" "$marker"; do
+  # mkdir, chmod, the marker write, the mv onto $bin and the prune loop would
+  # follow a symlink out of the data dir, so refuse each symlinked path before
+  # touching anything.
+  for dir in "$data" "$data/bin" "$data/bin/$version" "$bin" "$marker"; do
     [ ! -L "$dir" ] || die "refusing to install: $dir is a symlink"
   done
   base=${DESLAG_RELEASE_BASE_URL:-https://github.com/mfittko/deslag/releases/download}

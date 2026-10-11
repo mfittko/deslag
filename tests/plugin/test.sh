@@ -131,6 +131,14 @@ mkdir -p "$tmp/data-curlink/bin" && ln -s "$tmp/linked-cur" "$tmp/data-curlink/b
 expect_fail "install refuses a symlinked current version dir" "symlink" run_install "$good" "$tmp/data-curlink" install
 expect_eq "refused install leaves the link target unchanged" "deslag:keep" "$(ls -A "$tmp/linked-cur"):$(cat "$tmp/linked-cur/deslag")"
 
+# A symlinked data dir would let every install step act on its target.
+mkdir -p "$tmp/linked-data" && echo keep >"$tmp/linked-data/notes.txt" && chmod 755 "$tmp/linked-data"
+ln -s "$tmp/linked-data" "$tmp/data-datalink"
+expect_fail "install refuses a symlinked data dir" "symlink" run_install "$good" "$tmp/data-datalink" install
+expect_fail "install refuses a symlinked data dir with a trailing slash" "symlink" run_install "$good" "$tmp/data-datalink/" install
+expect_eq "refused install leaves the data link target unchanged" "notes.txt:keep:755" \
+  "$(ls -A "$tmp/linked-data"):$(cat "$tmp/linked-data/notes.txt"):$(mode "$tmp/linked-data")"
+
 # A symlinked bin dir would let chmod and the prune loop act on its target.
 mkdir -p "$tmp/linked-bin" && echo keep >"$tmp/linked-bin/notes.txt" && chmod 755 "$tmp/linked-bin"
 mkdir -p "$tmp/data-binlink" && ln -s "$tmp/linked-bin" "$tmp/data-binlink/bin"
