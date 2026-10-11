@@ -347,6 +347,8 @@ Do not merge similar lines with different timestamps, IDs, paths, counts, or err
 
 A decoder must reconstruct the original text bytes exactly. Mixed LF/CRLF, empty lines, partial final lines, and strings resembling encoding markers need tests.
 
+DF-013 implements this as `lines-v1`, specified in [compression-formats.md](compression-formats.md).
+
 ### 7.4 Transform composition and exactness
 
 Make each approved transform idempotent for its supported representation, and test the complete pipeline for repeated application. Do not recursively compress strings inside an encoded wrapper.

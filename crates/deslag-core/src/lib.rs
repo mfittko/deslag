@@ -4,6 +4,13 @@
 //! network client, filesystem handle or session state. Adapters own decision
 //! recording and decide whether to commit a `Changed` output.
 
+mod lines;
+
+pub use lines::{
+    DecodeError, EXACT_LINE_RUNS_ID, EXACT_LINE_RUNS_VERSION, LINES_FORMAT_VERSION, decode_lines,
+    encode_lines,
+};
+
 use std::{borrow::Cow, collections::HashSet, fmt::Write, time::Duration, time::Instant};
 
 /// Crate version, as set in the workspace manifest.
@@ -180,6 +187,8 @@ pub struct CompressionContext<'c> {
     pub policy_version: u32,
     /// Enables the JSON minifier, the only transform so far.
     pub json_minify: bool,
+    /// Enables the exact line-run codec for plain text the JSON scanner rejects.
+    pub exact_line_runs: bool,
     pub limits: Limits,
     /// Without a counter, every token field in the report is `None`.
     pub token_counter: Option<&'c dyn TokenCounter>,
@@ -191,6 +200,7 @@ pub const FIRST_SLICE_JSON_MINIFY_CONTEXT: CompressionContext<'static> = Compres
     mode: Mode::Safe,
     policy_version: 1,
     json_minify: true,
+    exact_line_runs: false,
     limits: Limits {
         min_candidate_bytes: 0,
         max_candidate_bytes: usize::MAX,
@@ -363,7 +373,7 @@ fn decide<'a>(
     if ctx.mode == Mode::Off {
         return Err(Reason::ModeOff);
     }
-    if !ctx.json_minify {
+    if !ctx.json_minify && !ctx.exact_line_runs {
         return Err(Reason::TransformDisabled);
     }
     if input.len() < limits.min_candidate_bytes {
@@ -372,13 +382,36 @@ fn decide<'a>(
     if input.len() > limits.max_candidate_bytes {
         return Err(Reason::AboveMaxBytes);
     }
-    let bytes = minify(input, limits.max_json_depth)?;
-    report.candidate_bytes = Some(bytes.len());
-    // Output is ASCII structure plus whole string lexemes from valid UTF-8 input,
-    // so this check guards the scanner itself.
-    let Ok(candidate) = String::from_utf8(bytes) else {
-        report.validation_outcome = ValidationOutcome::Failed;
-        return Err(Reason::InvalidCandidate);
+    let json = if ctx.json_minify {
+        minify(input, limits.max_json_depth)
+    } else {
+        Err(Reason::UnsupportedFormat)
+    };
+    let candidate = match json {
+        Ok(bytes) => {
+            report.candidate_bytes = Some(bytes.len());
+            // Output is ASCII structure plus whole string lexemes from valid UTF-8
+            // input, so this check guards the scanner itself.
+            let Ok(candidate) = String::from_utf8(bytes) else {
+                report.validation_outcome = ValidationOutcome::Failed;
+                return Err(Reason::InvalidCandidate);
+            };
+            candidate
+        }
+        // Text the JSON scanner rejects is plain text.
+        Err(Reason::UnsupportedFormat) if ctx.exact_line_runs => {
+            report.transform_id = EXACT_LINE_RUNS_ID;
+            report.transform_version = EXACT_LINE_RUNS_VERSION;
+            report.format_version = Some(LINES_FORMAT_VERSION);
+            let candidate = encode_lines(input).ok_or(Reason::UnsupportedFormat)?;
+            report.candidate_bytes = Some(candidate.len());
+            if decode_lines(&candidate, input.len()).as_deref() != Ok(input) {
+                report.validation_outcome = ValidationOutcome::Failed;
+                return Err(Reason::InvalidCandidate);
+            }
+            candidate
+        }
+        Err(reason) => return Err(reason),
     };
     report.validation_outcome = ValidationOutcome::Passed;
     if let Some(counter) = ctx.token_counter {
