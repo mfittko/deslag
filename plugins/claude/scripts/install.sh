@@ -43,9 +43,10 @@ install() {
     Linux/x86_64) target=x86_64-unknown-linux-gnu ;;
     *) die "no deslag release for $(uname -s) $(uname -m); build it with cargo build --release -p deslag-cli and copy target/release/deslag to $bin, then run touch $marker so that uninstall removes it" ;;
   esac
-  # chmod, the marker write and the prune loop would follow a symlink out of
-  # the data dir, so refuse each symlinked path before touching anything.
-  for dir in "$data/bin" "$data/bin/$version" "$marker"; do
+  # chmod, the marker write, the mv onto $bin and the prune loop would follow a
+  # symlink out of the data dir, so refuse each symlinked path before touching
+  # anything.
+  for dir in "$data/bin" "$data/bin/$version" "$bin" "$marker"; do
     [ ! -L "$dir" ] || die "refusing to install: $dir is a symlink"
   done
   base=${DESLAG_RELEASE_BASE_URL:-https://github.com/mfittko/deslag/releases/download}

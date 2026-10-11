@@ -138,6 +138,20 @@ expect_fail "install refuses a symlinked bin dir" "symlink" run_install "$good" 
 expect_eq "refused install leaves the bin link target unchanged" "notes.txt:keep:755" \
   "$(ls -A "$tmp/linked-bin"):$(cat "$tmp/linked-bin/notes.txt"):$(mode "$tmp/linked-bin")"
 
+# A symlinked binary path would let mv write into its target.
+mkdir -p "$tmp/linked-bindir" && echo keep >"$tmp/linked-bindir/deslag"
+mkdir -p "$tmp/data-dirlink/bin/$version" && ln -s "$tmp/linked-bindir" "$tmp/data-dirlink/bin/$version/deslag"
+expect_fail "install refuses a binary path linked to a directory" "refusing to install" run_install "$good" "$tmp/data-dirlink" install
+expect_eq "refused install leaves the linked directory unchanged" "deslag:keep" "$(ls -A "$tmp/linked-bindir"):$(cat "$tmp/linked-bindir/deslag")"
+echo keep >"$tmp/linked-binfile"
+mkdir -p "$tmp/data-filelink/bin/$version" && ln -s "$tmp/linked-binfile" "$tmp/data-filelink/bin/$version/deslag"
+expect_fail "install refuses a binary path linked to a file" "refusing to install" run_install "$good" "$tmp/data-filelink" install
+expect_eq "refused install leaves the linked file unchanged" keep "$(cat "$tmp/linked-binfile")"
+# A regular file at the binary path is replaced.
+mkdir -p "$tmp/data-regular/bin/$version" && echo stale >"$tmp/data-regular/bin/$version/deslag"
+expect_ok "install replaces a regular file at the binary path" run_install "$good" "$tmp/data-regular" install
+expect_eq "replaced file is the release binary" "fake-deslag --version" "$("$tmp/data-regular/bin/$version/deslag" --version </dev/null)"
+
 # A symlinked marker would let the marker write truncate its target.
 echo keep >"$tmp/linked-marker"
 mkdir -p "$tmp/data-markerlink" && ln -s "$tmp/linked-marker" "$tmp/data-markerlink/.deslag-data"
@@ -177,6 +191,10 @@ expect_eq "hook with a missing binary exits 0" 0 "$rc"
 expect_eq "hook with a missing binary prints nothing" "" "$out"
 rc=0; out=$(echo '{"tool_name":"Bash"}' | run_hook "$tmp/data-old") || rc=$?
 expect_eq "hook with a mismatched version exits 0" 0 "$rc"
+for d in data-partial data-empty; do
+  rc=0; out=$(echo '{"tool_name":"Bash"}' | run_hook "$tmp/$d" 2>&1) || rc=$?
+  expect_eq "hook with $d exits 0 with no output" "0:" "$rc:$out"
+done
 expect_eq "hook with a mismatched version prints nothing" "" "$out"
 rc=0; out=$(echo '{"tool_name":"Bash"}' | env -i PATH=/usr/bin:/bin "$hook_sh" 2>&1) || rc=$?
 expect_eq "hook without plugin env exits 0 silently" "0:" "$rc:$out"

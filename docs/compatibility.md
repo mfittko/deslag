@@ -102,13 +102,13 @@ Each run used a throwaway project directory, `--setting-sources project,local`, 
 | 8 | `/deslag:status`, plugin copy at a path with a space, quoted command and unquoted `allowed-tools` rule | 2.1.296 | claude-haiku-5-5 | Refused: "Shell command permission check failed ... This command requires approval" | 0 |
 | 9 | `/deslag:status`, plugin path without a space, quoted command and unquoted rule | 2.1.296 | claude-haiku-5-5 | Missing, with the fix hint | 0.00019403 |
 | 10-11 | `/deslag:status` with the quoted rule `Bash("${CLAUDE_PLUGIN_ROOT}/scripts/install.sh":*)`, with and without a space in the path | 2.1.296 | claude-haiku-5-5 | Missing, with the fix hint, in both runs | 0.00038806 |
-| 12 | `/deslag:install`, final scripts, path with a space | 2.1.296 | claude-haiku-5-5 | Installed at `<data>/bin/0.1.0/deslag` | 0.00020576 |
-| 13 | `/deslag:status`, final scripts | 2.1.296 | claude-haiku-5-5 | Installed | 0.00019913 |
-| 14 | Bash tool call `echo hello-deslag`, final scripts | 2.1.296 | claude-haiku-5-5 | The fake binary logged `hook claude`; model saw `hello-deslag` | 0.00039158 |
-| 15 | `/deslag:uninstall`, final scripts | 2.1.296 | claude-haiku-5-5 | Removed the data directory | 0.00021261 |
-| 16 | `/deslag:status`, final scripts | 2.1.296 | claude-haiku-5-5 | Missing, with the fix hint | 0.00019403 |
+| 12 | `/deslag:install`, path with a space | 2.1.296 | claude-haiku-5-5 | Installed at `<data>/bin/0.1.0/deslag` | 0.00020576 |
+| 13 | `/deslag:status` | 2.1.296 | claude-haiku-5-5 | Installed | 0.00019913 |
+| 14 | Bash tool call `echo hello-deslag` | 2.1.296 | claude-haiku-5-5 | The fake binary logged `hook claude`; model saw `hello-deslag` | 0.00039158 |
+| 15 | `/deslag:uninstall` | 2.1.296 | claude-haiku-5-5 | Removed the data directory | 0.00021261 |
+| 16 | `/deslag:status` | 2.1.296 | claude-haiku-5-5 | Missing, with the fix hint | 0.00019403 |
 
-Total: USD 0.00775653. Runs 1-7 used the scripts before the pre-PR review fixes. Runs 12-16 used the final scripts.
+Total: USD 0.00775653. Runs 1-7 used the scripts before the pre-PR review fixes. Runs 12-16 used the scripts at commit 9e498e83e100a6e3216364740e182dc743e9dd16. Later `install.sh` changes, including the refusals of a symlinked bin dir, version dir, binary path and marker, are covered by `tests/plugin/test.sh` only and did not run live.
 
 These zero-cost CLI runs used an isolated `CLAUDE_CONFIG_DIR`. No global settings were touched.
 
