@@ -22,18 +22,8 @@ changed() { git diff -z --no-renames --name-only "$@" "$base...HEAD"; }
 changed >"$lists/files"
 changed --diff-filter=AM >"$lists/fragments"
 
-touched=0
-while IFS= read -r -d '' f; do
-  case $f in crates/* | plugins/*) touched=1 ;; esac
-done <"$lists/files"
-if [ "$touched" = 0 ]; then
-  echo "ok: no changes under crates/ or plugins/"
-  exit 0
-fi
-if printf '%s\n' "${PR_BODY:-}" | tr -d '\r' | grep -iE '^[[:space:]]*changelog:[[:space:]]*none[[:space:]]*$' >/dev/null; then
-  echo "ok: PR body opts out with 'changelog: none'"
-  exit 0
-fi
+# Validation runs before the early exits below, so an untouched or opted-out
+# PR cannot land a malformed fragment.
 found=0 bad=0
 while IFS= read -r -d '' f; do
   case $f in changes/README.md | changes/*/*) continue ;; changes/*.md) ;; *) continue ;; esac
@@ -62,6 +52,19 @@ done <"$lists/fragments"
 if [ "$bad" = 1 ]; then
   echo "error: fix the fragment format; see changes/README.md" >&2
   exit 1
+fi
+
+touched=0
+while IFS= read -r -d '' f; do
+  case $f in crates/* | plugins/*) touched=1 ;; esac
+done <"$lists/files"
+if [ "$touched" = 0 ]; then
+  echo "ok: no changes under crates/ or plugins/"
+  exit 0
+fi
+if printf '%s\n' "${PR_BODY:-}" | tr -d '\r' | grep -iE '^[[:space:]]*changelog:[[:space:]]*none[[:space:]]*$' >/dev/null; then
+  echo "ok: PR body opts out with 'changelog: none'"
+  exit 0
 fi
 [ "$found" = 0 ] || exit 0
 echo "error: changes under crates/ or plugins/ need a changes/<slug>.md fragment" >&2

@@ -93,6 +93,23 @@ check() { PR_BODY=$1 "$here/check-changelog-fragment.sh" "$base"; }
 branch docs-only; echo more >>"$r/README.md"; commit docs
 expect_ok "fragment check passes a change outside crates/ and plugins/" "$r" check ""
 
+branch docs-good-fragment; echo more >>"$r/README.md"; printf -- '- Doc.\n' >"$r/changes/x.md"; commit docs
+expect_ok "fragment check passes a docs-only change with a valid fragment" "$r" check ""
+
+branch docs-bad-fragment; echo more >>"$r/README.md"; printf 'Just text.\n' >"$r/changes/x.md"; commit docs
+expect_fail "fragment check rejects a malformed fragment in a docs-only change" "expected a" "$r" check ""
+
+branch docs-dot-fragment; echo more >>"$r/README.md"; printf -- '- Doc.\n' >"$r/changes/.x.md"; commit docs
+expect_fail "fragment check rejects a dot-prefixed fragment in a docs-only change" "must not start with a dot" "$r" check ""
+
+branch optout-bad-fragment; echo "// o" >>"$r/crates/a/src/lib.rs"; printf 'Just text.\n' >"$r/changes/x.md"; commit bad
+expect_fail "fragment check rejects a malformed fragment despite 'changelog: none'" "expected a" "$r" check "changelog: none"
+
+branch release-base; printf -- '- Old.\n' >"$r/changes/old.md"; commit old
+release_base=$(git -C "$r" rev-parse HEAD)
+git -C "$r" rm -q changes/old.md; echo " " >>"$r/plugins/claude/.claude-plugin/plugin.json"; commit release
+expect_ok "fragment check passes a release that deletes fragments with 'changelog: none'" "$r" env PR_BODY='changelog: none' "$here/check-changelog-fragment.sh" "$release_base"
+
 branch no-fragment; echo "// x" >>"$r/crates/a/src/lib.rs"; commit code
 expect_fail "fragment check fails crates/ change without fragment" "changes/" "$r" check ""
 expect_ok "fragment check accepts 'changelog: none'" "$r" check "Summary"$'\n'"  Changelog: None  "$'\r'
