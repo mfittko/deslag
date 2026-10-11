@@ -4,7 +4,7 @@
 //! is buffered, parsed or logged. The upstream authority comes only from
 //! configuration, never from the request target, `Host` header or credentials.
 
-use std::{convert::Infallible, fmt, io, net::IpAddr, time::Duration};
+use std::{convert::Infallible, fmt, io, net::IpAddr, sync::Arc, time::Duration};
 
 use bytes::Bytes;
 use http_body_util::{Either, Full};
@@ -17,9 +17,9 @@ use hyper::{
 };
 use hyper_util::{
     client::legacy::{Client, connect::HttpConnector},
-    rt::{TokioExecutor, TokioIo},
+    rt::{TokioExecutor, TokioIo, TokioTimer},
 };
-use tokio::net::TcpListener;
+use tokio::{net::TcpListener, sync::Semaphore};
 
 type HttpsClient = Client<hyper_rustls::HttpsConnector<HttpConnector>, Incoming>;
 type ProxyBody = Either<Incoming, Full<Bytes>>;
@@ -129,10 +129,76 @@ fn is_loopback(host: &str) -> bool {
             .is_ok_and(|ip| ip.is_loopback())
 }
 
+/// Default cap on concurrently served client connections.
+pub const MAX_CONNECTIONS: usize = 128;
+/// Default time a client has to send a complete request head.
+pub const HEADER_READ_TIMEOUT: Duration = Duration::from_secs(30);
+/// Default time allowed to open the TCP connection to the upstream.
+pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// Default time an unused pooled upstream connection stays open.
+pub const POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Connection and timeout bounds. None of them limits how long a response
+/// body may stream once the upstream has answered.
+#[derive(Clone, Copy, Debug)]
+pub struct Limits {
+    /// Further connections wait in the listen backlog until a slot frees.
+    pub max_connections: usize,
+    /// Also bounds how long an idle keep-alive client connection is held.
+    pub header_read_timeout: Duration,
+    pub connect_timeout: Duration,
+    pub pool_idle_timeout: Duration,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            max_connections: MAX_CONNECTIONS,
+            header_read_timeout: HEADER_READ_TIMEOUT,
+            connect_timeout: CONNECT_TIMEOUT,
+            pool_idle_timeout: POOL_IDLE_TIMEOUT,
+        }
+    }
+}
+
+impl Limits {
+    /// Zero would deadlock the accept loop or drop every connection; values
+    /// beyond these bounds overflow tokio's semaphore or timer arithmetic.
+    fn check(&self) -> io::Result<()> {
+        const MAX_TIMEOUT: Duration = Duration::from_secs(24 * 60 * 60);
+        let ok = (1..=Semaphore::MAX_PERMITS).contains(&self.max_connections)
+            && [
+                self.header_read_timeout,
+                self.connect_timeout,
+                self.pool_idle_timeout,
+            ]
+            .iter()
+            .all(|d| !d.is_zero() && *d <= MAX_TIMEOUT);
+        if ok {
+            Ok(())
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("limits out of range: {self:?}"),
+            ))
+        }
+    }
+}
+
+/// [`serve_with`] using [`Limits::default`].
+pub async fn serve(listener: TcpListener, upstream: Upstream) -> io::Result<()> {
+    serve_with(listener, upstream, Limits::default()).await
+}
+
 /// Accepts connections on `listener` and relays every request to `upstream`.
 /// Fails before accepting anything unless `listener` is bound to a loopback
 /// address: the proxy is unauthenticated and carries client credentials.
-pub async fn serve(listener: TcpListener, upstream: Upstream) -> io::Result<()> {
+pub async fn serve_with(
+    listener: TcpListener,
+    upstream: Upstream,
+    limits: Limits,
+) -> io::Result<()> {
+    limits.check()?;
     let addr = listener.local_addr()?;
     if !addr.ip().is_loopback() {
         return Err(io::Error::new(
@@ -144,13 +210,24 @@ pub async fn serve(listener: TcpListener, upstream: Upstream) -> io::Result<()> 
     let mut http = HttpConnector::new();
     http.set_nodelay(true);
     http.enforce_http(false);
+    http.set_connect_timeout(Some(limits.connect_timeout));
     let https = hyper_rustls::HttpsConnectorBuilder::new()
         .with_webpki_roots()
         .https_or_http()
         .enable_http1()
         .wrap_connector(http);
-    let client: HttpsClient = Client::builder(TokioExecutor::new()).build(https);
+    let client: HttpsClient = Client::builder(TokioExecutor::new())
+        .pool_idle_timeout(limits.pool_idle_timeout)
+        .pool_timer(TokioTimer::new())
+        .build(https);
+    let slots = Arc::new(Semaphore::new(limits.max_connections));
     loop {
+        // Waiting before accept leaves excess connections in the kernel backlog.
+        let permit = slots
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("semaphore is never closed");
         let stream = match listener.accept().await {
             Ok((stream, _)) => stream,
             // Transient errors such as fd exhaustion must not end the proxy.
@@ -165,8 +242,11 @@ pub async fn serve(listener: TcpListener, upstream: Upstream) -> io::Result<()> 
         tokio::spawn(async move {
             // Client disconnects end this future, which drops the upstream body and connection.
             let _ = http1::Builder::new()
+                .timer(TokioTimer::new())
+                .header_read_timeout(limits.header_read_timeout)
                 .serve_connection(TokioIo::new(stream), svc)
                 .await;
+            drop(permit);
         });
     }
 }
@@ -371,5 +451,37 @@ mod tests {
         let up = Upstream::parse("https://api.anthropic.com").unwrap();
         let err = serve(listener, up).await.unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
+    }
+
+    #[tokio::test]
+    async fn serve_rejects_out_of_range_limits() {
+        let d = Limits::default();
+        for bad in [
+            Limits {
+                max_connections: 0,
+                ..d
+            },
+            Limits {
+                max_connections: Semaphore::MAX_PERMITS + 1,
+                ..d
+            },
+            Limits {
+                header_read_timeout: Duration::ZERO,
+                ..d
+            },
+            Limits {
+                connect_timeout: Duration::ZERO,
+                ..d
+            },
+            Limits {
+                pool_idle_timeout: Duration::MAX,
+                ..d
+            },
+        ] {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let up = Upstream::parse("https://api.anthropic.com").unwrap();
+            let err = serve_with(listener, up, bad).await.unwrap_err();
+            assert_eq!(err.kind(), io::ErrorKind::InvalidInput, "{bad:?}");
+        }
     }
 }
