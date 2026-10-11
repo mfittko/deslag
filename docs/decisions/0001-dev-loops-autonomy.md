@@ -6,7 +6,7 @@
 
 ## Context
 
-deflate is a new single-maintainer repository. Work runs through dev-loops from the epic tree in issues #1 to #23. The maintainer wants the loop to proceed without operator checkpoints.
+deslag is a new single-maintainer repository. Work runs through dev-loops from the epic tree in issues #1 to #23. The maintainer wants the loop to proceed without operator checkpoints.
 
 ## Decision
 

@@ -1,4 +1,4 @@
-# deflate - Implementation Plan
+# deslag - Implementation Plan
 
 **Status:** Implementation handoff; no implementation is claimed by this document.  
 **Planning date:** 2026-10-10  
@@ -28,7 +28,7 @@ Build a no-op Claude hook adapter and a transparent streaming Anthropic proxy ag
 
 ## 1. Product intent and user requirements
 
-The project is named **deflate**. It is inspired by [Headroom][S1], but should be a focused implementation rather than a feature-for-feature clone.
+The project is named **deslag**. It is inspired by [Headroom][S1], but should be a focused implementation rather than a feature-for-feature clone.
 
 | User requirement | Planned interpretation |
 | --- | --- |
@@ -56,7 +56,7 @@ Here, compression means changing the model-visible representation. HTTP gzip/DEF
 | Deterministic transformations | Results must be reproducible across repeated submissions and session resumes. |
 | Observe mode initially | Establish what would change and its estimated benefit before enabling mutation. |
 | Metadata-only telemetry by default | Avoid copying sensitive payloads into observability infrastructure. |
-| Optional OTLP export, preferably through a Collector | Keep backend integrations outside deflate and avoid mandatory infrastructure. |
+| Optional OTLP export, preferably through a Collector | Keep backend integrations outside deslag and avoid mandatory infrastructure. |
 | No local model or compression API | Compression must not add inference cost, remote dependencies, or model latency. |
 
 Headroom already has Rust core and proxy crates; a language rewrite alone is not a differentiator. Its workspace and transform modules are useful implementation references, but its broader feature set is deliberately outside this MVP. [S2]
@@ -114,7 +114,7 @@ These references inform the plan; they do not replace testing against the client
 
 The official hook reference checked on 2026-10-10 documents `PostToolUse` replacement through `updatedToolOutput`, including built-in tools. Replacements must match the tool's output shape; invalid built-in replacements are ignored. It also states that native tool telemetry may capture the original result before the hook runs. [S5]
 
-Consequences for deflate:
+Consequences for deslag:
 
 - Verify the minimum working client version and test each supported result shape.
 - Preserve surrounding structures and change only approved text fields.
@@ -133,7 +133,7 @@ Anthropic documents exact-prefix requirements for prompt-cache reuse. Design for
 
 ### 4.3 Async instrumentation reference
 
-The reviewed `llm-proxy` implementation uses a bounded, non-blocking publication path and tracks drops. Its subscriber dispatch loop retries serially; deflate should not reproduce that coupling between slow consumers. The instrumentation docs also describe body capture, which deflate must not adopt as its default. [S3], [S4]
+The reviewed `llm-proxy` implementation uses a bounded, non-blocking publication path and tracks drops. Its subscriber dispatch loop retries serially; deslag should not reproduce that coupling between slow consumers. The instrumentation docs also describe body capture, which deslag must not adopt as its default. [S3], [S4]
 
 OpenTelemetry span lifecycle callbacks execute synchronously. The batching processor provides bounded buffering, with spans dropped at queue capacity. Use non-blocking callbacks and bounded export; an asynchronous exporter does not make expensive attribute construction or payload copying free. [S9]
 
@@ -143,14 +143,14 @@ OpenTelemetry span lifecycle callbacks execute synchronously. The batching proce
 Claude Code
   -> plugin PostToolUse adapter
   -> eligible result-field extraction
-  -> deflate-core
+  -> deslag-core
   -> shape-preserving replacement
   -> Claude Code conversation
 
 Other supported harnesses / explicit Claude proxy mode
-  -> deflate HTTP proxy
+  -> deslag HTTP proxy
   -> protocol-specific eligibility and history checks
-  -> deflate-core
+  -> deslag-core
   -> patch selected content; preserve everything else
   -> configured upstream provider or existing gateway
   <- streaming response relayed unchanged
@@ -183,12 +183,14 @@ Cargo.lock
 PLAN.md
 README.md
 crates/
-  deflate-core/
+  deslag-core/
     src/{classify,transforms,policy,report}.rs
-  deflate-runtime/
-    src/{cli,hook,proxy,session,local}.rs
-  deflate-telemetry/
+  deslag-runtime/
+    src/{hook,proxy,session,local}.rs
+  deslag-telemetry/
     src/{metrics,report_sink,otlp}.rs
+  deslag-cli/
+    src/main.rs
 plugins/
   claude/
     .claude-plugin/plugin.json
@@ -306,7 +308,7 @@ Illustrative format, subject to freezing in `docs/compression-formats.md`:
 
 ```json
 {
-  "_deflate": {"format": "table-v1"},
+  "_deslag": {"format": "table-v1"},
   "columns": ["id", "status", "owner"],
   "rows": [
     [101, "open", "alice"],
@@ -444,14 +446,14 @@ Keep plugin cache locations separate from writable user state. Use private permi
 These are proposed commands, not existing functionality. Finalize and test their syntax during implementation.
 
 ```text
-deflate compress       Offline transform/observe mode; stdin or explicit file input.
-deflate hook claude    Hook JSON on stdin; protocol JSON only on stdout.
-deflate proxy          Run the configured HTTP proxy.
-deflate run -- <cmd>   Launch a child with explicit, scoped proxy configuration.
-deflate doctor         Check versions, routing, ownership, schemas, and state access.
-deflate status         Show mode, versions, supported capabilities, and active services.
-deflate stats          Read locally available aggregate measurements.
-deflate local          Optional local report aggregation service; start/stop/status.
+deslag compress       Offline transform/observe mode; stdin or explicit file input.
+deslag hook claude    Hook JSON on stdin; protocol JSON only on stdout.
+deslag proxy          Run the configured HTTP proxy.
+deslag run -- <cmd>   Launch a child with explicit, scoped proxy configuration.
+deslag doctor         Check versions, routing, ownership, schemas, and state access.
+deslag status         Show mode, versions, supported capabilities, and active services.
+deslag stats          Read locally available aggregate measurements.
+deslag local          Optional local report aggregation service; start/stop/status.
 ```
 
 Doctor output must redact credentials and explicitly distinguish hook mode from proxy mode. Plugin commands such as status and diagnostics may wrap these executable commands; their exact names should follow the verified plugin conventions.
@@ -564,7 +566,7 @@ Rollout sequence: offline fixtures -> observe mode on representative traffic -> 
 
 Follow the asynchronous instrumentation direction of `sofatutor/llm-proxy`: request processing and telemetry delivery are separate concerns. [S3], [S4]
 
-Deflate does not need a new distributed event platform. Prefer the OpenTelemetry SDK's batching/export facilities where they already solve the problem. Add a small local report sink only for the short-lived-hook and local-statistics requirements that the SDK alone does not address.
+Deslag does not need a new distributed event platform. Prefer the OpenTelemetry SDK's batching/export facilities where they already solve the problem. Add a small local report sink only for the short-lived-hook and local-statistics requirements that the SDK alone does not address.
 
 Avoid serial subscriber retries that delay unrelated consumers. Use independent bounded paths where necessary, or let a Collector perform downstream fan-out.
 
@@ -599,7 +601,7 @@ hook invocation
 
 Record the operation's real start/end timestamps and context; asynchronous export must not create misleading spans timed only around the dispatcher. Preserve valid parentage across async tasks. Do not invent a parent span from a session ID.
 
-Trace propagation to an upstream gateway/provider is an explicit policy. Do not forward arbitrary baggage or secrets. Custom traces must not claim visibility into model execution or tool runtime that deflate did not observe.
+Trace propagation to an upstream gateway/provider is an explicit policy. Do not forward arbitrary baggage or secrets. Custom traces must not claim visibility into model execution or tool runtime that deslag did not observe.
 
 Hook-only mode measures hook/compression behavior, not complete provider latency or billing. Proxy mode can additionally observe request/response metadata and provider usage. State these differences in the user interface and documentation.
 
@@ -609,15 +611,15 @@ Names below are proposed custom instruments, not established OpenTelemetry seman
 
 | Proposed instrument | Purpose |
 | --- | --- |
-| `deflate.compression.operations` | Changed, would-change, skipped, and failed counts by bounded category. |
-| `deflate.compression.duration` | Transformation latency, in seconds. |
-| `deflate.compression.bytes` | Original, candidate, and emitted bytes, clearly separated. |
-| `deflate.compression.tokens` | Optional local counts/estimates with explicit method and stage. |
-| `deflate.proxy.overhead` | Deflate's measured contribution apart from upstream time. |
-| `deflate.telemetry.dropped` | Observable report/span drops by bounded cause. |
-| `deflate.telemetry.queue_depth` | Buffer pressure, when supported by the chosen SDK/sink. |
-| `deflate.telemetry.export_failures` | Failed exports without payload or credential logging. |
-| `deflate.session.consistency_failures` | Missing, incompatible, or conflicting replay state. |
+| `deslag.compression.operations` | Changed, would-change, skipped, and failed counts by bounded category. |
+| `deslag.compression.duration` | Transformation latency, in seconds. |
+| `deslag.compression.bytes` | Original, candidate, and emitted bytes, clearly separated. |
+| `deslag.compression.tokens` | Optional local counts/estimates with explicit method and stage. |
+| `deslag.proxy.overhead` | Deslag's measured contribution apart from upstream time. |
+| `deslag.telemetry.dropped` | Observable report/span drops by bounded cause. |
+| `deslag.telemetry.queue_depth` | Buffer pressure, when supported by the chosen SDK/sink. |
+| `deslag.telemetry.export_failures` | Failed exports without payload or credential logging. |
+| `deslag.session.consistency_failures` | Missing, incompatible, or conflicting replay state. |
 
 Use standard HTTP and appropriate provider/GenAI usage instruments instead of duplicating equivalent metrics under new names. Record provider cache usage according to the provider's meaning; do not add already-included cached tokens twice.
 
@@ -773,7 +775,7 @@ Require checksums, release provenance, pinned dependencies/toolchains, private l
 
 Before reusing Headroom or `llm-proxy` source, inspect the exact pinned revision's license and notices. Record copied/adapted files and preserve required notices and attribution. Choosing a project license and verifying reuse obligations are explicit release tasks; this plan is not a substitute for that review.
 
-The public product name remains **deflate**. Check relevant package/binary namespaces before publication and document installation names if a registry collision exists; do not silently rename the project.
+The public product name is **deslag** (see [ADR 0002](decisions/0002-rename-to-deslag.md)). The crates.io name `deslag` belongs to an unrelated crate, so publish crates as `deslag-*` and document `cargo install deslag-cli`. Do not rename the project again without a decision record.
 
 ## 16. Ordered implementation backlog
 
@@ -837,7 +839,7 @@ All items begin pending. Update status only with implementation and verification
 | DF-033 | Add OpenAI Responses adapter. | DF-021, DF-022 | Explicit stateful/stateless coverage; protected opaque items; continuation tests. |
 | DF-034 | Add cache-aware usage reports and container distribution. | DF-030 through DF-033 | Estimates separated from actual usage; deployed smoke tests; documented network-security requirements. |
 
-**Exit:** Export backends remain optional. Protocol support is explicit and verified. Deflate can sit in front of an existing gateway without replacing its credential-management or observability platform.
+**Exit:** Export backends remain optional. Protocol support is explicit and verified. Deslag can sit in front of an existing gateway without replacing its credential-management or observability platform.
 
 ### M4 - v0.3+ evidence-driven expansion
 
@@ -859,12 +861,12 @@ Do not add cross-agent memory, model routing, or self-improving behavior merely 
 | Small-process aggregation | Optional local service using bounded IPC | Benchmarks and failure tests in DF-024. |
 | OTLP transport and Rust SDK versions | Small supported standard stack | Compatibility/protocol check in DF-030; pin versions. |
 | Project license and source reuse | Focused implementation with recorded provenance | Review before copying source and before publication. |
-| Package/binary registry naming | Product remains deflate | Namespace checks before release. |
+| Package/binary registry naming | Product is deslag; crates are `deslag-*` (ADR 0002) | Re-check namespaces before release. |
 | Additional deployment targets | Only tested platforms | Clean-install smoke tests before listing support. |
 
 ## 18. Definition of done for the first release
 
-- [ ] A supported Claude Code user can install and run deflate without building native code.
+- [ ] A supported Claude Code user can install and run deslag without building native code.
 - [ ] The same core is exercised by the plugin and the minimal Anthropic proxy.
 - [ ] Each advertised integration has recorded versioned compatibility evidence.
 - [ ] New unsupported content passes through without corruption or truncation.
