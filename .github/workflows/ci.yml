@@ -13,7 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # ponytail: config-only check until DF-001 adds cargo fmt/clippy/test here.
       # Fails on broken YAML, a non-mapping root (empty file or scalar) and
       # duplicate mapping keys at any depth.
       - name: Validate .devloops YAML
@@ -34,3 +33,13 @@ jobs:
             walk.call(root)
             YAML.safe_load(File.read(ARGV[0]))
           ' .devloops
+      # Installs the toolchain and components pinned in rust-toolchain.toml.
+      # ponytail: no cargo cache while the workspace has no dependencies.
+      - name: Install Rust toolchain
+        run: rustup toolchain install
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: cargo test
+        run: cargo test --workspace --locked

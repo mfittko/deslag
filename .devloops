@@ -44,7 +44,8 @@ localImplementation:
 
 # Rules cover the docs/PLAN.md §5.2 layout plus the standard Cargo test, bench
 # and fuzz trees. Built-in tables already map .rs to code and .toml/.lock to
-# config; these rules classify test and benchmark trees.
+# config; these rules classify test and benchmark trees plus the extensionless
+# root files .gitignore and LICENSE-*.
 classify:
   paths:
     - pattern: tests/**
@@ -59,6 +60,9 @@ classify:
       kind: test
     - pattern: .gitignore
       kind: config
+    # Extensionless license texts are prose; unclassified they block the size budget.
+    - pattern: LICENSE-*
+      kind: docs
 
 models:
   roleTiers:
