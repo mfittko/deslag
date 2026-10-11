@@ -187,8 +187,10 @@ pub struct CompressionContext<'c> {
     pub policy_version: u32,
     /// Enables the JSON minifier.
     pub json_minify: bool,
-    /// Enables the exact line-run codec for text the JSON scanner rejects as
-    /// `unsupported_format`. `false` in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
+    /// Enables the exact line-run codec. With `json_minify` on, the codec
+    /// handles text the JSON scanner rejects as `unsupported_format`. With
+    /// `json_minify` off, all input goes to the codec. `false` in
+    /// [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
     pub exact_line_runs: bool,
     pub limits: Limits,
     /// Without a counter, every token field in the report is `None`.
@@ -404,7 +406,8 @@ fn decide<'a>(
         }
         // Text the JSON scanner rejects as unsupported_format is plain text. A
         // leading value rejected for duplicate_key, escaped_key or depth_limit
-        // keeps the input on the JSON path, even when text lines follow.
+        // keeps the input on the JSON path, even when text lines follow. With
+        // json_minify off, all input arrives here as unsupported_format.
         Err(Reason::UnsupportedFormat) if ctx.exact_line_runs => {
             set_line_runs_identity(report);
             let candidate = encode_lines(input).ok_or(Reason::UnsupportedFormat)?;
