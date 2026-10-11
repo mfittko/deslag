@@ -36,6 +36,10 @@ Total: USD 0.0038538. The shared M0 live-run budget is USD 5; the operator allot
 
 Runs 2 and 3 used throwaway `jq` hooks to characterize the client. The deslag adapter does not emit replacements yet. Its `replacement` helper applies the same shape rule, and unit tests cover the accepted and rejected cases.
 
+### JSON minification (opt-in)
+
+`deslag hook claude --minify-json` and `deslag-proxy --minify-json` remove insignificant whitespace from JSON in Bash tool results only. Both call `deslag_core::minify_json`. The plugin hook in `plugins/claude` does not pass the flag, so it stays a no-op. Neither flag has been run against a live client. Whitespace removal changes bytes; no token saving is claimed.
+
 ### Pending
 
 - Linux and Windows clients.
