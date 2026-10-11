@@ -4,7 +4,7 @@ A small, native, deterministic context-compression layer for AI agents.
 
 deslag reduces the representation overhead of tool results before a model sees them. It does not change executed tool calls, it does not silently drop evidence, and telemetry stays off the request path.
 
-> **Status:** planning. Nothing is implemented yet. The [implementation plan](docs/PLAN.md) is the product brief and backlog. Progress is tracked in the [v0.1 epic](https://github.com/mfittko/deslag/issues/1).
+> **Status:** early development. The M0 Claude Code plugin and a no-op `PostToolUse` hook adapter (`deslag hook claude`) exist. Compression is not implemented yet. The [implementation plan](docs/PLAN.md) is the product brief and backlog. Progress is tracked in the [v0.1 epic](https://github.com/mfittko/deslag/issues/1).
 
 ## Planned v0.1
 
@@ -39,7 +39,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 ```
 
-The Claude Code plugin lives in [`plugins/claude`](plugins/claude). It currently registers a no-op `PostToolUse` hook that runs `deslag hook claude`, so the `deslag` binary must be on `PATH`.
+The Claude Code plugin lives in [`plugins/claude`](plugins/claude). It currently registers a no-op `PostToolUse` hook that runs `deslag hook claude`, so the `deslag` binary must be on `PATH`. Install it from the repository root with `cargo install --path crates/deslag-cli --locked`.
 
 Work runs through [dev-loops](https://github.com/mfittko/dev-loops). Repository settings live in [`.devloops`](.devloops).
 
