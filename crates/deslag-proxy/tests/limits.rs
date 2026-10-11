@@ -70,8 +70,8 @@ async fn slow_header_client_is_disconnected() {
         ..Limits::default()
     };
     let addr = proxy(&format!("http://{up}"), limits).await;
-    let mut client = TcpStream::connect(addr).await.unwrap();
     let start = std::time::Instant::now();
+    let mut client = TcpStream::connect(addr).await.unwrap();
     client
         .write_all(b"POST /v1/messages HTTP/1.1\r\n")
         .await

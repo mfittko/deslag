@@ -24,7 +24,7 @@ Structural encodings stay opt-in until paired task evaluations pass. See [PLAN Â
 
 | Limit | Default | Effect |
 | --- | --- | --- |
-| `MAX_CONNECTIONS` | 128 | Further client connections wait in the kernel listen backlog (1024) until a slot frees. |
+| `MAX_CONNECTIONS` | 128 | Further client connections wait in the kernel listen backlog (128 by default, capped by the OS somaxconn) until a slot frees. |
 | `HEADER_READ_TIMEOUT` | 30 s | A client that does not send a complete request head in time is disconnected. Idle keep-alive connections close after the same time. |
 | `CONNECT_TIMEOUT` | 10 s | A TCP connect to the upstream that does not complete in time fails with `502`. DNS and the TLS handshake are not covered. |
 | `POOL_IDLE_TIMEOUT` | 30 s | Unused pooled upstream connections close within about twice this time. |
