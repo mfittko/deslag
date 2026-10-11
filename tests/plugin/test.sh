@@ -176,6 +176,11 @@ for c in install status uninstall; do
   expect_eq "commands/$c.md passes the data dir as an argument" \
     '!`"${CLAUDE_PLUGIN_ROOT}/scripts/install.sh" '"$c"' "${CLAUDE_PLUGIN_DATA}"`' \
     "$(grep '^!`' "$root/commands/$c.md")"
+  # The quoted rule matches the quoted command even when the plugin root has a space.
+  # shellcheck disable=SC2016 # the literal placeholder is expected
+  expect_eq "commands/$c.md allows only install.sh" \
+    'allowed-tools: Bash("${CLAUDE_PLUGIN_ROOT}/scripts/install.sh":*)' \
+    "$(grep '^allowed-tools:' "$root/commands/$c.md")"
 done
 
 # --- uninstall -----------------------------------------------------------------

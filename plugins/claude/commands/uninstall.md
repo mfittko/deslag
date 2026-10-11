@@ -1,7 +1,7 @@
 ---
 description: Remove the deslag binary and the plugin data directory
 disable-model-invocation: true
-allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/install.sh:*)
+allowed-tools: Bash("${CLAUDE_PLUGIN_ROOT}/scripts/install.sh":*)
 ---
 
 !`"${CLAUDE_PLUGIN_ROOT}/scripts/install.sh" uninstall "${CLAUDE_PLUGIN_DATA}"`

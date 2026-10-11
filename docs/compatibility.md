@@ -78,6 +78,7 @@ These facts were read from the Claude Code 2.1.296 client binary.
 
 - Plugin command `!` injection substitutes `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_PLUGIN_DATA}` in the command text. It does not export them as environment variables to that shell. The plugin commands therefore pass `"${CLAUDE_PLUGIN_DATA}"` to `install.sh` as an argument. `install.sh` derives the plugin root from its own location.
 - `/deslag:install` installs the binary, and the hook then runs it on a Bash tool call.
+- A permission rule in `allowed-tools` matches the command text after substitution. With a space in the plugin root, the rule must quote the path the same way the command does: `Bash("${CLAUDE_PLUGIN_ROOT}/scripts/install.sh":*)`.
 - `/deslag:status` reports an installed and a missing binary.
 - `/deslag:uninstall` removes the data directory.
 - Without a binary, the hook exits 0 and the tool output is unchanged.
@@ -98,8 +99,16 @@ Each run used a throwaway project directory, `--setting-sources project,local`, 
 | 5 | `/deslag:uninstall` | 2.1.296 | claude-haiku-5-5 | Removed the data directory | 0.00097209 |
 | 6 | `/deslag:status` | 2.1.296 | claude-haiku-5-5 | Missing, with the fix hint | 0.00096049 |
 | 7 | Bash tool call with no binary | 2.1.296 | claude-haiku-5-5 | Hook finished with status 0 (6 ms); model saw `hello-deslag` | 0.00042008 |
+| 8 | `/deslag:status`, plugin copy at a path with a space, quoted command and unquoted `allowed-tools` rule | 2.1.296 | claude-haiku-5-5 | Refused: "Shell command permission check failed ... This command requires approval" | 0 |
+| 9 | `/deslag:status`, plugin path without a space, quoted command and unquoted rule | 2.1.296 | claude-haiku-5-5 | Missing, with the fix hint | 0.00019403 |
+| 10-11 | `/deslag:status` with the quoted rule `Bash("${CLAUDE_PLUGIN_ROOT}/scripts/install.sh":*)`, with and without a space in the path | 2.1.296 | claude-haiku-5-5 | Missing, with the fix hint, in both runs | 0.00038806 |
+| 12 | `/deslag:install`, final scripts, path with a space | 2.1.296 | claude-haiku-5-5 | Installed at `<data>/bin/0.1.0/deslag` | 0.00020576 |
+| 13 | `/deslag:status`, final scripts | 2.1.296 | claude-haiku-5-5 | Installed | 0.00019913 |
+| 14 | Bash tool call `echo hello-deslag`, final scripts | 2.1.296 | claude-haiku-5-5 | The fake binary logged `hook claude`; model saw `hello-deslag` | 0.00039158 |
+| 15 | `/deslag:uninstall`, final scripts | 2.1.296 | claude-haiku-5-5 | Removed the data directory | 0.00021261 |
+| 16 | `/deslag:status`, final scripts | 2.1.296 | claude-haiku-5-5 | Missing, with the fix hint | 0.00019403 |
 
-Total: USD 0.00597133.
+Total: USD 0.00775653. Runs 1-7 used the scripts before the pre-PR review fixes. Runs 12-16 used the final scripts.
 
 These zero-cost CLI runs used an isolated `CLAUDE_CONFIG_DIR`. No global settings were touched.
 
@@ -107,7 +116,7 @@ These zero-cost CLI runs used an isolated `CLAUDE_CONFIG_DIR`. No global setting
 - `claude plugin install deslag@deslag` installed version 0.1.0.
 - After `install.sh` seeded `plugins/data/deslag-deslag`, `claude plugin uninstall deslag@deslag` removed that data directory.
 
-The live runs used the plugin scripts as they were before the pre-PR review fixes. Those fixes cover symlinked version dirs, the cleanup trap, quoted command paths, download timeouts, status detection, scoped uninstall and the missing-subcommand usage message.
+The pre-PR review fixes between runs 7 and 12 cover symlinked version dirs, the cleanup trap, quoted command paths, download timeouts, status detection, scoped uninstall and the missing-subcommand usage message.
 
 ### Pending
 
