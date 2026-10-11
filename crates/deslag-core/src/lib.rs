@@ -74,10 +74,10 @@ pub enum Reason {
     UnsupportedFormat,
     DepthLimit,
     /// Consumers disagree on which duplicate wins. A duplicate in any object
-    /// skips the whole document; no partial rewrite is emitted.
+    /// skips the whole document.
     DuplicateKey,
     /// An escaped key could hide a duplicate. An escaped key in any object
-    /// skips the whole document; no partial rewrite is emitted.
+    /// skips the whole document.
     EscapedKey,
     /// The candidate is not shorter than the input.
     InsufficientGain,

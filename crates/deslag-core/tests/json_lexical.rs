@@ -15,6 +15,11 @@ fn assert_passthrough(input: &str, ctx: &CompressionContext, reason: Reason) {
     assert_eq!(result.report.outcome, Outcome::Skipped, "{input:?}");
     assert_eq!(result.report.reason, Some(reason), "{input:?}");
     assert_eq!(result.report.candidate_bytes, None, "{input:?}");
+    assert_eq!(
+        result.report.validation_outcome,
+        ValidationOutcome::NotRun,
+        "{input:?}"
+    );
 }
 
 fn assert_minifies(input: &str, expected: &str) {
@@ -149,8 +154,5 @@ fn policy_bypass_returns_exact_bytes() {
         (off, Reason::ModeOff),
     ] {
         assert_passthrough(input, &ctx, reason);
-        let result = compress(input, &ctx);
-        assert_eq!(result.output, input);
-        assert_eq!(result.report.validation_outcome, ValidationOutcome::NotRun);
     }
 }

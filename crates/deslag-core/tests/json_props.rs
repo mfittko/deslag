@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use deslag_core::{FIRST_SLICE_JSON_MINIFY_CONTEXT, Outcome, compress, minify_json};
+use deslag_core::{FIRST_SLICE_JSON_MINIFY_CONTEXT, Outcome, Reason, compress, minify_json};
 
 /// xorshift64*: small, deterministic and dependency-free.
 struct Rng(u64);
@@ -182,6 +182,7 @@ fn random_valid_json_minifies_exactly() {
         } else {
             assert_eq!(out.as_deref(), Some(compact.as_str()), "seed {seed}");
         }
+        // Validates the generator only: both sides are generator output.
         let a: serde_json::Value = serde_json::from_str(&spaced).unwrap();
         let b: serde_json::Value = serde_json::from_str(&compact).unwrap();
         assert_eq!(a, b, "seed {seed}");
@@ -201,6 +202,11 @@ fn random_valid_json_minifies_exactly() {
                 "seed {seed}: {prefix:?}"
             );
             assert_eq!(result.report.outcome, Outcome::Skipped, "seed {seed}");
+            assert_eq!(
+                result.report.reason,
+                Some(Reason::UnsupportedFormat),
+                "seed {seed}"
+            );
         }
     }
 }
