@@ -92,7 +92,9 @@ impl fmt::Display for Upstream {
 
 /// True if the percent-decoded `path` has a `..` segment. Both `/` and `\` count
 /// as separators because some upstreams treat `\` as one. Decoding is a single
-/// pass; a malformed `%` escape is kept as literal bytes.
+/// pass; a malformed `%` escape is kept as literal bytes. A segment matches when
+/// the part before its first `;` is `..`, because servlet-style upstreams strip
+/// `;params` before resolving dot segments.
 fn has_dot_dot_segment(path: &str) -> bool {
     let raw = path.as_bytes();
     let mut decoded = Vec::with_capacity(raw.len());
@@ -115,7 +117,7 @@ fn has_dot_dot_segment(path: &str) -> bool {
     }
     decoded
         .split(|&b| b == b'/' || b == b'\\')
-        .any(|seg| seg == b"..")
+        .any(|seg| seg.split(|&b| b == b';').next() == Some(b".."))
 }
 
 fn is_loopback(host: &str) -> bool {
@@ -304,6 +306,8 @@ mod tests {
             "/v1/..%2Fx",
             "/v1/..\\x",
             "/v1/..%5cx",
+            "/v1/..;/x",
+            "/v1/%2e%2e;a/x",
         ] {
             assert!(has_dot_dot_segment(bad), "{bad} accepted");
         }
@@ -320,6 +324,8 @@ mod tests {
             "/v1/%zz",
             "/v1/%2",
             "/v1/.%+e",
+            "/v1/a;..",
+            "/v1/.;x",
         ] {
             assert!(!has_dot_dot_segment(good), "{good} rejected");
         }

@@ -71,6 +71,9 @@ async fn dot_dot_paths_are_rejected_without_reaching_upstream() {
         "/v1/.%2e/admin",
         "/v1/..%2fadmin",
         "/v1/..%5cadmin",
+        "/v1/..;/admin",
+        "/v1/..\\admin",
+        "http://x/../admin",
         "/..",
     ] {
         let resp = raw_get(proxy, target).await;
