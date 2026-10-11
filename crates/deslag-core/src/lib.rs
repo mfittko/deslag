@@ -77,7 +77,9 @@ pub enum Reason {
     BelowMinBytes,
     AboveMaxBytes,
     /// Bare scalar, invalid or truncated JSON, or trailing data, when no depth
-    /// or key-policy reason occurs earlier in the input.
+    /// or key-policy reason occurs earlier in the input. On the
+    /// `exact-line-runs` path, input that already starts with the `lines-v1`
+    /// header, so the codec never encodes its own output.
     UnsupportedFormat,
     DepthLimit,
     /// Consumers disagree on which duplicate wins.
@@ -189,8 +191,9 @@ pub struct CompressionContext<'c> {
     pub json_minify: bool,
     /// Enables the exact line-run codec. With `json_minify` on, the codec
     /// handles text the JSON scanner rejects as `unsupported_format`. With
-    /// `json_minify` off, all input goes to the codec. `false` in
-    /// [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
+    /// `json_minify` off, all input goes to the codec. The codec skips input
+    /// that already starts with the `lines-v1` header as `unsupported_format`.
+    /// `false` in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
     pub exact_line_runs: bool,
     pub limits: Limits,
     /// Without a counter, every token field in the report is `None`.
@@ -410,6 +413,8 @@ fn decide<'a>(
         // json_minify off, all input arrives here as unsupported_format.
         Err(Reason::UnsupportedFormat) if ctx.exact_line_runs => {
             set_line_runs_identity(report);
+            // Input that already starts with the lines-v1 header is skipped as
+            // unsupported_format, so the codec never encodes its own output.
             let candidate = encode_lines(input).ok_or(Reason::UnsupportedFormat)?;
             report.candidate_bytes = Some(candidate.len());
             if candidate.len() >= input.len() {
