@@ -530,6 +530,30 @@ fn gain_token_threshold_applies_with_counter() {
     assert!(encode(&input, &no_counter).is_ok());
 }
 
+/// Counts the encoded table as more tokens than any minified JSON.
+struct TableCostsMore;
+
+impl TokenCounter for TableCostsMore {
+    fn count(&self, text: &str) -> TokenCount {
+        TokenCount {
+            count: u64::from(text.starts_with(MARKER)),
+            method: TokenMethod::Estimate,
+            tokenizer: "table-costs-more",
+        }
+    }
+}
+
+#[test]
+fn gain_token_regression_fails_at_zero_threshold() {
+    let input = repeat(r#"{"identifier":12,"name":"alpha"}"#, 10);
+    let opts = TableOptions {
+        min_token_savings: 0,
+        token_counter: Some(&TableCostsMore),
+        ..lenient()
+    };
+    reject(&input, &opts, Reason::InsufficientGain);
+}
+
 #[test]
 fn decoder_accepts_zero_rows() {
     assert_eq!(decode("table-v1 [0]{a:str}").as_deref(), Some("[]"));
