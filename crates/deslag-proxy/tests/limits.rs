@@ -9,7 +9,7 @@ use hyper::{Request, Response, body::Incoming, server::conn::http1, service::ser
 use hyper_util::rt::TokioIo;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, TcpStream},
+    net::{TcpListener, TcpSocket, TcpStream},
     sync::mpsc,
     time::timeout,
 };
@@ -105,20 +105,49 @@ async fn connections_above_cap_wait_for_a_free_slot() {
     assert!(head.starts_with("HTTP/1.1 200"));
 }
 
+/// Upstream whose accept queue is full, so the kernel drops further SYNs and a
+/// connect stalls until the caller gives up. The returned guards keep it full.
+async fn stalled_upstream() -> (SocketAddr, Vec<TcpStream>, TcpListener) {
+    let socket = TcpSocket::new_v4().unwrap();
+    socket.bind("127.0.0.1:0".parse().unwrap()).unwrap();
+    let listener = socket.listen(1).unwrap();
+    let addr = listener.local_addr().unwrap();
+    let mut held = Vec::new();
+    for _ in 0..64 {
+        match timeout(SHORT, TcpStream::connect(addr)).await {
+            Ok(stream) => held.push(stream.unwrap()),
+            Err(_) => return (addr, held, listener),
+        }
+    }
+    panic!("listen backlog never filled; cannot stall a connect");
+}
+
 #[tokio::test]
-async fn unreachable_upstream_fails_within_connect_timeout() {
+async fn stalled_upstream_connect_fails_at_connect_timeout() {
+    let (up, _held, _listener) = stalled_upstream().await;
+    let connect_timeout = SHORT * 5;
     let limits = Limits {
-        connect_timeout: SHORT,
+        connect_timeout,
         ..Limits::default()
     };
-    // TEST-NET-1 is never routed. The timeout is exercised only where the SYN is
-    // blackholed; a host that fails fast with ENETUNREACH passes trivially.
-    let addr = proxy("https://192.0.2.1", limits).await;
+    let addr = proxy(&format!("http://{up}"), limits).await;
+    let start = std::time::Instant::now();
     let mut client = TcpStream::connect(addr).await.unwrap();
-    let head = timeout(WAIT, exchange(&mut client))
+    let pending = tokio::spawn(async move { exchange(&mut client).await });
+    tokio::time::sleep(SHORT).await;
+    assert!(
+        !pending.is_finished(),
+        "upstream connect failed before the deadline"
+    );
+    let head = timeout(WAIT, pending)
         .await
-        .expect("connect did not time out");
+        .expect("connect did not time out")
+        .unwrap();
     assert!(head.starts_with("HTTP/1.1 502"), "{head}");
+    assert!(
+        start.elapsed() >= connect_timeout,
+        "502 before the connect timeout"
+    );
 }
 
 #[tokio::test]
