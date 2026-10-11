@@ -32,7 +32,7 @@ type HttpsClient = Client<hyper_rustls::HttpsConnector<HttpConnector>, minify::R
 type ProxyBody = Either<Incoming, Full<Bytes>>;
 
 /// The single trusted upstream. Plain `http` is accepted only for loopback hosts.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Upstream {
     scheme: &'static str,
     authority: String,
@@ -102,6 +102,23 @@ impl fmt::Display for Upstream {
             f.write_str("/[redacted]")?;
         }
         Ok(())
+    }
+}
+
+/// Same redaction as `Display`: the base path may embed a credential.
+impl fmt::Debug for Upstream {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let base_path = if self.base_path.is_empty() {
+            ""
+        } else {
+            "/[redacted]"
+        };
+        f.debug_struct("Upstream")
+            .field("scheme", &self.scheme)
+            .field("authority", &self.authority)
+            .field("base_path", &base_path)
+            .field("minify_json", &self.minify_json)
+            .finish()
     }
 }
 
@@ -470,6 +487,19 @@ mod tests {
         assert_eq!(up.to_string(), "https://gw.example/[redacted]");
         let up = Upstream::parse("https://api.anthropic.com").unwrap();
         assert_eq!(up.to_string(), "https://api.anthropic.com");
+    }
+
+    #[test]
+    fn debug_redacts_base_path() {
+        let up = Upstream::parse("https://gw.example/token-secret/").unwrap();
+        let debug = format!("{up:?}");
+        assert!(!debug.contains("token-secret"), "{debug}");
+        assert!(debug.contains("[redacted]"), "{debug}");
+        let debug = format!(
+            "{:?}",
+            Upstream::parse("https://api.anthropic.com").unwrap()
+        );
+        assert!(!debug.contains("[redacted]"), "{debug}");
     }
 
     #[test]
