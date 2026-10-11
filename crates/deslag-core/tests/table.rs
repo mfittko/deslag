@@ -610,6 +610,21 @@ fn decoder_rejects_deep_dotted_column() {
 }
 
 #[test]
+fn decoder_parses_many_deep_columns_linearly() {
+    let depth = deslag_core::MAX_JSON_DEPTH_CEILING - 1;
+    let n = 2000;
+    let tail = vec!["a"; depth - 1].join(".");
+    // Distinct first segments open a fresh group chain per column. Storing
+    // each joined prefix would allocate gigabytes for this ~4 MB header.
+    let specs: Vec<String> = (0..n).map(|i| format!("b{i}.{tail}:int")).collect();
+    let row = vec!["1"; n].join(",");
+    let text = format!("table-v1 [1]{{{}}}\n{row}", specs.join(","));
+    assert!(decode(&text).is_some());
+    let reopened = format!("table-v1 [1]{{{},b0.x:int}}\n{row},1", specs.join(","));
+    assert_eq!(decode(&reopened), None);
+}
+
+#[test]
 fn decoder_regroups_dotted_columns() {
     assert_eq!(
         decode(
