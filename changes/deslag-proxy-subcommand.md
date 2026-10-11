@@ -4,7 +4,7 @@
 
 ### Changed
 
-- The separate `deslag-proxy` binary is removed; use `deslag proxy` (#33)
+- `deslag proxy` replaces the unreleased `deslag-proxy` binary (#33)
 
 ### Fixed
 
