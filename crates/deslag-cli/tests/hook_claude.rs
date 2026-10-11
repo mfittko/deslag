@@ -39,11 +39,16 @@ fn malformed_input_fails_open_with_diagnostic_on_stderr() {
         b"[]",
         b"{\"hook_event_name\":\"Post\\nX\"}",
     ] {
-        let output = run(&["hook", "claude"], input);
-        assert_eq!(output.status.code(), Some(0));
-        assert!(output.stdout.is_empty());
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        assert_eq!(stderr.lines().count(), 1, "{stderr}");
+        for args in [
+            &["hook", "claude"][..],
+            &["hook", "claude", "--minify-json"],
+        ] {
+            let output = run(args, input);
+            assert_eq!(output.status.code(), Some(0));
+            assert!(output.stdout.is_empty());
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert_eq!(stderr.lines().count(), 1, "{stderr}");
+        }
     }
 }
 

@@ -5,6 +5,15 @@
 //! forwarded unchanged. Every decision depends only on the tool_use block
 //! (`id`, `name`) and the tool_result block, which the client resends
 //! unchanged, so resending history yields the same bytes upstream.
+//!
+//! Experimental. The rewrite is stateless and keeps no replay manifest yet.
+//! Enabling, disabling or upgrading `--minify-json` mid-session rewrites
+//! already-submitted history on resend. Start a new session after any such
+//! change. Do not enable the hook and proxy flags at the same time: one
+//! component owns compression. Requests with `content-encoding` pass through,
+//! so a client that compresses only some requests would see drift. Requests
+//! with a body-integrity header also pass through. `/v1/messages/count_tokens`
+//! is not rewritten, so its counts can overstate.
 
 use std::{
     collections::HashSet,
@@ -22,11 +31,27 @@ use hyper::{
 };
 use serde::de::{Deserialize, Deserializer, Error, MapAccess, Visitor};
 use serde_json::value::RawValue;
+use tokio::sync::Semaphore;
 
 /// ponytail: at or above the Anthropic Messages request limit (32 MB), so every
 /// request the provider accepts is inspected and the decision never depends on
 /// size. A lower cap would bypass long sessions and change their history bytes.
 const MAX_INSPECT_BYTES: usize = 32 * 1024 * 1024;
+
+/// ponytail: at most 4 requests buffer and rewrite at once, so peak inspection
+/// memory is about 4 x ~100 MiB (buffer growth plus rewrite output). Others wait
+/// for a permit and never stream through, so the decision never depends on load.
+/// Make the permit count configurable via `Limits` if that ceiling is wrong.
+static INSPECT_PERMITS: Semaphore = Semaphore::const_new(4);
+
+/// Headers that pin the exact body bytes; rewriting would break the check.
+const INTEGRITY_HEADERS: [&str; 5] = [
+    "content-digest",
+    "digest",
+    "content-md5",
+    "x-amz-content-sha256",
+    "repr-digest",
+];
 
 /// Request body: an optional buffered prefix followed by the rest of the original body.
 pub(crate) struct ReqBody {
@@ -82,7 +107,10 @@ pub(crate) async fn prepare(
     let eligible = enabled
         && req.method() == Method::POST
         && req.uri().path() == "/v1/messages"
-        && !req.headers().contains_key(header::CONTENT_ENCODING);
+        && !req.headers().contains_key(header::CONTENT_ENCODING)
+        && !INTEGRITY_HEADERS
+            .iter()
+            .any(|h| req.headers().contains_key(*h));
     let (mut parts, mut body) = req.into_parts();
     if !eligible {
         let body = ReqBody {
@@ -91,7 +119,12 @@ pub(crate) async fn prepare(
         };
         return Ok(Request::from_parts(parts, body));
     }
-    let mut buf = Vec::new();
+    let _permit = INSPECT_PERMITS
+        .acquire()
+        .await
+        .expect("semaphore is never closed");
+    let hint = body.size_hint().exact().unwrap_or(0);
+    let mut buf = Vec::with_capacity(hint.min(MAX_INSPECT_BYTES as u64 + 1) as usize);
     while let Some(frame) = body.frame().await {
         // ponytail: request trailers are dropped on the buffered path; Messages
         // clients do not send them. Forward them if a client ever does.
@@ -171,7 +204,10 @@ fn rewrite(body: &[u8]) -> Option<Vec<u8>> {
         let Some(minified) = parse::<String>(raw).and_then(|s| deslag_core::minify_json(&s)) else {
             continue;
         };
-        let start = raw.get().as_ptr() as usize - body.as_ptr() as usize;
+        let start = (raw.get().as_ptr() as usize).checked_sub(body.as_ptr() as usize)?;
+        if start < pos || start + raw.get().len() > body.len() {
+            return None;
+        }
         out.extend_from_slice(&body[pos..start]);
         out.extend_from_slice(serde_json::to_string(&minified).ok()?.as_bytes());
         pos = start + raw.get().len();

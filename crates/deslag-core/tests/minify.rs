@@ -120,3 +120,18 @@ fn minification_is_idempotent() {
     let once = minify_json(PRETTY).unwrap();
     assert_eq!(minify_json(&once), None);
 }
+
+#[test]
+fn more_malformed_input_passes_through() {
+    for input in [
+        "{ 1: 2 }",
+        "[ 1,\u{c}2 ]",
+        "[ - ]",
+        "-",
+        "[ -01 ]",
+        "[ 1E+ ]",
+        "[ \"\\u12",
+    ] {
+        assert_eq!(minify_json(input), None, "{input:?}");
+    }
+}

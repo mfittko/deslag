@@ -4,7 +4,7 @@ use std::{convert::Infallible, net::SocketAddr};
 
 use bytes::Bytes;
 use deslag_proxy::{Upstream, serve};
-use http_body_util::{BodyExt, Full};
+use http_body_util::{BodyExt, Full, channel::Channel};
 use hyper::{
     HeaderMap, Request, Response, body::Incoming, server::conn::http1, service::service_fn,
 };
@@ -238,4 +238,73 @@ async fn body_over_the_inspection_cap_is_forwarded_intact() {
     let mut p = proxy(true).await;
     let seen = relay(&mut p, messages(), input.clone()).await;
     assert!(seen.body == input.as_bytes(), "over-cap body changed");
+}
+
+#[tokio::test]
+async fn requests_with_body_integrity_headers_pass_through() {
+    let (input, _) = render(TURN_1);
+    let mut p = proxy(true).await;
+    for name in [
+        "content-digest",
+        "digest",
+        "content-md5",
+        "x-amz-content-sha256",
+        "repr-digest",
+    ] {
+        let req = messages().header(name, "x");
+        assert_eq!(
+            relay(&mut p, req, input.clone()).await.body,
+            input,
+            "{name}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn tool_result_content_that_is_not_text_passes_through() {
+    let input = r#"{"messages": [
+  {"role": "assistant", "content": [
+    {"type": "tool_use", "id": "a", "name": "Bash", "input": {}},
+    {"type": "tool_use", "id": "b", "name": "Bash", "input": {}}
+  ]},
+  {"role": "user", "content": [
+    {"type": "tool_result", "tool_use_id": "a", "content": { "x" : [ 1 ] }},
+    {"type": "tool_result", "tool_use_id": "b", "content": 42}
+  ]}
+]}"#;
+    let mut p = proxy(true).await;
+    assert_eq!(relay(&mut p, messages(), input).await.body, input);
+}
+
+#[tokio::test]
+async fn chunked_request_is_rewritten_with_content_length() {
+    let (input, expected) = render(TURN_1);
+    let (p, mut seen) = proxy(true).await;
+    let stream = TcpStream::connect(p).await.unwrap();
+    let (mut tx, conn) = hyper::client::conn::http1::handshake(TokioIo::new(stream))
+        .await
+        .unwrap();
+    tokio::spawn(conn);
+    let (mut sender, body) = Channel::<Bytes, Infallible>::new(2);
+    let (head, tail) = input.split_at(input.len() / 2);
+    let (head, tail) = (Bytes::from(head.to_owned()), Bytes::from(tail.to_owned()));
+    tokio::spawn(async move {
+        sender.send_data(head).await.unwrap();
+        sender.send_data(tail).await.unwrap();
+    });
+    let resp = tx
+        .send_request(messages().body(body).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+    let up = seen.recv().await.unwrap();
+    assert_eq!(String::from_utf8(up.body.to_vec()).unwrap(), expected);
+    let length = expected.len().to_string();
+    assert_eq!(
+        up.headers
+            .get("content-length")
+            .map(|v| v.to_str().unwrap()),
+        Some(length.as_str())
+    );
+    assert!(up.headers.get("transfer-encoding").is_none());
 }
