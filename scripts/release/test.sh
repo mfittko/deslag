@@ -82,6 +82,14 @@ for v in 1.0.0+build 1.0.0+build-1; do
   set_version "$v"
   expect_fail "check-versions refuses build metadata ($v)" "not a semver" "$r" "$here/check-versions.sh" "v$v"
 done
+for v in 1.0.0-0 1.0.0-10 1.0.0-0a 1.0.0-rc.01a 1.0.0--1; do
+  set_version "$v"
+  expect_ok "check-versions accepts prerelease $v" "$r" "$here/check-versions.sh" "v$v"
+done
+for v in 1.0.0-01 1.0.0-rc.00; do
+  set_version "$v"
+  expect_fail "check-versions refuses a leading-zero numeric prerelease ($v)" "not a semver" "$r" "$here/check-versions.sh" "v$v"
+done
 
 # --- check-changelog-fragment.sh --------------------------------------------
 r=$(new_repo fragments)
@@ -173,6 +181,7 @@ r=$(new_repo bump-empty)
 expect_fail "bump rejects a non-SemVer version" "semver" "$r" "$here/bump.sh" 1.2
 expect_fail "bump rejects a version with an embedded newline" "semver" "$r" "$here/bump.sh" $'1.0.0\nx'
 expect_fail "bump rejects build metadata" "semver" "$r" "$here/bump.sh" 1.0.0+build-1
+expect_fail "bump rejects a leading-zero numeric prerelease" "semver" "$r" "$here/bump.sh" 1.0.0-01
 expect_fail "bump refuses an empty release" "nothing to release" "$r" "$here/bump.sh" 0.2.0
 expect_eq "bump leaves the tree untouched on refusal" "" "$(git -C "$r" status --porcelain)"
 
@@ -275,14 +284,21 @@ mkdir -p "$tmp/bin"
 cat >"$tmp/bin/gh" <<'EOF'
 #!/usr/bin/env bash
 [ -z "${FAKE_GH_FAIL:-}" ] || { echo "gh: HTTP 403" >&2; exit 1; }
+# An issue lookup answers has("pull_request"): true for numbers in FAKE_GH_PRS.
+if [[ $2 =~ /issues/([0-9]+)$ ]]; then
+  [ -z "${FAKE_GH_ISSUE_FAIL:-}" ] || { echo "gh: HTTP 404" >&2; exit 1; }
+  case " ${FAKE_GH_PRS:-} " in *" ${BASH_REMATCH[1]} "*) echo true ;; *) echo false ;; esac
+  exit 0
+fi
 cat "$FAKE_GH_JSON"
 EOF
 chmod +x "$tmp/bin/gh"
 export FAKE_GH_JSON=$tmp/comments.json
 since=2026-01-01T00:00:00Z
 comments() { printf '%s\n' "$@" >"$FAKE_GH_JSON"; }
-# c <login> <created_at> <body> [<updated_at>]: updated_at defaults to created_at (an unedited comment).
-c() { printf '{"user":{"login":"%s"},"created_at":"%s","updated_at":"%s","body":"%s","html_url":"u"}' "$1" "$2" "${4:-$2}" "$3"; }
+# c <login> <created_at> <body> [<updated_at>] [<issue>]: updated_at defaults to
+# created_at (an unedited comment); issue defaults to 1.
+c() { printf '{"user":{"login":"%s"},"created_at":"%s","updated_at":"%s","body":"%s","html_url":"u%s","issue_url":"https://api.github.com/repos/mfittko/deslag/issues/%s"}' "$1" "$2" "${4:-$2}" "$3" "${5:-1}" "${5:-1}"; }
 approve() { PATH="$tmp/bin:$PATH" "$here/verify-approval.sh" "$1" mfittko/deslag "$since"; }
 
 FAKE_GH_FAIL=1 expect_ok "approval skips prereleases without calling gh" "$r" approve 1.0.0-rc.1
@@ -305,6 +321,11 @@ expect_fail "approval rejects another version" "no approval" "$r" approve 1.0.0
 comments "[$(c x 2026-01-02T00:00:00Z a)]" "[$(c mfittko 2026-01-03T00:00:00Z 'approve release v1.0.0')]"
 expect_ok "approval reads every paginated page" "$r" approve 1.0.0
 FAKE_GH_FAIL=1 expect_fail "approval fails closed when gh fails" "could not list" "$r" approve 1.0.0
+comments "[$(c mfittko 2026-01-02T00:00:00Z 'approve release v1.0.0' '' 7)]"
+FAKE_GH_PRS=7 expect_fail "approval rejects a comment on a pull request" "no approval" "$r" approve 1.0.0
+comments "[$(c mfittko 2026-01-02T00:00:00Z 'approve release v1.0.0' '' 7),$(c mfittko 2026-01-03T00:00:00Z 'approve release v1.0.0' '' 8)]"
+FAKE_GH_PRS=7 expect_ok "approval skips a pull request comment and accepts an issue comment" "$r" approve 1.0.0
+FAKE_GH_ISSUE_FAIL=1 expect_fail "approval fails closed when the issue lookup fails" "could not look up" "$r" approve 1.0.0
 expect_fail "approval rejects a malformed since" "since" "$r" "$here/verify-approval.sh" 1.0.0 mfittko/deslag yesterday
 # release.yml passes no <since>: the HEAD committer date (epoch seconds) is the cutoff.
 approve_default() { PATH="$tmp/bin:$PATH" "$here/verify-approval.sh" "$1" mfittko/deslag; }

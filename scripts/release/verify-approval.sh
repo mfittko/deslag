@@ -5,7 +5,8 @@
 # `approve release v<version>` (trimmed, case-insensitive) and was created
 # after <since> (ISO-8601 UTC or epoch seconds; default: HEAD committer date).
 # An edited comment (updated_at differs from created_at) does not count: a
-# write-access collaborator can edit another user's comment.
+# write-access collaborator can edit another user's comment. A comment on a
+# pull request does not count.
 # A prerelease version (a `-` before any `+` build metadata) needs no approval.
 # Any lookup failure fails closed.
 set -euo pipefail
@@ -30,18 +31,28 @@ if ! comments=$(gh api --paginate "repos/$repo/issues/comments?since=$since_iso&
   echo "error: could not list issue comments of $repo; refusing the release" >&2
   exit 1
 fi
-# --paginate prints one array per page; -n with inputs reads them all, and
-# first() stops in jq, so no pipe can SIGPIPE under pipefail.
-match=$(jq -nr --arg op "$operator" --arg phrase "approve release v$version" --argjson since "$since_epoch" '
-  first(
-    inputs[]
-    | select((.user.login | ascii_downcase) == ($op | ascii_downcase))
-    | select((.created_at | fromdateiso8601) > $since)
-    | select(.updated_at == .created_at)
-    | select(any(.body | gsub("\r"; "") | split("\n")[]; gsub("^\\s+|\\s+$"; "") | ascii_downcase == $phrase))
-    | .html_url
-  )
+# --paginate prints one array per page; -n with inputs reads them all.
+# Each candidate line is "<issue number> <html_url>".
+candidates=$(jq -nr --arg op "$operator" --arg phrase "approve release v$version" --argjson since "$since_epoch" '
+  inputs[]
+  | select((.user.login | ascii_downcase) == ($op | ascii_downcase))
+  | select((.created_at | fromdateiso8601) > $since)
+  | select(.updated_at == .created_at)
+  | select(any(.body | gsub("\r"; "") | split("\n")[]; gsub("^\\s+|\\s+$"; "") | ascii_downcase == $phrase))
+  | "\(.issue_url | split("/") | last) \(.html_url)"
 ' <<<"$comments")
+
+# The issue-comments endpoint also returns pull request conversation comments.
+# Only a comment on an issue counts.
+match=
+while read -r number url; do
+  [ -n "$number" ] || continue
+  if ! is_pr=$(gh api "repos/$repo/issues/$number" --jq 'has("pull_request")'); then
+    echo "error: could not look up $repo#$number; refusing the release" >&2
+    exit 1
+  fi
+  if [ "$is_pr" = false ]; then match=$url; break; fi
+done <<<"$candidates"
 
 if [ -z "$match" ]; then
   echo "error: no approval: $operator has not commented 'approve release v$version' on an issue of $repo after $since_iso" >&2
