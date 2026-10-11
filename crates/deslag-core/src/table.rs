@@ -41,7 +41,8 @@ impl Default for TableOptions<'_> {
     }
 }
 
-/// Column type. A column of any type may also hold `null` or missing cells.
+/// Column type. A column of any type may also hold `null`. Only an undotted
+/// column may hold missing cells.
 #[derive(Clone, Copy, PartialEq)]
 enum Ty {
     Int,
