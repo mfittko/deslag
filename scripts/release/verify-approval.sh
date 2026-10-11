@@ -38,6 +38,7 @@ candidates=$(jq -nr --arg op "$operator" --arg phrase "approve release v$version
   | select((.user.login | ascii_downcase) == ($op | ascii_downcase))
   | select((.created_at | fromdateiso8601) > $since)
   | select(.updated_at == .created_at)
+  | select(.issue_url | type == "string")
   | select(any(.body | gsub("\r"; "") | split("\n")[]; gsub("^\\s+|\\s+$"; "") | ascii_downcase == $phrase))
   | "\(.issue_url | split("/") | last) \(.html_url)"
 ' <<<"$comments")
