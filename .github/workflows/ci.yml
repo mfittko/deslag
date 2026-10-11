@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # ponytail: config-only check until DF-001 adds cargo fmt/clippy/test here.
+      # Fails on broken YAML, a non-mapping root (empty file or scalar) and
+      # duplicate mapping keys at any depth.
+      - name: Validate .devloops YAML
+        run: |
+          ruby -ryaml -e '
+            docs = Psych.parse_stream(File.read(ARGV[0])).children
+            abort "#{ARGV[0]}: expected one YAML document" unless docs.size == 1
+            root = docs[0].root
+            abort "#{ARGV[0]}: root must be a mapping" unless root.is_a?(Psych::Nodes::Mapping)
+            walk = lambda do |node|
+              if node.is_a?(Psych::Nodes::Mapping)
+                keys = node.children.each_slice(2).map { |k, _| k.respond_to?(:value) ? k.value : k.to_ruby.inspect }
+                dup = keys.detect { |k| keys.count(k) > 1 }
+                abort "#{ARGV[0]}: duplicate key #{dup.inspect} at line #{node.start_line + 1}" if dup
+              end
+              (node.children || []).each { |c| walk.call(c) }
+            end
+            walk.call(root)
+            YAML.safe_load(File.read(ARGV[0]))
+          ' .devloops
