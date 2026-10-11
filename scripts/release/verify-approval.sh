@@ -4,6 +4,8 @@
 # default: the repo owner) that has a line reading exactly
 # `approve release v<version>` (trimmed, case-insensitive) and was created
 # after <since> (ISO-8601 UTC or epoch seconds; default: HEAD committer date).
+# An edited comment (updated_at differs from created_at) does not count: a
+# write-access collaborator can edit another user's comment.
 # A prerelease version (a `-` before any `+` build metadata) needs no approval.
 # Any lookup failure fails closed.
 set -euo pipefail
@@ -35,6 +37,7 @@ match=$(jq -nr --arg op "$operator" --arg phrase "approve release v$version" --a
     inputs[]
     | select((.user.login | ascii_downcase) == ($op | ascii_downcase))
     | select((.created_at | fromdateiso8601) > $since)
+    | select(.updated_at == .created_at)
     | select(any(.body | gsub("\r"; "") | split("\n")[]; gsub("^\\s+|\\s+$"; "") | ascii_downcase == $phrase))
     | .html_url
   )

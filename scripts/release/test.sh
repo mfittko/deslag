@@ -111,18 +111,18 @@ git -C "$r" rm -q changes/old.md; echo " " >>"$r/plugins/claude/.claude-plugin/p
 expect_ok "fragment check passes a release that deletes fragments with 'changelog: none'" "$r" env PR_BODY='changelog: none' "$here/check-changelog-fragment.sh" "$release_base"
 
 branch no-fragment; echo "// x" >>"$r/crates/a/src/lib.rs"; commit code
-expect_fail "fragment check fails crates/ change without fragment" "changes/" "$r" check ""
+expect_fail "fragment check fails crates/ change without fragment" "need a changes/<slug>.md" "$r" check ""
 expect_ok "fragment check accepts 'changelog: none'" "$r" check "Summary"$'\n'"  Changelog: None  "$'\r'
-expect_fail "fragment check rejects 'changelog: none' inside a sentence" "changes/" "$r" check "no changelog: none needed"
+expect_fail "fragment check rejects 'changelog: none' inside a sentence" "need a changes/<slug>.md" "$r" check "no changelog: none needed"
 
 branch plugin; echo " " >>"$r/plugins/claude/.claude-plugin/plugin.json"; commit plugin
-expect_fail "fragment check fails plugins/ change without fragment" "changes/" "$r" check ""
+expect_fail "fragment check fails plugins/ change without fragment" "need a changes/<slug>.md" "$r" check ""
 
 branch with-fragment; echo "// y" >>"$r/crates/a/src/lib.rs"; printf -- '- Thing.\n' >"$r/changes/thing.md"; commit frag
 expect_ok "fragment check accepts a non-empty fragment" "$r" check ""
 
 branch non-ascii-code; echo "// x" >"$r/crates/a/src/café.rs"; commit code
-expect_fail "fragment check fails a non-ASCII crates/ path without fragment" "changes/" "$r" check ""
+expect_fail "fragment check fails a non-ASCII crates/ path without fragment" "need a changes/<slug>.md" "$r" check ""
 
 branch non-ascii-fragment; echo "// x" >"$r/crates/a/src/café.rs"; printf -- '- Thing.\n' >"$r/changes/café.md"; commit frag
 expect_ok "fragment check counts a non-ASCII fragment name" "$r" check ""
@@ -130,14 +130,14 @@ expect_ok "fragment check counts a non-ASCII fragment name" "$r" check ""
 n=0
 for name in 'x"y.rs' $'x\ty.rs' 'x\y.rs'; do
   n=$((n + 1)); branch "quoted-$n"; echo "// x" >"$r/crates/a/src/$name"; commit code
-  expect_fail "fragment check fails a git-quoted crates/ path without fragment (${name//$'\t'/<TAB>})" "changes/" "$r" check ""
+  expect_fail "fragment check fails a git-quoted crates/ path without fragment (${name//$'\t'/<TAB>})" "need a changes/<slug>.md" "$r" check ""
 done
 
 branch empty-fragment; echo "// z" >>"$r/crates/a/src/lib.rs"; printf '\n  \n' >"$r/changes/empty.md"; commit empty
-expect_fail "fragment check rejects an empty fragment" "changes/" "$r" check ""
+expect_fail "fragment check rejects an empty fragment" 'no "- " entry' "$r" check ""
 
 branch readme-only; echo "// w" >>"$r/crates/a/src/lib.rs"; echo more >>"$r/changes/README.md"; commit readme
-expect_fail "fragment check ignores changes/README.md" "changes/" "$r" check ""
+expect_fail "fragment check ignores changes/README.md" "need a changes/<slug>.md" "$r" check ""
 
 branch bad-fragment; echo "// v" >>"$r/crates/a/src/lib.rs"; printf 'Just text.\n' >"$r/changes/bad.md"; commit bad
 expect_fail "fragment check rejects a line that is no entry" "expected a" "$r" check ""
@@ -281,7 +281,8 @@ chmod +x "$tmp/bin/gh"
 export FAKE_GH_JSON=$tmp/comments.json
 since=2026-01-01T00:00:00Z
 comments() { printf '%s\n' "$@" >"$FAKE_GH_JSON"; }
-c() { printf '{"user":{"login":"%s"},"created_at":"%s","body":"%s","html_url":"u"}' "$1" "$2" "$3"; }
+# c <login> <created_at> <body> [<updated_at>]: updated_at defaults to created_at (an unedited comment).
+c() { printf '{"user":{"login":"%s"},"created_at":"%s","updated_at":"%s","body":"%s","html_url":"u"}' "$1" "$2" "${4:-$2}" "$3"; }
 approve() { PATH="$tmp/bin:$PATH" "$here/verify-approval.sh" "$1" mfittko/deslag "$since"; }
 
 FAKE_GH_FAIL=1 expect_ok "approval skips prereleases without calling gh" "$r" approve 1.0.0-rc.1
@@ -293,6 +294,8 @@ expect_ok "approval accepts the owner's exact line" "$r" approve 1.0.0
 comments "[$(c someone 2026-01-02T00:00:00Z 'approve release v1.0.0')]"
 expect_fail "approval rejects a non-owner comment" "no approval" "$r" approve 1.0.0
 RELEASE_OPERATOR=someone expect_ok "approval honors RELEASE_OPERATOR" "$r" approve 1.0.0
+comments "[$(c mfittko 2026-01-02T00:00:00Z 'approve release v1.0.0' 2026-01-02T00:00:01Z)]"
+expect_fail "approval rejects an edited comment" "no approval" "$r" approve 1.0.0
 comments "[$(c mfittko 2025-12-31T23:59:59Z 'approve release v1.0.0')]"
 expect_fail "approval rejects a comment older than the release commit" "no approval" "$r" approve 1.0.0
 comments "[$(c mfittko 2026-01-02T00:00:00Z 'I do not approve release v1.0.0')]"

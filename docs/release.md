@@ -100,6 +100,8 @@ approve release v1.0.0
   phrase. The phrase inside a longer sentence does not count.
 - The comment was created after the committer date of the tagged commit. Post
   the approval after the bump commit lands on `main`.
+- The comment was never edited. An edited approval comment does not count,
+  so post a new comment instead.
 
 Any lookup failure fails the release.
 
