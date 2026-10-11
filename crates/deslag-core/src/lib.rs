@@ -1,6 +1,10 @@
 //! Shared core for deslag.
+//!
+//! [`compress`] is the core contract. It is pure: the context carries no
+//! network client, filesystem handle or session state. Adapters own decision
+//! recording and decide whether to commit a `Changed` output.
 
-use std::collections::HashSet;
+use std::{borrow::Cow, collections::HashSet, fmt::Write, time::Duration, time::Instant};
 
 /// Crate version, as set in the workspace manifest.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -9,51 +13,405 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const JSON_MINIFY_ID: &str = "json-minify";
 /// Bumped whenever `minify_json` output can change for some input.
 pub const JSON_MINIFY_VERSION: u32 = 1;
+/// Bumped whenever a [`CompressionReport`] field or its serialized form changes.
+pub const REPORT_SCHEMA_VERSION: u32 = 1;
 
-/// Containers nested deeper than this are skipped, which bounds recursion.
-const MAX_DEPTH: usize = 128;
+/// Policy mode: `Off` builds no candidate, `Observe` builds one but emits the
+/// original, `Safe` emits a validated candidate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mode {
+    Off,
+    Observe,
+    Safe,
+}
+
+impl Mode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Mode::Off => "off",
+            Mode::Observe => "observe",
+            Mode::Safe => "safe",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Outcome {
+    /// The output is the candidate.
+    Changed,
+    /// Observe mode: a valid candidate exists, the output is the original.
+    WouldChange,
+    /// The output is the original; `reason` says why.
+    Skipped,
+    /// The candidate failed validation; the output is the original.
+    Failed,
+}
+
+impl Outcome {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Outcome::Changed => "changed",
+            Outcome::WouldChange => "would_change",
+            Outcome::Skipped => "skipped",
+            Outcome::Failed => "failed",
+        }
+    }
+}
+
+/// Bounded skip or failure reason. Only `InvalidCandidate` pairs with `Failed`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Reason {
+    ModeOff,
+    TransformDisabled,
+    BelowMinBytes,
+    AboveMaxBytes,
+    /// Bare scalar, invalid or truncated JSON, or trailing data.
+    UnsupportedFormat,
+    DepthLimit,
+    /// Consumers disagree on which duplicate wins.
+    DuplicateKey,
+    /// An escaped key could hide a duplicate.
+    EscapedKey,
+    /// The candidate is not shorter than the input.
+    InsufficientGain,
+    InvalidCandidate,
+}
+
+impl Reason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Reason::ModeOff => "mode_off",
+            Reason::TransformDisabled => "transform_disabled",
+            Reason::BelowMinBytes => "below_min_bytes",
+            Reason::AboveMaxBytes => "above_max_bytes",
+            Reason::UnsupportedFormat => "unsupported_format",
+            Reason::DepthLimit => "depth_limit",
+            Reason::DuplicateKey => "duplicate_key",
+            Reason::EscapedKey => "escaped_key",
+            Reason::InsufficientGain => "insufficient_gain",
+            Reason::InvalidCandidate => "invalid_candidate",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ValidationOutcome {
+    NotRun,
+    Passed,
+    Failed,
+}
+
+impl ValidationOutcome {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ValidationOutcome::NotRun => "not_run",
+            ValidationOutcome::Passed => "passed",
+            ValidationOutcome::Failed => "failed",
+        }
+    }
+}
+
+/// Resource limits. Input sizes outside `min..=max` bytes are skipped.
+/// Containers nested deeper than `max_json_depth` are skipped.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Limits {
+    pub min_candidate_bytes: usize,
+    pub max_candidate_bytes: usize,
+    pub max_json_depth: usize,
+}
+
+impl Default for Limits {
+    /// Proposed starting values from the rollout policy.
+    fn default() -> Self {
+        Limits {
+            min_candidate_bytes: 2048,
+            max_candidate_bytes: 2_097_152,
+            max_json_depth: 64,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TokenMethod {
+    /// Counted with the target model's own tokenizer.
+    Exact,
+    Estimate,
+}
+
+impl TokenMethod {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TokenMethod::Exact => "exact",
+            TokenMethod::Estimate => "estimate",
+        }
+    }
+}
+
+/// A token count with its provenance. An unknown count is `None`, never zero.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TokenCount {
+    pub count: u64,
+    pub method: TokenMethod,
+    /// Tokenizer name and version, as a plain ASCII identifier.
+    pub tokenizer: &'static str,
+}
+
+/// Optional local token counting capability.
+pub trait TokenCounter {
+    fn count(&self, text: &str) -> TokenCount;
+}
+
+/// Everything [`compress`] may depend on. The same input and context yield the
+/// same output.
+#[derive(Clone, Copy)]
+pub struct CompressionContext<'c> {
+    pub mode: Mode,
+    pub policy_version: u32,
+    /// Enables the JSON minifier, the only transform so far.
+    pub json_minify: bool,
+    pub limits: Limits,
+    /// Without a counter, every token field in the report is `None`.
+    pub token_counter: Option<&'c dyn TokenCounter>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CompressionReport {
+    pub schema_version: u32,
+    pub transform_id: &'static str,
+    pub transform_version: u32,
+    /// `None` when the output is plain JSON with no deslag-defined format.
+    pub format_version: Option<u32>,
+    pub policy_version: u32,
+    pub mode: Mode,
+    pub outcome: Outcome,
+    pub reason: Option<Reason>,
+    pub original_bytes: usize,
+    /// `None` when no candidate was built.
+    pub candidate_bytes: Option<usize>,
+    pub emitted_bytes: usize,
+    pub original_tokens: Option<TokenCount>,
+    pub candidate_tokens: Option<TokenCount>,
+    pub emitted_tokens: Option<TokenCount>,
+    pub compression_duration: Duration,
+    pub validation_outcome: ValidationOutcome,
+}
+
+impl CompressionReport {
+    /// One JSON object with snake_case keys. `reason` is serialized as
+    /// `skip_or_failure_reason`, `compression_duration` as whole nanoseconds,
+    /// and every absent value as `null`.
+    pub fn to_json(&self) -> String {
+        fn opt<T>(v: Option<T>, f: impl FnOnce(T) -> String) -> String {
+            v.map_or_else(|| "null".to_string(), f)
+        }
+        // ponytail: every string value is a static ASCII identifier, so
+        // quoting without escaping is valid JSON.
+        let q = |s: &str| format!("\"{s}\"");
+        let tokens = |t: Option<TokenCount>| {
+            opt(t, |t| {
+                format!(
+                    r#"{{"count":{},"method":"{}","tokenizer":"{}"}}"#,
+                    t.count,
+                    t.method.as_str(),
+                    t.tokenizer
+                )
+            })
+        };
+        let fields = [
+            ("schema_version", self.schema_version.to_string()),
+            ("transform_id", q(self.transform_id)),
+            ("transform_version", self.transform_version.to_string()),
+            (
+                "format_version",
+                opt(self.format_version, |v| v.to_string()),
+            ),
+            ("policy_version", self.policy_version.to_string()),
+            ("mode", q(self.mode.as_str())),
+            ("outcome", q(self.outcome.as_str())),
+            (
+                "skip_or_failure_reason",
+                opt(self.reason, |r| q(r.as_str())),
+            ),
+            ("original_bytes", self.original_bytes.to_string()),
+            (
+                "candidate_bytes",
+                opt(self.candidate_bytes, |v| v.to_string()),
+            ),
+            ("emitted_bytes", self.emitted_bytes.to_string()),
+            ("original_tokens", tokens(self.original_tokens)),
+            ("candidate_tokens", tokens(self.candidate_tokens)),
+            ("emitted_tokens", tokens(self.emitted_tokens)),
+            (
+                "compression_duration",
+                self.compression_duration.as_nanos().to_string(),
+            ),
+            ("validation_outcome", q(self.validation_outcome.as_str())),
+        ];
+        let mut out = String::from("{");
+        for (i, (key, value)) in fields.iter().enumerate() {
+            let sep = if i == 0 { "" } else { "," };
+            let _ = write!(out, "{sep}\"{key}\":{value}");
+        }
+        out.push('}');
+        out
+    }
+}
+
+#[derive(Debug)]
+pub struct CompressionResult<'a> {
+    /// Borrows `input` for every outcome except `Changed`.
+    pub output: Cow<'a, str>,
+    pub report: CompressionReport,
+}
+
+/// Runs the JSON minifier under `ctx`. Any skip or failure returns the input
+/// borrowed, never a partial rewrite.
+pub fn compress<'a>(input: &'a str, ctx: &CompressionContext) -> CompressionResult<'a> {
+    let start = Instant::now();
+    let mut report = CompressionReport {
+        schema_version: REPORT_SCHEMA_VERSION,
+        transform_id: JSON_MINIFY_ID,
+        transform_version: JSON_MINIFY_VERSION,
+        format_version: None,
+        policy_version: ctx.policy_version,
+        mode: ctx.mode,
+        outcome: Outcome::Skipped,
+        reason: None,
+        original_bytes: input.len(),
+        candidate_bytes: None,
+        emitted_bytes: input.len(),
+        original_tokens: None,
+        candidate_tokens: None,
+        emitted_tokens: None,
+        compression_duration: Duration::ZERO,
+        validation_outcome: ValidationOutcome::NotRun,
+    };
+    let output = match decide(input, ctx, &mut report) {
+        Ok(candidate) => candidate,
+        Err(reason) => {
+            report.reason = Some(reason);
+            if reason == Reason::InvalidCandidate {
+                report.outcome = Outcome::Failed;
+            }
+            Cow::Borrowed(input)
+        }
+    };
+    report.compression_duration = start.elapsed();
+    CompressionResult { output, report }
+}
+
+/// Fills candidate fields in `report`. Returns the output for a valid
+/// candidate with gain, or the reason the input passes through.
+fn decide<'a>(
+    input: &'a str,
+    ctx: &CompressionContext,
+    report: &mut CompressionReport,
+) -> Result<Cow<'a, str>, Reason> {
+    let limits = &ctx.limits;
+    if ctx.mode == Mode::Off {
+        return Err(Reason::ModeOff);
+    }
+    if !ctx.json_minify {
+        return Err(Reason::TransformDisabled);
+    }
+    if input.len() < limits.min_candidate_bytes {
+        return Err(Reason::BelowMinBytes);
+    }
+    if input.len() > limits.max_candidate_bytes {
+        return Err(Reason::AboveMaxBytes);
+    }
+    let bytes = minify(input, limits.max_json_depth)?;
+    report.candidate_bytes = Some(bytes.len());
+    // Output is ASCII structure plus whole string lexemes from valid UTF-8 input,
+    // so this check guards the scanner itself.
+    let Ok(candidate) = String::from_utf8(bytes) else {
+        report.validation_outcome = ValidationOutcome::Failed;
+        return Err(Reason::InvalidCandidate);
+    };
+    report.validation_outcome = ValidationOutcome::Passed;
+    if let Some(counter) = ctx.token_counter {
+        report.original_tokens = Some(counter.count(input));
+        report.candidate_tokens = Some(counter.count(&candidate));
+        report.emitted_tokens = report.original_tokens;
+    }
+    if candidate.len() >= input.len() {
+        return Err(Reason::InsufficientGain);
+    }
+    if ctx.mode == Mode::Observe {
+        report.outcome = Outcome::WouldChange;
+        return Ok(Cow::Borrowed(input));
+    }
+    report.outcome = Outcome::Changed;
+    report.emitted_bytes = candidate.len();
+    report.emitted_tokens = report.candidate_tokens;
+    Ok(Cow::Owned(candidate))
+}
 
 /// Removes insignificant whitespace from a JSON object or array.
 ///
 /// Every string, number and literal lexeme is copied byte for byte, so values,
 /// escapes and number precision are preserved. Member and element order is kept.
 ///
-/// `None` means: pass the input through unchanged. It is returned when:
-/// - `input` is a bare scalar, invalid or truncated JSON, or has trailing data;
-/// - any object has a duplicate key, because consumers disagree on which wins;
-/// - any object key contains an escape, because it could hide a duplicate;
-/// - containers nest deeper than 128 levels;
-/// - the input is already minimal, so the result would not be shorter.
+/// `None` means: pass the input through unchanged. Equivalent to [`compress`]
+/// in safe mode with no size limits and a depth limit of 128.
 pub fn minify_json(input: &str) -> Option<String> {
+    let ctx = CompressionContext {
+        mode: Mode::Safe,
+        policy_version: 0,
+        json_minify: true,
+        limits: Limits {
+            min_candidate_bytes: 0,
+            max_candidate_bytes: usize::MAX,
+            max_json_depth: 128,
+        },
+        token_counter: None,
+    };
+    match compress(input, &ctx).output {
+        Cow::Owned(out) => Some(out),
+        Cow::Borrowed(_) => None,
+    }
+}
+
+/// Scans `input` and returns its minified bytes, with no gain check.
+fn minify(input: &str, max_depth: usize) -> Result<Vec<u8>, Reason> {
     let bytes = input.as_bytes();
     let mut s = Scanner {
         b: bytes,
         i: 0,
         out: Vec::with_capacity(bytes.len()),
+        max_depth,
     };
     s.ws();
     // Bare scalars are treated as plain text.
     if !matches!(s.peek(), Some(b'{' | b'[')) {
-        return None;
+        return Err(Reason::UnsupportedFormat);
     }
     s.value(0)?;
     s.ws();
-    if s.i != bytes.len() || s.out.len() >= bytes.len() {
-        return None;
+    if s.i != bytes.len() {
+        return Err(Reason::UnsupportedFormat);
     }
-    // Output is ASCII structure plus whole string lexemes from valid UTF-8 input.
-    String::from_utf8(s.out).ok()
+    Ok(s.out)
 }
+
+type Scan<T = ()> = Result<T, Reason>;
+
+const BAD: Reason = Reason::UnsupportedFormat;
 
 struct Scanner<'a> {
     b: &'a [u8],
     i: usize,
     out: Vec<u8>,
+    max_depth: usize,
 }
 
 impl<'a> Scanner<'a> {
     fn peek(&self) -> Option<u8> {
         self.b.get(self.i).copied()
+    }
+
+    fn next(&self) -> Scan<u8> {
+        self.peek().ok_or(BAD)
     }
 
     /// JSON whitespace only; any other byte outside a lexeme is invalid.
@@ -72,12 +430,12 @@ impl<'a> Scanner<'a> {
         hit
     }
 
-    fn expect(&mut self, c: u8) -> Option<()> {
-        self.eat(c).then_some(())
+    fn expect(&mut self, c: u8) -> Scan {
+        if self.eat(c) { Ok(()) } else { Err(BAD) }
     }
 
-    fn value(&mut self, depth: usize) -> Option<()> {
-        match self.peek()? {
+    fn value(&mut self, depth: usize) -> Scan {
+        match self.next()? {
             b'{' => self.object(depth + 1),
             b'[' => self.array(depth + 1),
             b'"' => self.string().map(drop),
@@ -88,28 +446,31 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn object(&mut self, depth: usize) -> Option<()> {
-        if depth > MAX_DEPTH {
-            return None;
+    fn object(&mut self, depth: usize) -> Scan {
+        if depth > self.max_depth {
+            return Err(Reason::DepthLimit);
         }
         self.expect(b'{')?;
         self.ws();
         if self.eat(b'}') {
-            return Some(());
+            return Ok(());
         }
         let mut keys = HashSet::new();
         loop {
             self.ws();
             if self.peek() != Some(b'"') {
-                return None;
+                return Err(BAD);
             }
             let key = self.string()?;
             // ponytail: keys are compared as raw lexemes, and any escaped key is
-            // skipped. An escaped key such as `"\u0061"` decodes to the same key as
+            // skipped. An escaped key such as `"a"` decodes to the same key as
             // `"a"`, so the two could hide a duplicate. Decode keys
             // if escaped keys turn out to be common in real tool output.
-            if key.contains(&b'\\') || !keys.insert(key) {
-                return None;
+            if key.contains(&b'\\') {
+                return Err(Reason::EscapedKey);
+            }
+            if !keys.insert(key) {
+                return Err(Reason::DuplicateKey);
             }
             self.ws();
             self.expect(b':')?;
@@ -122,14 +483,14 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn array(&mut self, depth: usize) -> Option<()> {
-        if depth > MAX_DEPTH {
-            return None;
+    fn array(&mut self, depth: usize) -> Scan {
+        if depth > self.max_depth {
+            return Err(Reason::DepthLimit);
         }
         self.expect(b'[')?;
         self.ws();
         if self.eat(b']') {
-            return Some(());
+            return Ok(());
         }
         loop {
             self.ws();
@@ -142,53 +503,53 @@ impl<'a> Scanner<'a> {
     }
 
     /// Validates one string lexeme, copies it verbatim and returns it with its quotes.
-    fn string(&mut self) -> Option<&'a [u8]> {
+    fn string(&mut self) -> Scan<&'a [u8]> {
         let start = self.i;
         self.i += 1;
         loop {
-            match self.peek()? {
+            match self.next()? {
                 b'"' => break,
                 b'\\' => {
                     self.i += 1;
-                    match self.peek()? {
+                    match self.next()? {
                         b'"' | b'\\' | b'/' | b'b' | b'f' | b'n' | b'r' | b't' => self.i += 1,
                         b'u' => {
-                            let hex = self.b.get(self.i + 1..self.i + 5)?;
+                            let hex = self.b.get(self.i + 1..self.i + 5).ok_or(BAD)?;
                             if !hex.iter().all(u8::is_ascii_hexdigit) {
-                                return None;
+                                return Err(BAD);
                             }
                             self.i += 5;
                         }
-                        _ => return None,
+                        _ => return Err(BAD),
                     }
                 }
-                c if c < 0x20 => return None,
+                c if c < 0x20 => return Err(BAD),
                 _ => self.i += 1,
             }
         }
         self.i += 1;
         let lexeme = &self.b[start..self.i];
         self.out.extend_from_slice(lexeme);
-        Some(lexeme)
+        Ok(lexeme)
     }
 
-    fn literal(&mut self, word: &[u8]) -> Option<()> {
+    fn literal(&mut self, word: &[u8]) -> Scan {
         if !self.b[self.i..].starts_with(word) {
-            return None;
+            return Err(BAD);
         }
         self.out.extend_from_slice(word);
         self.i += word.len();
-        Some(())
+        Ok(())
     }
 
     /// RFC 8259 number grammar, copied verbatim.
-    fn number(&mut self) -> Option<()> {
+    fn number(&mut self) -> Scan {
         let start = self.i;
         self.skip(b'-');
-        match self.peek()? {
+        match self.next()? {
             b'0' => self.i += 1,
             b'1'..=b'9' => self.digits(),
-            _ => return None,
+            _ => return Err(BAD),
         }
         if self.skip(b'.') {
             self.require_digits()?;
@@ -198,7 +559,7 @@ impl<'a> Scanner<'a> {
             self.require_digits()?;
         }
         self.out.extend_from_slice(&self.b[start..self.i]);
-        Some(())
+        Ok(())
     }
 
     fn skip(&mut self, c: u8) -> bool {
@@ -213,10 +574,10 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn require_digits(&mut self) -> Option<()> {
+    fn require_digits(&mut self) -> Scan {
         let start = self.i;
         self.digits();
-        (self.i > start).then_some(())
+        if self.i > start { Ok(()) } else { Err(BAD) }
     }
 }
 
