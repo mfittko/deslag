@@ -137,6 +137,9 @@ expect_ok "fragment check accepts a CRLF fragment" "$r" check ""
 branch symlink-fragment; echo "// q" >>"$r/crates/a/src/lib.rs"; ln -s ../README.md "$r/changes/link.md"; commit link
 expect_fail "fragment check refuses a symlinked fragment" "regular file" "$r" check ""
 
+branch dot-fragment; echo "// p" >>"$r/crates/a/src/lib.rs"; printf -- '- Fix.\n' >"$r/changes/.fix.md"; commit dot
+expect_fail "fragment check rejects a dot-prefixed fragment name" "must not start with a dot" "$r" check ""
+
 branch rename-base; printf -- '- Old.\n' >"$r/changes/old.md"; commit old
 rename_base=$(git -C "$r" rev-parse HEAD)
 git -C "$r" mv changes/old.md changes/new.md; echo "// r" >>"$r/crates/a/src/lib.rs"; commit rename

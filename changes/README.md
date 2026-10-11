@@ -7,7 +7,8 @@ requests from conflicting on the changelog.
 ## Adding a fragment
 
 Create `changes/<slug>.md` with a unique slug, for example
-`changes/proxy-timeouts.md`. The file must be a non-empty regular file.
+`changes/proxy-timeouts.md`. The file must be a non-empty regular file, and its name must not start with
+a dot because `bump.sh` skips dotfiles.
 
 - A section line (`### Added`, `### Changed` or `### Fixed`) may appear
   anywhere. It switches the section for the entries that follow. Entries

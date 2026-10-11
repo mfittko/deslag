@@ -37,6 +37,13 @@ fi
 found=0 bad=0
 while IFS= read -r -d '' f; do
   case $f in changes/README.md | changes/*/*) continue ;; changes/*.md) ;; *) continue ;; esac
+  # bump.sh globs changes/*.md, and a bash glob skips dotfiles.
+  case $f in changes/.*)
+    echo "error: $f: a fragment name must not start with a dot" >&2
+    bad=1
+    continue
+    ;;
+  esac
   if [ ! -f "$f" ] || [ -L "$f" ]; then
     echo "error: $f: a fragment must be a regular file" >&2
     bad=1
