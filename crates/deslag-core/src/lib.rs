@@ -302,6 +302,14 @@ pub struct CompressionResult<'a> {
     pub report: CompressionReport,
 }
 
+impl CompressionResult<'_> {
+    /// The rewritten content when the outcome is `Changed`, else `None`.
+    /// Adapters commit only this value; every other outcome keeps the original.
+    pub fn into_changed(self) -> Option<String> {
+        (self.report.outcome == Outcome::Changed).then(|| self.output.into_owned())
+    }
+}
+
 /// Runs the JSON minifier under `ctx`. Any skip or failure returns the input
 /// borrowed, never a partial rewrite.
 pub fn compress<'a>(input: &'a str, ctx: &CompressionContext) -> CompressionResult<'a> {
@@ -394,10 +402,7 @@ fn decide<'a>(
 /// with [`FIRST_SLICE_JSON_MINIFY_CONTEXT`]; `Some` exactly when the outcome
 /// is `Changed`.
 pub fn minify_json(input: &str) -> Option<String> {
-    match compress(input, &FIRST_SLICE_JSON_MINIFY_CONTEXT).output {
-        Cow::Owned(out) => Some(out),
-        Cow::Borrowed(_) => None,
-    }
+    compress(input, &FIRST_SLICE_JSON_MINIFY_CONTEXT).into_changed()
 }
 
 /// Scans `input` and returns its minified bytes, with no gain check.

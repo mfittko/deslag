@@ -3,6 +3,7 @@
 use std::io::{self, Read, Write};
 use std::process::ExitCode;
 
+use deslag_core::FIRST_SLICE_JSON_MINIFY_CONTEXT;
 use serde_json::{Value, json};
 
 const USAGE: &str = "usage: deslag hook claude [--minify-json]";
@@ -80,7 +81,7 @@ fn claude_hook(mut input: impl Read, minify_json: bool) -> Result<Option<Value>,
     let Some(minified) = response
         .get("stdout")
         .and_then(Value::as_str)
-        .and_then(deslag_core::minify_json)
+        .and_then(|s| deslag_core::compress(s, &FIRST_SLICE_JSON_MINIFY_CONTEXT).into_changed())
     else {
         return Ok(None);
     };
