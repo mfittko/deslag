@@ -67,12 +67,10 @@ The Claude Code plugin lives in [`plugins/claude`](plugins/claude). It currently
 /plugin install deslag@deslag
 ```
 
-Claude Code 2.1.275 or later also accepts one step: `/plugin install deslag --marketplace mfittko/deslag`.
-
 The plugin does not download anything on its own. Run `/deslag:install` once after you install or update the plugin. The command downloads the release archive for the plugin version and your platform (macOS arm64 or Linux x86_64), verifies it against the release `SHA256SUMS` and installs `deslag` into the private plugin data directory. It never replaces a `deslag` binary on your `PATH`. Until the matching binary is installed, the hook exits without output and tool results stay unchanged.
 
 - `/deslag:status` reports whether the matching binary is installed and how to fix it.
-- `/deslag:uninstall` removes the plugin data directory. `/plugin uninstall deslag@deslag` also removes it.
+- `/deslag:uninstall` removes the installed binary and then the plugin data directory. It leaves the directory in place when it holds files that `/deslag:install` did not create. `/plugin uninstall deslag@deslag` also removes the data directory.
 
 For a local checkout, `claude --plugin-dir plugins/claude` loads the plugin. Its hook also needs `/deslag:install`, or a binary built with `cargo build --release -p deslag-cli` and copied to `$CLAUDE_PLUGIN_DATA/bin/<version>/deslag`.
 

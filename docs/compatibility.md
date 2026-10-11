@@ -61,19 +61,55 @@ Status: experimental. The proxy rewrite is stateless and keeps no replay manifes
 
 ## Plugin distribution
 
-These facts were read from the Claude Code 2.1.296 client binary. `claude plugin validate` passes for the repository root and for `plugins/claude`. The other facts are untested against a live client.
+`claude plugin validate` passes for the repository root and for `plugins/claude`.
+
+### Read from the client binary
+
+These facts were read from the Claude Code 2.1.296 client binary.
 
 - `.claude-plugin/marketplace.json` at the repository root is the default marketplace path for a GitHub source. `/plugin marketplace add mfittko/deslag` reads it. The shorthand also accepts `owner/repo#ref`.
 - A marketplace plugin entry with `source: "./plugins/claude"` points at the plugin directory. The entry carries no `version`; `plugin.json` is the only plugin version surface.
 - The client substitutes `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_PLUGIN_DATA}` in hook commands, in command markdown and in `allowed-tools`. Hook processes also receive both as environment variables.
-- Observed live with 2.1.296 and `--plugin-dir`: plugin command `!` injection substitutes `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_PLUGIN_DATA}` in the command text. It does not export them as environment variables to that shell. The plugin commands therefore pass `"${CLAUDE_PLUGIN_DATA}"` to `install.sh` as an argument. `install.sh` derives the plugin root from its own location.
 - The data directory is `<config dir>/plugins/data/<plugin id>/`. The config dir is `CLAUDE_CONFIG_DIR` or `~/.claude`. The client creates it on demand with default permissions. `/deslag:install` sets it to mode 0700.
 - `claude plugin uninstall` deletes the data directory unless `--keep-data` is passed.
 - A file `commands/<name>.md` in the plugin appears as `/deslag:<name>`.
 
-The hook wrapper `plugins/claude/hooks/deslag-hook.sh` runs `$CLAUDE_PLUGIN_DATA/bin/<plugin version>/deslag hook claude`. When that file is missing, the wrapper exits 0 without output. Only `/deslag:install` downloads anything. `plugins/claude/tests/test.sh` covers the install, checksum, hook and uninstall paths with `file://` fixtures.
+### Observed live
 
-Pending live runs on the maintainer's machine:
+- Plugin command `!` injection substitutes `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_PLUGIN_DATA}` in the command text. It does not export them as environment variables to that shell. The plugin commands therefore pass `"${CLAUDE_PLUGIN_DATA}"` to `install.sh` as an argument. `install.sh` derives the plugin root from its own location.
+- `/deslag:install` installs the binary, and the hook then runs it on a Bash tool call.
+- `/deslag:status` reports an installed and a missing binary.
+- `/deslag:uninstall` removes the data directory.
+- Without a binary, the hook exits 0 and the tool output is unchanged.
+- `claude plugin marketplace add`, `claude plugin install` and `claude plugin uninstall` work against a local checkout. `claude plugin uninstall` removes the data directory.
 
-- `/plugin marketplace add mfittko/deslag` lists the plugin.
+The hook wrapper `plugins/claude/hooks/deslag-hook.sh` runs `$CLAUDE_PLUGIN_DATA/bin/<plugin version>/deslag hook claude`. When that file is missing, the wrapper exits 0 without output. Only `/deslag:install` downloads anything. `tests/plugin/test.sh` covers the install, checksum, hook and uninstall paths with `file://` fixtures.
+
+### Live runs
+
+Each run used a throwaway project directory, `--setting-sources project,local`, `--strict-mcp-config`, `--plugin-dir` (a copy of `plugins/claude`), `--no-session-persistence` and `--max-budget-usd 0.30`. A fixture release was served from a `file://` `DESLAG_RELEASE_BASE_URL`. Its fake binary only logs its arguments. No global settings were edited.
+
+| Run | Action | Client | Model | Result | total_cost_usd |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `/deslag:install` before the data dir argument fix | 2.1.296 | claude-haiku-5-5 | Failed with "CLAUDE_PLUGIN_ROOT is not set". The client does not export plugin variables to `!` shells | 0 |
+| 2 | `/deslag:install` | 2.1.296 | claude-haiku-5-5 | "Installed deslag 0.1.0 for aarch64-apple-darwin at `<data>/bin/0.1.0/deslag`" | 0.00147325 |
+| 3 | Bash tool call `echo hello-deslag` with the binary installed | 2.1.296 | claude-haiku-5-5 | The fake binary logged `hook claude`; model saw `hello-deslag` | 0.00117793 |
+| 4 | `/deslag:status` | 2.1.296 | claude-haiku-5-5 | Installed | 0.00096749 |
+| 5 | `/deslag:uninstall` | 2.1.296 | claude-haiku-5-5 | Removed the data directory | 0.00097209 |
+| 6 | `/deslag:status` | 2.1.296 | claude-haiku-5-5 | Missing, with the fix hint | 0.00096049 |
+| 7 | Bash tool call with no binary | 2.1.296 | claude-haiku-5-5 | Hook finished with status 0 (6 ms); model saw `hello-deslag` | 0.00042008 |
+
+Total: USD 0.00597133.
+
+These zero-cost CLI runs used an isolated `CLAUDE_CONFIG_DIR`. No global settings were touched.
+
+- `claude plugin marketplace add <worktree path>` added the marketplace `deslag`.
+- `claude plugin install deslag@deslag` installed version 0.1.0.
+- After `install.sh` seeded `plugins/data/deslag-deslag`, `claude plugin uninstall deslag@deslag` removed that data directory.
+
+The live runs used the plugin scripts as they were before the pre-PR review fixes. Those fixes cover symlinked version dirs, the cleanup trap, quoted command paths, download timeouts, status detection, scoped uninstall and the missing-subcommand usage message.
+
+### Pending
+
+- `/plugin marketplace add mfittko/deslag` against `main`. This needs the merge.
 - `/deslag:install` against a published release.
