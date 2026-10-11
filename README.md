@@ -20,7 +20,7 @@ Structural encodings stay opt-in until paired task evaluations pass. See [PLAN Â
 
 ## Proxy limits
 
-`deslag proxy --upstream <url> [--listen <addr>] [--minify-json]` runs the proxy. It listens on `127.0.0.1:8789` by default and accepts only loopback addresses. It bounds connections and waiting time. The defaults are constants in `crates/deslag-proxy/src/lib.rs`:
+`deslag proxy --upstream <url> [--listen <addr>] [--minify-json]` runs the proxy. It listens on `127.0.0.1:8789` by default. `--listen` takes a literal `IP:port`, for example `127.0.0.1:8789` or `[::1]:8789`, and the IP must be a loopback address. It bounds connections and waiting time. The defaults are constants in `crates/deslag-proxy/src/lib.rs`:
 
 | Limit | Default | Effect |
 | --- | --- | --- |
