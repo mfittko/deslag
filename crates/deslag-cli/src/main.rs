@@ -63,8 +63,9 @@ fn claude_hook(mut input: impl Read) -> Result<(), String> {
     if event.get("tool_name").and_then(Value::as_str).is_none() {
         return Err("hook input has no tool_name".to_string());
     }
-    if !event.get("tool_response").is_some_and(Value::is_object) {
-        return Err("hook input has no object tool_response".to_string());
+    // MCP tools return strings or content-block arrays, so any non-null value is valid.
+    if event.get("tool_response").is_none_or(Value::is_null) {
+        return Err("hook input has no tool_response".to_string());
     }
     Ok(())
 }
@@ -197,9 +198,20 @@ mod tests {
             r#"{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_response":{}}"#,
             r#"{"tool_name":"Bash","tool_response":{}}"#,
             r#"{"hook_event_name":"PostToolUse","tool_response":{}}"#,
-            r#"{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":"x"}"#,
+            r#"{"hook_event_name":"PostToolUse","tool_name":"Bash"}"#,
+            r#"{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":null}"#,
         ] {
             assert!(claude_hook(input.as_bytes()).is_err(), "{input}");
+        }
+    }
+
+    #[test]
+    fn non_object_tool_responses_pass() {
+        for input in [
+            r#"{"hook_event_name":"PostToolUse","tool_name":"mcp__x__y","tool_response":"x"}"#,
+            r#"{"hook_event_name":"PostToolUse","tool_name":"mcp__x__y","tool_response":[{"type":"text","text":"x"}]}"#,
+        ] {
+            assert_eq!(claude_hook(input.as_bytes()), Ok(()), "{input}");
         }
     }
 }

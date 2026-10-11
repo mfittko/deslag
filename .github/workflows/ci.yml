@@ -34,7 +34,8 @@ jobs:
             YAML.safe_load(File.read(ARGV[0]))
           ' .devloops
       # Installs the toolchain and components pinned in rust-toolchain.toml.
-      # ponytail: no cargo cache while the workspace has no dependencies.
+      # ponytail: no cargo cache; the only dependency is serde_json.
+      # Add a cargo registry cache when build time grows.
       - name: Install Rust toolchain
         run: rustup toolchain install
       - name: cargo fmt

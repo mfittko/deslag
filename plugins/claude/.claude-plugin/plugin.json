@@ -1,5 +1,5 @@
 {
   "name": "deslag",
   "version": "0.1.0",
-  "description": "Deterministic compression of model-visible tool results via a PostToolUse hook. Requires the deslag binary on PATH."
+  "description": "PostToolUse hook adapter for deslag (currently a no-op; compression not yet enabled). Requires the deslag binary on PATH."
 }

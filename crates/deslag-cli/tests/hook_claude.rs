@@ -61,3 +61,14 @@ fn unknown_arguments_print_usage_and_exit_64() {
         assert!(String::from_utf8_lossy(&output.stderr).contains("usage"));
     }
 }
+
+#[test]
+fn oversize_input_is_drained_and_fails_open() {
+    // Well past the 16 MiB cap and the pipe buffer: without the drain, write_all in run() hits EPIPE.
+    let input = vec![b' '; 17 * 1024 * 1024];
+    let output = run(&["hook", "claude"], &input);
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(stderr.lines().count(), 1, "{stderr}");
+}
