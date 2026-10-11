@@ -6,9 +6,9 @@ PLAN §13.2 budgets remain provisional. This file records measurements only; rel
 
 | Field | Value |
 | --- | --- |
-| Date (UTC) | 2026-10-11T17:12:53Z |
-| Commit | 8ab0503f97c5f28482837af70e785873b08b9bd8 |
-| Uncommitted tracked changes | no |
+| Date (UTC) | 2026-10-11T17:21:33Z |
+| Commit | a47ce5f8a3673dd223f56080353ddc30bad1b33f |
+| Uncommitted changes (tracked or untracked) | no |
 | CPU | Apple M5 Max |
 | Logical CPUs | 18 |
 | OS | Darwin st13521495 25.6.0 Darwin Kernel Version 25.6.0: Sat Jul 11 15:27:04 PDT 2026; root:xnu-12377.161.13~4/RELEASE_ARM64_T6050 arm64 |
@@ -33,29 +33,29 @@ LLVM version: 22.1.6
 
 | mode | p50 | p95 | p99 |
 | --- | --- | --- | --- |
-| no-op (no flag) | 1.386041ms | 1.5925ms | 1.717875ms |
-| --minify-json | 1.569292ms | 1.698208ms | 1.8895ms |
+| no-op (no flag) | 1.267666ms | 1.688875ms | 1.935917ms |
+| --minify-json | 1.548167ms | 1.710041ms | 1.814ms |
 
 ### deslag-core minify_json (concurrency 1, warmup 10)
 
 | input | bytes | changed | samples | p50 | p95 | p99 | MiB/s at p50 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| repetitive | 2131 | yes | 2000 | 7.375µs | 8.792µs | 8.917µs | 276 |
-| incompressible | 2071 | no | 2000 | 1.417µs | 1.583µs | 1.916µs | 1394 |
-| repetitive | 16468 | yes | 2000 | 32.416µs | 43.5µs | 46.541µs | 484 |
-| incompressible | 16421 | no | 2000 | 7.917µs | 9µs | 13.375µs | 1978 |
-| repetitive | 65627 | yes | 1022 | 99.833µs | 104.458µs | 112.375µs | 627 |
-| incompressible | 65561 | no | 1023 | 29.458µs | 30.625µs | 34.416µs | 2122 |
-| repetitive | 262193 | yes | 255 | 405.084µs | 427.042µs | 438.625µs | 617 |
-| incompressible | 262156 | no | 255 | 113.625µs | 122.625µs | 133.541µs | 2200 |
-| repetitive | 1048628 | yes | 100 | 1.599083ms | 1.642833ms | 1.673ms | 625 |
-| incompressible | 1048606 | no | 100 | 447.917µs | 472.25µs | 479.333µs | 2233 |
+| repetitive | 2131 | yes | 2000 | 7.542µs | 8.791µs | 9.042µs | 269 |
+| incompressible | 2071 | no | 2000 | 1.792µs | 2.166µs | 2.25µs | 1102 |
+| repetitive | 16468 | yes | 2000 | 30.625µs | 43.667µs | 44.709µs | 513 |
+| incompressible | 16421 | no | 2000 | 7.209µs | 7.917µs | 8.042µs | 2172 |
+| repetitive | 65627 | yes | 1022 | 96.792µs | 105.917µs | 114.5µs | 647 |
+| incompressible | 65561 | no | 1023 | 27.375µs | 30.541µs | 37.625µs | 2284 |
+| repetitive | 262193 | yes | 255 | 385.791µs | 412.5µs | 420.583µs | 648 |
+| incompressible | 262156 | no | 255 | 109.792µs | 119.875µs | 125.5µs | 2277 |
+| repetitive | 1048628 | yes | 100 | 1.596417ms | 1.647458ms | 1.664125ms | 626 |
+| incompressible | 1048606 | no | 100 | 438.75µs | 463.125µs | 477.708µs | 2279 |
 
 ### deslag-proxy request latency (273190 byte request, concurrency 1, warmup 20, samples 500)
 
 | path | upstream bytes | p50 | p95 | p99 |
 | --- | --- | --- | --- | --- |
-| direct to mock | 273190 | 79.625µs | 159.375µs | 196.792µs |
-| proxy, transparent | 273190 | 107.875µs | 128.125µs | 138.584µs |
-| proxy, --minify-json | 244704 | 1.183584ms | 1.250667ms | 1.343792ms |
+| direct to mock | 273190 | 84.666µs | 103.5µs | 111.833µs |
+| proxy, transparent | 273190 | 107.291µs | 122.584µs | 130.334µs |
+| proxy, --minify-json | 244704 | 1.198875ms | 1.312459ms | 1.3505ms |
 
