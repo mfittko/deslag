@@ -6,7 +6,7 @@
 
 ## Context
 
-The dev-loops size budget computes `logicLoc = code + testDiscount * test` with a default `testDiscount` of 0.25 and escalates above 400. An escalated merge needs a fresh per-PR owner approval, even under the autonomous merge policy in [ADR 0001](0001-dev-loops-autonomy.md).
+The dev-loops size budget computes `logicLoc = (code - commentOnly) + testDiscount * test` with a default `testDiscount` of 0.25 and escalates above 400. An escalated merge needs a fresh per-PR owner approval, even under the autonomous merge policy in [ADR 0001](0001-dev-loops-autonomy.md).
 
 DF-003 (PR #29) escalated at 409. About 215 of those lines were proxy logic. The rest were blank lines, comment lines the detector missed, the inline `#[cfg(test)]` unit-test module in `src/lib.rs` (counted as code), and 25% of the integration tests in `tests/`.
 
