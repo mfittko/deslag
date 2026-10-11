@@ -79,4 +79,5 @@ fn main() {
         bench("repetitive", &repetitive(kib * 1024));
         bench("incompressible", &incompressible(kib * 1024));
     }
+    println!();
 }

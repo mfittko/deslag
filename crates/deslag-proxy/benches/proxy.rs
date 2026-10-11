@@ -133,4 +133,5 @@ async fn main() {
             percentile(&times, 0.99),
         );
     }
+    println!();
 }
