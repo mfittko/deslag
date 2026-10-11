@@ -27,7 +27,8 @@ pub enum DecodeError {
     /// directive, or a directive with no unit directly above it. For
     /// `lines-v2` it also covers a non-canonical template directive, bad
     /// positions, missing rows, and a row with the wrong value count, an empty
-    /// value or a tab in a value.
+    /// value, a tab in a value, a missing `\n`, or the reserved prefix without
+    /// the escape.
     InvalidDirective,
     /// The decoded output would exceed the caller's bound.
     OutputTooLarge,

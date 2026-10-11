@@ -221,6 +221,22 @@ fn compress_reports_changed() {
 }
 
 #[test]
+fn templates_take_precedence_over_runs() {
+    let input = format!("starting\n{}done\n", log(30, "request served", "\n"));
+    let both = CompressionContext {
+        exact_line_runs: true,
+        ..on(Mode::Safe)
+    };
+    let r = compress(&input, &both);
+    assert_eq!(r.report.outcome, Outcome::Changed);
+    assert_eq!(r.report.transform_id, "line-templates");
+    assert_eq!(r.report.transform_version, 1);
+    assert_eq!(r.report.format_version, Some(2));
+    assert!(r.output.starts_with(HEADER));
+    assert_eq!(decode_lines(&r.output, input.len()).unwrap(), input);
+}
+
+#[test]
 fn lines_v1_output_still_decodes() {
     let input = format!("{}{}", "abcdefghijklmnop\n".repeat(5), log(5, "x", "\n"));
     let v1 = encode_lines(&input).unwrap();
