@@ -3,7 +3,6 @@
 use std::io::{self, Read, Write};
 use std::process::ExitCode;
 
-use deslag_core::{CompressionContext, Limits, Mode, Outcome, compress};
 use serde_json::{Value, json};
 
 const USAGE: &str = "usage: deslag hook claude [--minify-json]";
@@ -81,33 +80,13 @@ fn claude_hook(mut input: impl Read, minify_json: bool) -> Result<Option<Value>,
     let Some(minified) = response
         .get("stdout")
         .and_then(Value::as_str)
-        .and_then(minified)
+        .and_then(deslag_core::minify_json)
     else {
         return Ok(None);
     };
     let mut updated = response.clone();
     updated["stdout"] = Value::String(minified);
     Ok(replacement(&event, updated))
-}
-
-/// Safe mode with no size limits and a depth limit of 128, so behavior matches
-/// the first minification slice.
-const CONTEXT: CompressionContext<'static> = CompressionContext {
-    mode: Mode::Safe,
-    policy_version: 1,
-    json_minify: true,
-    limits: Limits {
-        min_candidate_bytes: 0,
-        max_candidate_bytes: usize::MAX,
-        max_json_depth: 128,
-    },
-    token_counter: None,
-};
-
-/// The minified text, only when the core reports `Changed`.
-fn minified(text: &str) -> Option<String> {
-    let result = compress(text, &CONTEXT);
-    (result.report.outcome == Outcome::Changed).then(|| result.output.into_owned())
 }
 
 /// Builds the PostToolUse output that replaces the tool result with `updated`.

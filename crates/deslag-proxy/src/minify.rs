@@ -24,7 +24,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use deslag_core::{CompressionContext, Limits, Mode, Outcome, compress};
+use deslag_core::minify_json;
 use http_body_util::BodyExt;
 use hyper::{
     HeaderMap, Method, Request, StatusCode,
@@ -252,7 +252,7 @@ fn rewrite(body: &[u8]) -> Option<Vec<u8>> {
     let mut out = Vec::with_capacity(body.len());
     let mut pos = 0;
     for raw in targets {
-        let Some(minified) = parse::<String>(raw).and_then(|s| minified(&s)) else {
+        let Some(minified) = parse::<String>(raw).and_then(|s| minify_json(&s)) else {
             continue;
         };
         let start = (raw.get().as_ptr() as usize).checked_sub(body.as_ptr() as usize)?;
@@ -268,26 +268,6 @@ fn rewrite(body: &[u8]) -> Option<Vec<u8>> {
     }
     out.extend_from_slice(&body[pos..]);
     Some(out)
-}
-
-/// Safe mode with no size limits and a depth limit of 128, so behavior matches
-/// the first minification slice.
-const CONTEXT: CompressionContext<'static> = CompressionContext {
-    mode: Mode::Safe,
-    policy_version: 1,
-    json_minify: true,
-    limits: Limits {
-        min_candidate_bytes: 0,
-        max_candidate_bytes: usize::MAX,
-        max_json_depth: 128,
-    },
-    token_counter: None,
-};
-
-/// The minified text, only when the core reports `Changed`.
-fn minified(text: &str) -> Option<String> {
-    let result = compress(text, &CONTEXT);
-    (result.report.outcome == Outcome::Changed).then(|| result.output.into_owned())
 }
 
 fn parse<'a, T: Deserialize<'a>>(raw: &'a RawValue) -> Option<T> {
