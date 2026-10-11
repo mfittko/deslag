@@ -1,0 +1,25 @@
+name: changelog
+
+# Separate from ci.yml so that editing the PR body (adding or removing
+# `changelog: none`) re-runs only this check. The PR body reaches the script
+# through env and is never interpolated into the shell.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  fragment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require a changelog fragment
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: scripts/release/check-changelog-fragment.sh "$BASE_SHA"
