@@ -24,6 +24,7 @@ use std::{
 };
 
 use bytes::Bytes;
+use deslag_core::{FIRST_SLICE_JSON_MINIFY_CONTEXT, compress};
 use http_body_util::BodyExt;
 use hyper::{
     HeaderMap, Method, Request, StatusCode,
@@ -251,7 +252,9 @@ fn rewrite(body: &[u8]) -> Option<Vec<u8>> {
     let mut out = Vec::with_capacity(body.len());
     let mut pos = 0;
     for raw in targets {
-        let Some(minified) = parse::<String>(raw).and_then(|s| deslag_core::minify_json(&s)) else {
+        let Some(minified) = parse::<String>(raw)
+            .and_then(|s| compress(&s, &FIRST_SLICE_JSON_MINIFY_CONTEXT).into_changed())
+        else {
             continue;
         };
         let start = (raw.get().as_ptr() as usize).checked_sub(body.as_ptr() as usize)?;

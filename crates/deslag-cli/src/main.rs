@@ -4,6 +4,7 @@ use std::io::{self, Read, Write};
 use std::net::SocketAddr;
 use std::process::ExitCode;
 
+use deslag_core::FIRST_SLICE_JSON_MINIFY_CONTEXT;
 use deslag_proxy::{Upstream, serve};
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
@@ -134,7 +135,7 @@ fn claude_hook(mut input: impl Read, minify_json: bool) -> Result<Option<Value>,
     let Some(minified) = response
         .get("stdout")
         .and_then(Value::as_str)
-        .and_then(deslag_core::minify_json)
+        .and_then(|s| deslag_core::compress(s, &FIRST_SLICE_JSON_MINIFY_CONTEXT).into_changed())
     else {
         return Ok(None);
     };

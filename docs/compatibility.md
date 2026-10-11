@@ -38,7 +38,7 @@ Runs 2 and 3 used throwaway `jq` hooks to characterize the client. The deslag ad
 
 ### JSON minification (opt-in)
 
-`deslag hook claude --minify-json` and `deslag proxy --minify-json` remove insignificant whitespace from JSON in Bash tool results only. Both call `deslag_core::minify_json`. The plugin hook in `plugins/claude` does not pass the flag, so it stays a no-op. Neither flag has been run against a live client. Token savings from whitespace removal have not been measured.
+`deslag hook claude --minify-json` and `deslag proxy --minify-json` remove insignificant whitespace from JSON in Bash tool results only. Both call `deslag_core::compress` with `FIRST_SLICE_JSON_MINIFY_CONTEXT` and commit the output only for a `Changed` result, through `into_changed`. The plugin hook in `plugins/claude` does not pass the flag, so it stays a no-op. Neither flag has been run against a live client. Token savings from whitespace removal have not been measured.
 
 Status: experimental. The proxy rewrite is stateless and keeps no replay manifest yet.
 
@@ -107,8 +107,11 @@ Each run used a throwaway project directory, `--setting-sources project,local`, 
 | 14 | Bash tool call `echo hello-deslag` | 2.1.296 | claude-haiku-5-5 | The fake binary logged `hook claude`; model saw `hello-deslag` | 0.00039158 |
 | 15 | `/deslag:uninstall` | 2.1.296 | claude-haiku-5-5 | Removed the data directory | 0.00021261 |
 | 16 | `/deslag:status` | 2.1.296 | claude-haiku-5-5 | Missing, with the fix hint | 0.00019403 |
+| 17 | `/deslag:install` against the published `v0.1.0-alpha.1` release (default `https` base URL, plugin version set to `0.1.0-alpha.1` in the copy) | 2.1.296 | claude-haiku-5-5 | Installed the real arm64 binary at `<data>/bin/0.1.0-alpha.1/deslag`; data and bin dirs mode 0700 | 0.00098499 |
+| 18 | Bash tool call `echo hello-deslag` with the real binary installed | 2.1.296 | claude-haiku-5-5 | Hook finished with status 0 (409 ms, first launch); model saw `hello-deslag` | 0.00039158 |
+| 19 | `/deslag:uninstall` | 2.1.296 | claude-haiku-5-5 | Removed the data directory | 0.00020361 |
 
-Total: USD 0.00775653. Runs 1-7 used the scripts before the pre-PR review fixes. Runs 12-16 used the scripts at commit 9e498e83e100a6e3216364740e182dc743e9dd16. Later `install.sh` changes, including the refusals of a symlinked bin dir, version dir, binary path and marker, are covered by `tests/plugin/test.sh` only and did not run live.
+Total: USD 0.00933671. Runs 1-7 used the scripts before the pre-PR review fixes. Runs 12-16 used the scripts at commit 9e498e83e100a6e3216364740e182dc743e9dd16. Runs 17-19 used the scripts at commit eb1708138a311bcd8eec4dd94a81c4d03a72179f. The refusals of a symlinked bin dir, version dir, binary path and marker are covered by `tests/plugin/test.sh` only.
 
 These zero-cost CLI runs used an isolated `CLAUDE_CONFIG_DIR`. No global settings were touched.
 
@@ -122,4 +125,3 @@ The pre-PR review fixes between runs 7 and 12 cover symlinked version dirs, the 
 ### Pending
 
 - `/plugin marketplace add mfittko/deslag` against `main`. This needs the merge. The same GitHub source at the branch ref `mfittko/deslag#issue-40` passed. That branch-ref run is the accepted pre-merge evidence for the acceptance criterion "`/plugin marketplace add mfittko/deslag` lists the plugin". The post-merge run against `main` completes it.
-- `/deslag:install` against a published release.
