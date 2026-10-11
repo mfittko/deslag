@@ -7,6 +7,8 @@ until a release folds them in; see `changes/README.md` and `docs/release.md`.
 
 ## Unreleased
 
+## 0.1.0-alpha.1 - 2026-10-11
+
 ### Added
 
 - Rust workspace with a pinned toolchain and CI that runs fmt, clippy and tests (#27)
@@ -16,7 +18,13 @@ until a release folds them in; see `changes/README.md` and `docs/release.md`.
 - Decision record for session identity, ownership and replay (#34)
 - Opt-in experimental JSON minification of Bash tool output: `deslag hook claude --minify-json` and `deslag proxy --minify-json`, plus benchmark runners and a measured baseline (#37)
 - Release pipeline: changelog fragments, version lockstep check, bump script and a tag-driven release workflow that publishes macOS arm64 and Linux x86_64 archives with SHA256SUMS and build provenance (#39)
+- `deslag proxy --upstream <url> [--listen <addr>] [--minify-json]` runs the proxy from the `deslag` CLI and reports the bound address (#33)
+
+### Changed
+
+- `deslag proxy` replaces the unreleased `deslag-proxy` binary (#33)
 
 ### Fixed
 
 - The proxy keeps request paths inside the configured base path (#35)
+- `Upstream` debug output redacts the upstream base path like its display form (#33)
