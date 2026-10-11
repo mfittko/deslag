@@ -12,8 +12,9 @@
 //! change. Do not enable the hook and proxy flags at the same time: one
 //! component owns compression. Requests with `content-encoding` pass through,
 //! so a client that compresses only some requests would see drift. Requests
-//! with a body-integrity header or with trailers also pass through. `/v1/messages/count_tokens`
-//! is not rewritten, so its counts can overstate.
+//! with a body-integrity header or with trailers also pass through. Trailers
+//! are not forwarded upstream. `/v1/messages/count_tokens` is not rewritten,
+//! so its counts can overstate.
 
 use std::{
     collections::HashSet,
