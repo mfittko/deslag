@@ -14,9 +14,11 @@ DF-003 (PR #29) escalated at 409. About 215 of those lines were proxy logic. The
 
 - `gates.size.testDiscount: 0`. Test files do not count toward the budget.
 - `gates.size.tiers.default.softLoc: 800`. The waiver threshold stays at 1500 and the absolute ceiling at 2000.
+- When a PR exceeds the soft limit, split it into smaller PRs or stack it on a prior PR. Do not ask for a per-PR approval or a waiver to merge an oversized PR. Approval is the exception, for a change that cannot be split.
 
 ## Consequences
 
-- PRs up to 800 logic lines merge under the standing authorization when the gates are clean. Larger PRs still need a per-PR approval.
+- PRs up to 800 logic lines merge under the standing authorization when the gates are clean.
+- A PR above 800 logic lines is split or stacked before merge. A per-PR approval or waiver applies only to a change that cannot be split.
 - Inline Rust unit-test modules under `src/` still count as code, because the dev-loops classifier works per file. That is a dev-loops limitation, tracked upstream.
 - Test-heavy PRs no longer escalate on test volume. Test quality stays with the gate review angles.
