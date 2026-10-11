@@ -64,7 +64,7 @@ These obligations apply when a later change copies or adapts upstream source:
 - llm-proxy (MIT): keep the copyright notice `Copyright (c) 2025 Manuel Fittko, sofatutor GmbH` and the MIT permission notice with every copied or substantial portion.
 - Both: record each copied or adapted file with its upstream path and pinned commit, as PLAN §15 requires.
 
-llm-proxy (MIT) source may be distributed under either deslag license. Headroom (Apache-2.0) source can be included, but copied or adapted Headroom files remain under Apache-2.0, and the MIT option does not cover them. The release license task in PLAN §15 must confirm this before such code ships.
+llm-proxy (MIT) source may be distributed under either deslag license. Headroom (Apache-2.0) source can be included. Copied or adapted Headroom files stay under Apache-2.0 only. The release license task in PLAN §15 must confirm this before such code ships.
 
 ### No copied source
 
@@ -74,4 +74,4 @@ This change copies no source from Headroom or llm-proxy. deslag therefore has no
 
 - The first change that copies upstream source must add the attribution and a provenance record. If the source is from Headroom, it must also add a `NOTICE` file.
 - A later reuse of a newer upstream revision must inspect `LICENSE` and `NOTICE` again at that commit and update this record.
-- Legal review of the release is still pending. This record lists the observed license texts. It does not replace the release license task in PLAN §15.
+- Legal review of the release is still pending in the PLAN §15 release license task. This record lists the observed license texts as input to that task.
