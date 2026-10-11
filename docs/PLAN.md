@@ -343,13 +343,13 @@ Compress runs of byte-identical consecutive lines in supported plain-text tool o
 
 Use an unambiguous versioned representation with escaping. Define it before enabling it. A structured run encoding is acceptable, but apply it only when wrapper overhead is outweighed by actual gain.
 
-Do not merge similar lines with different timestamps, IDs, paths, counts, or error messages. Do not reorder nonconsecutive repetitions. Do not suppress error lines or successful test output using relevance heuristics.
+In the exact-repetition codec (`lines-v1`), do not merge similar lines with different timestamps, IDs, paths, counts, or error messages. Do not reorder nonconsecutive repetitions. Do not suppress error lines or successful test output using relevance heuristics.
 
 A decoder must reconstruct the original text bytes exactly. Mixed LF/CRLF, empty lines, partial final lines, and strings resembling encoding markers need tests.
 
 DF-013 implements this as `lines-v1`, specified in [compression-formats.md](compression-formats.md).
 
-The line-template codec implements templates for consecutive lines that differ only in variable tokens as `lines-v2`, specified in [compression-formats.md](compression-formats.md). It is a separate opt-in transform, and a constant token that differs still ends a template.
+The line-template codec implements templates for consecutive lines that differ only in variable tokens as `lines-v2`, specified in [compression-formats.md](compression-formats.md). It is a separate opt-in transform and the only exception to the merge rule above. It merges lines that differ only in variable-class tokens (timestamps, IDs, counts, paths). A constant token that differs, such as an error message, still ends a template, so those lines are never merged.
 
 ### 7.4 Transform composition and exactness
 
