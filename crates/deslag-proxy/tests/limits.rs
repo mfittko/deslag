@@ -113,10 +113,16 @@ async fn stalled_upstream() -> (SocketAddr, Vec<TcpStream>, TcpListener) {
     let listener = socket.listen(1).unwrap();
     let addr = listener.local_addr().unwrap();
     let mut held = Vec::new();
+    // Two stalls in a row, so one slow connect on a loaded host is not mistaken for a full queue.
+    let mut stalls = 0;
     for _ in 0..64 {
         match timeout(SHORT, TcpStream::connect(addr)).await {
-            Ok(stream) => held.push(stream.unwrap()),
-            Err(_) => return (addr, held, listener),
+            Ok(stream) => {
+                held.push(stream.unwrap());
+                stalls = 0;
+            }
+            Err(_) if stalls == 1 => return (addr, held, listener),
+            Err(_) => stalls += 1,
         }
     }
     panic!("listen backlog never filled; cannot stall a connect");
