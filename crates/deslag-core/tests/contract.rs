@@ -45,6 +45,7 @@ fn ctx(mode: Mode) -> CompressionContext<'static> {
         policy_version: 7,
         json_minify: true,
         json_table: false,
+        exact_line_runs: false,
         limits: Limits {
             min_candidate_bytes: 0,
             ..Limits::default()

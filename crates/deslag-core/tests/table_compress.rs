@@ -298,3 +298,44 @@ fn compress_never_selects_markdown_kv() {
         }
     }
 }
+
+#[test]
+fn table_and_line_runs_route_by_input() {
+    let text = "connection refused by upstream\n".repeat(20);
+    let table = rows(10);
+    for json_minify in [false, true] {
+        let ctx = CompressionContext {
+            exact_line_runs: true,
+            ..ctx(Mode::Safe, json_minify, true)
+        };
+        // A table-eligible array goes to table-v1 only.
+        let r = compress(&table, &ctx);
+        assert_eq!(r.report.transform_id, JSON_TABLE_ID, "{json_minify}");
+        assert_eq!(decode(&r.output).unwrap(), minify_json(&table).unwrap());
+        // Plain text goes to the line-run codec only.
+        let r = compress(&text, &ctx);
+        assert_eq!(r.report.outcome, Outcome::Changed, "{json_minify}");
+        assert_eq!(r.report.transform_id, "exact-line-runs");
+        assert_eq!(
+            deslag_core::decode_lines(&r.output, text.len()).unwrap(),
+            text
+        );
+        // An object table-v1 rejects goes to the minifier when it is on.
+        let r = compress(OBJECT, &ctx);
+        let want = if json_minify {
+            JSON_MINIFY_ID
+        } else {
+            "exact-line-runs"
+        };
+        assert_eq!(r.report.transform_id, want);
+    }
+    // With every transform switch off, compress skips with TransformDisabled.
+    let none = CompressionContext {
+        exact_line_runs: false,
+        ..ctx(Mode::Safe, false, false)
+    };
+    assert_eq!(
+        compress(&text, &none).report.reason,
+        Some(Reason::TransformDisabled)
+    );
+}

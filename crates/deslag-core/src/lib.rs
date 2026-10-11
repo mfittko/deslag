@@ -4,6 +4,13 @@
 //! network client, filesystem handle or session state. Adapters own decision
 //! recording and decide whether to commit a `Changed` output.
 
+mod lines;
+
+pub use lines::{
+    DecodeError, EXACT_LINE_RUNS_ID, EXACT_LINE_RUNS_VERSION, LINES_FORMAT_VERSION, decode_lines,
+    encode_lines,
+};
+
 use std::{borrow::Cow, collections::HashSet, fmt::Write, time::Duration, time::Instant};
 
 pub mod table;
@@ -80,7 +87,9 @@ pub enum Reason {
     BelowMinBytes,
     AboveMaxBytes,
     /// Bare scalar, invalid or truncated JSON, or trailing data, when no depth
-    /// or key-policy reason occurs earlier in the input.
+    /// or key-policy reason occurs earlier in the input. On the
+    /// `exact-line-runs` path, input that already starts with the `lines-v1`
+    /// header, so the codec never encodes its own output.
     /// Also any input that is not eligible for table-v1.
     UnsupportedFormat,
     DepthLimit,
@@ -199,6 +208,12 @@ pub struct CompressionContext<'c> {
     /// Enables the table-v1 encoder, tried before the minifier. Opt-in: it
     /// is false in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
     pub json_table: bool,
+    /// Enables the exact line-run codec. With `json_minify` on, the codec
+    /// handles text the JSON scanner rejects as `unsupported_format`. With
+    /// `json_minify` off, all input table-v1 does not encode goes to the codec.
+    /// The codec skips input that already starts with the `lines-v1` header as
+    /// `unsupported_format`. `false` in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
+    pub exact_line_runs: bool,
     pub limits: Limits,
     /// Without a counter, every token field in the report is `None`.
     pub token_counter: Option<&'c dyn TokenCounter>,
@@ -211,6 +226,7 @@ pub const FIRST_SLICE_JSON_MINIFY_CONTEXT: CompressionContext<'static> = Compres
     policy_version: 1,
     json_minify: true,
     json_table: false,
+    exact_line_runs: false,
     limits: Limits {
         min_candidate_bytes: 0,
         max_candidate_bytes: usize::MAX,
@@ -338,8 +354,9 @@ impl CompressionResult<'_> {
 }
 
 /// Runs the enabled transforms under `ctx`: table-v1 first, then the JSON
-/// minifier. Any skip or failure returns the input borrowed, never a partial
-/// rewrite.
+/// minifier, then the exact line-run codec for input the JSON transforms reject
+/// as unsupported_format. Any skip or failure returns the input borrowed, never
+/// a partial rewrite.
 pub fn compress<'a>(input: &'a str, ctx: &CompressionContext) -> CompressionResult<'a> {
     let start = Instant::now();
     let mut report = CompressionReport {
@@ -390,8 +407,11 @@ fn decide<'a>(
     if ctx.mode == Mode::Off {
         return Err(Reason::ModeOff);
     }
-    if !ctx.json_minify && !ctx.json_table {
+    if !ctx.json_minify && !ctx.json_table && !ctx.exact_line_runs {
         return Err(Reason::TransformDisabled);
+    }
+    if !ctx.json_minify && !ctx.json_table {
+        set_line_runs_identity(report);
     }
     if input.len() < limits.min_candidate_bytes {
         return Err(Reason::BelowMinBytes);
@@ -399,7 +419,7 @@ fn decide<'a>(
     if input.len() > limits.max_candidate_bytes {
         return Err(Reason::AboveMaxBytes);
     }
-    if ctx.json_table {
+    let json = if ctx.json_table {
         let opts = TableOptions {
             max_rows: limits.max_table_rows,
             max_depth: limits.max_json_depth,
@@ -420,17 +440,46 @@ fn decide<'a>(
                 }
                 return emit(input, text, ctx, report);
             }
-            Err(reason) if !ctx.json_minify => return Err(reason),
-            Err(_) => {}
+            Err(_) if ctx.json_minify => minify(input, limits.max_json_depth),
+            Err(reason) => Err(reason),
         }
-    }
-    let bytes = minify(input, limits.max_json_depth)?;
-    report.candidate_bytes = Some(bytes.len());
-    // Output is ASCII structure plus whole string lexemes from valid UTF-8 input,
-    // so this check guards the scanner itself.
-    let Ok(candidate) = String::from_utf8(bytes) else {
-        report.validation_outcome = ValidationOutcome::Failed;
-        return Err(Reason::InvalidCandidate);
+    } else if ctx.json_minify {
+        minify(input, limits.max_json_depth)
+    } else {
+        Err(Reason::UnsupportedFormat)
+    };
+    let candidate = match json {
+        Ok(bytes) => {
+            report.candidate_bytes = Some(bytes.len());
+            // Output is ASCII structure plus whole string lexemes from valid UTF-8
+            // input, so this check guards the scanner itself.
+            let Ok(candidate) = String::from_utf8(bytes) else {
+                report.validation_outcome = ValidationOutcome::Failed;
+                return Err(Reason::InvalidCandidate);
+            };
+            candidate
+        }
+        // Text the JSON transforms reject as unsupported_format is plain text. A
+        // leading value rejected for duplicate_key, escaped_key or depth_limit
+        // keeps the input on the JSON path, even when text lines follow. With
+        // json_minify off, all input table-v1 does not encode arrives here as
+        // unsupported_format.
+        Err(Reason::UnsupportedFormat) if ctx.exact_line_runs => {
+            set_line_runs_identity(report);
+            // Input that already starts with the lines-v1 header is skipped as
+            // unsupported_format, so the codec never encodes its own output.
+            let candidate = encode_lines(input).ok_or(Reason::UnsupportedFormat)?;
+            report.candidate_bytes = Some(candidate.len());
+            if candidate.len() >= input.len() {
+                return Err(Reason::InsufficientGain);
+            }
+            if decode_lines(&candidate, input.len()).as_deref() != Ok(input) {
+                report.validation_outcome = ValidationOutcome::Failed;
+                return Err(Reason::InvalidCandidate);
+            }
+            candidate
+        }
+        Err(reason) => return Err(reason),
     };
     emit(input, candidate, ctx, report)
 }
@@ -459,6 +508,12 @@ fn emit<'a>(
     report.emitted_bytes = candidate.len();
     report.emitted_tokens = report.candidate_tokens;
     Ok(Cow::Owned(candidate))
+}
+
+fn set_line_runs_identity(report: &mut CompressionReport) {
+    report.transform_id = EXACT_LINE_RUNS_ID;
+    report.transform_version = EXACT_LINE_RUNS_VERSION;
+    report.format_version = Some(LINES_FORMAT_VERSION);
 }
 
 /// Removes insignificant whitespace from a JSON object or array.

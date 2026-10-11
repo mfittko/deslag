@@ -258,7 +258,7 @@ validation_outcome
 
 Count absence as unknown, not zero. Keep identifiers and timestamps that belong to the integration outside the pure transformation result. In observe mode, candidate savings are hypothetical; emitted content remains original.
 
-DF-010 finalized this contract in `deslag-core` (`compress`, `CompressionContext`, `CompressionReport`). `CompressionReport::to_json` writes the fields above as snake_case keys; `compression_duration` is whole nanoseconds and every absent value is `null`. The core owns the §11 limits `min_candidate_bytes`, `max_candidate_bytes` and `max_json_depth` (`Limits::default()` uses the §11 values) and the `json_minify` switch. `Limits::max_table_rows` (default 20000) and the opt-in `json_table` switch now exist with table-v1 (DF-012). Token gain thresholds wait for token estimation (DF-014). The processing budget and parallel job limit belong to adapter-side bounded execution (DF-015). The supported output category and the transform/format version selection in the context remain open after table-v1.
+DF-010 finalized this contract in `deslag-core` (`compress`, `CompressionContext`, `CompressionReport`). `CompressionReport::to_json` writes the fields above as snake_case keys; `compression_duration` is whole nanoseconds and every absent value is `null`. The core owns the §11 limits `min_candidate_bytes`, `max_candidate_bytes` and `max_json_depth` (`Limits::default()` uses the §11 values) and the `json_minify` and `exact_line_runs` switches. `Limits::max_table_rows` (default 20000) and the opt-in `json_table` switch now exist with table-v1 (DF-012). Token gain thresholds wait for token estimation (DF-014). The processing budget and parallel job limit belong to adapter-side bounded execution (DF-015). The supported output category and the transform/format version selection in the context remain open after table-v1.
 
 ### 6.2 Pipeline
 
@@ -346,6 +346,8 @@ Use an unambiguous versioned representation with escaping. Define it before enab
 Do not merge similar lines with different timestamps, IDs, paths, counts, or error messages. Do not reorder nonconsecutive repetitions. Do not suppress error lines or successful test output using relevance heuristics.
 
 A decoder must reconstruct the original text bytes exactly. Mixed LF/CRLF, empty lines, partial final lines, and strings resembling encoding markers need tests.
+
+DF-013 implements this as `lines-v1`, specified in [compression-formats.md](compression-formats.md).
 
 ### 7.4 Transform composition and exactness
 

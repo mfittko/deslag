@@ -1,6 +1,79 @@
 # Compression formats
 
-This file specifies the text formats that deslag transforms emit. Each format has a local decoder in `deslag-core`.
+Formats that deslag transforms emit. Each format is versioned. A decoder for a
+version accepts every output that version's encoder can produce. Each format
+has a local decoder in `deslag-core`.
+
+## lines-v1
+
+Exact codec for runs of byte-identical consecutive lines in plain text. The
+decoder reconstructs the original bytes exactly. Transform identity:
+`exact-line-runs`, transform version 1, report `format_version` 1.
+
+### Units
+
+- A unit is a maximal byte sequence that ends with `\n`, or the final bytes
+  after the last `\n`.
+- Only `\n` ends a unit. A `\r` before `\n` belongs to the unit content.
+- A partial final unit has no terminator, so `a\n` and `a` are different units
+  and never form one run.
+- Empty input has no units.
+
+### Encoded text
+
+The encoded text is the header line followed by the body.
+
+- Header: `#!deslag lines-v1\n`.
+- Reserved prefix: `#!deslag`. Every body line that starts with the prefix is
+  a run directive or an escaped line. Any other body line is a literal unit.
+- Run directive: `#!deslag x<N>\n`. N is canonical decimal with no leading
+  zero and N >= 2. It means: the unit directly above occurs N times in total.
+  A directive always ends with `\n`. It directly follows a literal or escaped
+  unit. Two directives never follow each other.
+- Escape: an original unit that starts with the reserved prefix is written as
+  `#!deslag|` followed by the unit bytes. The decoder removes the first
+  `#!deslag|` bytes. This covers header lookalikes, directive lookalikes and a
+  partial final unit that starts with the prefix.
+
+### Decoder
+
+- The input must start with the header. Otherwise it is rejected.
+- A body line that starts with the prefix and is neither a valid escape nor a
+  canonical run directive is rejected. So is a directive with no unit directly
+  above it, and an escape whose unit does not start with the prefix.
+- The caller passes a maximum output size in bytes. The decoder fails before
+  the output would exceed it, so a crafted count cannot allocate without bound.
+
+### Encoder
+
+- Units are compared byte for byte, including the terminator. Only
+  consecutive units form a run. Order never changes and no unit is dropped.
+- A run is encoded only when the directive is shorter than the emitted bytes
+  of the N-1 copies it replaces. A copy of a unit that starts with the prefix
+  is emitted with its escape. Otherwise the copies are written out.
+- The candidate is emitted only when it is shorter than the input
+  (`insufficient_gain` otherwise).
+- Input that already starts with the header is skipped as
+  `unsupported_format`, so the codec never encodes its own output.
+
+### Integration
+
+- The transform is opt-in: `CompressionContext::exact_line_runs` is `false` in
+  `FIRST_SLICE_JSON_MINIFY_CONTEXT`.
+- With the switch on, input that the JSON scanner rejects as
+  `unsupported_format` is plain text and goes to this codec. With
+  `json_minify` on, JSON content stays on the JSON path. With `json_minify` off
+  and `exact_line_runs` on, all input goes to this codec, except input that
+  table-v1 encodes when `json_table` is on (see table-v1, Pipeline and
+  configuration).
+- The JSON scanner checks key policy and depth before it checks that the whole
+  input is one value. Input whose leading JSON value it rejects for
+  `duplicate_key`, `escaped_key` or `depth_limit` stays on the JSON path and
+  reports that reason, even when lines that are not JSON follow.
+- The core decodes the candidate and compares it with the input. A mismatch
+  yields `failed` / `invalid_candidate`.
+- The header, prefix, escape and unit splitting are shared, so a later
+  line-template codec can add its own directive to the same container.
 
 ## table-v1
 
@@ -195,5 +268,6 @@ When the switch is on, `compress` calls `encode` with `max_rows` set to `Limits:
 - If the input is eligible, `compress` decodes the encoded text and compares it with the minified original. A mismatch fails with `invalid_candidate` and validation outcome `failed`. Otherwise the report has transform id `json-table`, transform version 1 and format version 1. The byte and token fields are filled as for the minifier. Observe mode emits the original with outcome `would_change`.
 - If the input is ineligible and `json_minify` is true, `compress` runs the JSON minifier unchanged and reports it as `json-minify`.
 - If the input is ineligible and `json_minify` is false, `compress` skips with the table-v1 reason and transform id `json-table`. The format version is `null`, because no candidate was built.
-- If `json_table` is true and `json_minify` is false, every skip reports transform id `json-table`, including the mode and size checks that run before encoding.
-- If both switches are false, `compress` skips with `transform_disabled`.
+- If `exact_line_runs` is also true, input that the JSON transforms reject as `unsupported_format` goes to the lines-v1 codec as described in its Integration section. The report then has transform id `exact-line-runs`. Every input runs at most one transform: table-v1, else the minifier, else the line-run codec.
+- If `json_table` is true and `json_minify` is false, every other skip reports transform id `json-table`, including the mode and size checks that run before encoding.
+- If `json_table`, `json_minify` and `exact_line_runs` are all false, `compress` skips with `transform_disabled`.

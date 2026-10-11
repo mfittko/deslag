@@ -76,8 +76,47 @@ enum Value<'a> {
     Str(String),
 }
 
-/// Fields in order. A nested leaf key is its dotted path, such as `meta.region`.
-type Row<'a> = Vec<(String, Value<'a>)>;
+/// Fields in order, keyed by the [`Paths`] node id of each leaf path.
+type Row<'a> = Vec<(usize, Value<'a>)>;
+
+/// Every key path seen, as a tree keyed by (parent node id, key), so each key
+/// costs O(1) instead of its joined path length. Node 0 is the root.
+struct Paths<'a> {
+    ids: HashMap<(usize, &'a str), usize>,
+    /// Parent id, key and joined path length per node, indexed by id.
+    nodes: Vec<(usize, &'a str, usize)>,
+    /// Joined bytes of all distinct leaf paths. Every leaf path becomes a
+    /// header column, so once this exceeds the input the gain check must fail.
+    leaf_bytes: usize,
+}
+
+impl<'a> Paths<'a> {
+    /// Returns the id of `key` under `parent` and whether it is new.
+    fn node(&mut self, parent: usize, key: &'a str) -> (usize, bool) {
+        let next = self.nodes.len();
+        let id = *self.ids.entry((parent, key)).or_insert(next);
+        if id == next {
+            let len = if parent == 0 {
+                key.len()
+            } else {
+                self.nodes[parent].2 + 1 + key.len()
+            };
+            self.nodes.push((parent, key, len));
+        }
+        (id, id == next)
+    }
+
+    /// The dotted path of node `id`, such as `meta.region`.
+    fn join(&self, mut id: usize) -> String {
+        let mut keys = Vec::new();
+        while id != 0 {
+            keys.push(self.nodes[id].1);
+            id = self.nodes[id].0;
+        }
+        keys.reverse();
+        keys.join(".")
+    }
+}
 
 /// Encodes `input` as table-v1. `Err` means: pass the input through unchanged.
 pub fn encode(input: &str, opts: &TableOptions) -> Result<String, Reason> {
@@ -99,14 +138,14 @@ fn build(input: &str, opts: &TableOptions, kv: bool) -> Result<String, Reason> {
         return Err(NO);
     }
     let minified = String::from_utf8(minify(input, opts.max_depth)?).map_err(|_| NO)?;
-    let rows = parse_rows(&minified).ok_or(NO)?;
+    let (rows, paths) = parse_rows(&minified).ok_or(NO)?;
     if rows.len() < 2 || rows.len() > opts.max_rows {
         return Err(NO);
     }
-    let (cols, types) = layout(&rows).ok_or(NO)?;
+    let (cols, names, types) = layout(&rows, &paths).ok_or(NO)?;
 
     let mut out = format!("{MARKER} [{}]{{", rows.len());
-    for (j, (col, ty)) in cols.iter().zip(&types).enumerate() {
+    for (j, (col, ty)) in names.iter().zip(&types).enumerate() {
         let sep = if j == 0 { "" } else { "," };
         let _ = write!(out, "{sep}{col}:{}", ty.name());
     }
@@ -134,7 +173,7 @@ fn build(input: &str, opts: &TableOptions, kv: bool) -> Result<String, Reason> {
             out.push_str("\n-");
             for (j, (key, v)) in row.iter().enumerate() {
                 out.push_str(if j == 0 { " " } else { "\n  " });
-                out.push_str(key);
+                out.push_str(&paths.join(*key));
                 out.push_str(": ");
                 // Each line break (`\r\n`, lone `\r` or `\n`) becomes `\n` plus the
                 // item indent, so value text cannot start a new top-level row item.
@@ -304,25 +343,31 @@ fn insert_node<'t>(
     nodes.insert((parent, name), id).is_none().then_some(id)
 }
 
-/// Parses the minified array into rows of dotted leaf keys. `None` when the
-/// top level is not an array, an item is not an object, a field holds an
-/// array, or nested objects are not uniform across rows.
-fn parse_rows(min: &str) -> Option<Vec<Row<'_>>> {
+/// Parses the minified array into rows of leaf path ids. `None` when the top
+/// level is not an array, an item is not an object, a field holds an array,
+/// nested objects are not uniform across rows, or the distinct leaf paths
+/// together are longer than `min`.
+fn parse_rows(min: &str) -> Option<(Vec<Row<'_>>, Paths<'_>)> {
     let mut s = Scanner {
         b: min.as_bytes(),
         i: 0,
         out: Vec::new(),
         max_depth: 0,
     };
+    let mut paths = Paths {
+        ids: HashMap::new(),
+        nodes: vec![(0, "", 0)],
+        leaf_bytes: 0,
+    };
     s.expect(b'[').ok()?;
     let mut rows = Vec::new();
     if s.eat(b']') {
-        return Some(rows);
+        return Some((rows, paths));
     }
     let mut first_shape = None;
     loop {
         let (mut row, mut shape) = (Vec::new(), Vec::new());
-        parse_object(&mut s, min, "", &mut row, &mut shape)?;
+        parse_object(&mut s, min, 0, &mut row, &mut shape, &mut paths)?;
         // Every row must have the same nested objects with the same key lists.
         if *first_shape.get_or_insert_with(|| shape.clone()) != shape {
             return None;
@@ -333,24 +378,25 @@ fn parse_rows(min: &str) -> Option<Vec<Row<'_>>> {
         }
     }
     s.expect(b']').ok()?;
-    Some(rows)
+    Some((rows, paths))
 }
 
-/// Parses the object at the cursor into `row`, flattening nested objects into
-/// leaf keys `prefix.key`. `prefix` is empty for a row and ends with `.` for a
-/// nested object. `shape` collects, in order, each nested object's path
-/// (`true`) and each key path inside a nested object (`false`).
+/// Parses the object at path node `parent` into `row`, flattening nested
+/// objects into leaf paths. `parent` is 0 for a row. `shape` collects, in
+/// order, each nested object's node (`true`) and each key node inside a
+/// nested object (`false`).
 fn parse_object<'a>(
     s: &mut Scanner<'a>,
     min: &'a str,
-    prefix: &str,
+    parent: usize,
     row: &mut Row<'a>,
-    shape: &mut Vec<(bool, String)>,
+    shape: &mut Vec<(bool, usize)>,
+    paths: &mut Paths<'a>,
 ) -> Option<()> {
     s.expect(b'{').ok()?;
     if s.eat(b'}') {
         // A nested `{}` would leave no column to restore it from.
-        return prefix.is_empty().then_some(());
+        return (parent == 0).then_some(());
     }
     loop {
         let start = s.i;
@@ -360,16 +406,16 @@ fn parse_object<'a>(
         if !valid_name(key) {
             return None;
         }
-        let path = format!("{prefix}{key}");
-        if !prefix.is_empty() {
-            shape.push((false, path.clone()));
+        let (id, new) = paths.node(parent, key);
+        if parent != 0 {
+            shape.push((false, id));
         }
         s.expect(b':').ok()?;
         let start = s.i;
         let value = match s.peek()? {
             b'{' => {
-                shape.push((true, path.clone()));
-                parse_object(s, min, &format!("{path}."), row, shape)?;
+                shape.push((true, id));
+                parse_object(s, min, id, row, shape, paths)?;
                 None
             }
             b'"' => {
@@ -395,7 +441,13 @@ fn parse_object<'a>(
             _ => return None,
         };
         if let Some(value) = value {
-            row.push((path, value));
+            if new {
+                paths.leaf_bytes += paths.nodes[id].2;
+                if paths.leaf_bytes > min.len() {
+                    return None;
+                }
+            }
+            row.push((id, value));
         }
         if !s.eat(b',') {
             break;
@@ -404,26 +456,29 @@ fn parse_object<'a>(
     s.expect(b'}').ok()
 }
 
-/// Columns in first-seen order and their types. `None` when a row's key order
-/// is not a subsequence of the column order, a key is not a valid column name,
-/// there are no columns, or a column mixes non-null types.
-fn layout<'r>(rows: &'r [Row]) -> Option<(Vec<&'r str>, Vec<Ty>)> {
-    let mut index: HashMap<&str, usize> = HashMap::new();
+/// Column node ids in first-seen order, their dotted names and their types.
+/// `None` when a row's key order is not a subsequence of the column order, a
+/// key is not a valid column name, there are no columns, or a column mixes
+/// non-null types.
+fn layout(rows: &[Row], paths: &Paths) -> Option<(Vec<usize>, Vec<String>, Vec<Ty>)> {
+    let mut index: HashMap<usize, usize> = HashMap::new();
     let mut cols = Vec::new();
-    for (key, _) in rows.iter().flatten() {
-        index.entry(key.as_str()).or_insert_with(|| {
-            cols.push(key.as_str());
+    for &(key, _) in rows.iter().flatten() {
+        index.entry(key).or_insert_with(|| {
+            cols.push(key);
             cols.len() - 1
         });
     }
-    if cols.is_empty() || !cols.iter().all(|c| valid_path(c)) {
+    // Joined once per column. `parse_rows` bounds the total by the input.
+    let names: Vec<String> = cols.iter().map(|&c| paths.join(c)).collect();
+    if cols.is_empty() || !names.iter().all(|c| valid_path(c)) {
         return None;
     }
     let mut kinds: Vec<Option<Ty>> = vec![None; cols.len()];
     for row in rows {
         let mut prev = None;
         for (key, value) in row {
-            let j = index[key.as_str()];
+            let j = index[key];
             if prev.is_some_and(|p| j <= p) {
                 return None;
             }
@@ -444,7 +499,7 @@ fn layout<'r>(rows: &'r [Row]) -> Option<(Vec<&'r str>, Vec<Ty>)> {
         }
     }
     let types = kinds.into_iter().map(|k| k.unwrap_or(Ty::Str)).collect();
-    Some((cols, types))
+    Some((cols, names, types))
 }
 
 /// The encoded text, header included, must save at least
