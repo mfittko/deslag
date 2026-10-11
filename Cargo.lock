@@ -50,10 +50,12 @@ name = "deslag-proxy"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "deslag-core",
  "http-body-util",
  "hyper",
  "hyper-rustls",
  "hyper-util",
+ "serde",
  "serde_json",
  "tokio",
 ]

@@ -1,8 +1,10 @@
 //! Transparent Anthropic Messages reverse proxy to one configured upstream.
 //!
 //! Request and response bodies stream through unchanged as hyper bodies; nothing
-//! is buffered, parsed or logged. The upstream authority comes only from
-//! configuration, never from the request target, `Host` header or credentials.
+//! is buffered, parsed or logged. The one exception is opt-in JSON minification,
+//! which buffers and patches `POST /v1/messages` request bodies (see `minify`).
+//! The upstream authority comes only from configuration, never from the request
+//! target, `Host` header or credentials.
 
 use std::{convert::Infallible, fmt, io, net::IpAddr, time::Duration};
 
@@ -21,7 +23,9 @@ use hyper_util::{
 };
 use tokio::net::TcpListener;
 
-type HttpsClient = Client<hyper_rustls::HttpsConnector<HttpConnector>, Incoming>;
+mod minify;
+
+type HttpsClient = Client<hyper_rustls::HttpsConnector<HttpConnector>, minify::ReqBody>;
 type ProxyBody = Either<Incoming, Full<Bytes>>;
 
 /// The single trusted upstream. Plain `http` is accepted only for loopback hosts.
@@ -30,6 +34,7 @@ pub struct Upstream {
     scheme: &'static str,
     authority: String,
     base_path: String,
+    minify_json: bool,
 }
 
 impl Upstream {
@@ -62,7 +67,14 @@ impl Upstream {
             scheme,
             authority: authority.to_string(),
             base_path: uri.path().trim_end_matches('/').to_string(),
+            minify_json: false,
         })
+    }
+
+    /// Enables minification of JSON in Bash tool results of `POST /v1/messages`.
+    pub fn with_json_minification(mut self) -> Self {
+        self.minify_json = true;
+        self
     }
 
     /// Joins the configured base with the request's path and query. Only an
@@ -174,7 +186,7 @@ pub async fn serve(listener: TcpListener, upstream: Upstream) -> io::Result<()> 
 async fn forward(
     client: HttpsClient,
     upstream: Upstream,
-    mut req: Request<Incoming>,
+    req: Request<Incoming>,
 ) -> Result<Response<ProxyBody>, Infallible> {
     let target = (req.method() != Method::CONNECT)
         .then(|| upstream.target(req.uri()))
@@ -184,6 +196,13 @@ async fn forward(
             StatusCode::BAD_REQUEST,
             "invalid_request_error",
             "unsupported request target",
+        ));
+    };
+    let Ok(mut req) = minify::prepare(req, upstream.minify_json).await else {
+        return Ok(error(
+            StatusCode::BAD_REQUEST,
+            "invalid_request_error",
+            "deslag: request body read failed",
         ));
     };
     *req.uri_mut() = target;
