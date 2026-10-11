@@ -13,7 +13,10 @@ pub use lines::{
 
 use std::{borrow::Cow, collections::HashSet, fmt::Write, time::Duration, time::Instant};
 
+pub mod table;
 mod tokens;
+
+pub use table::TableOptions;
 pub use tokens::EstimateCounter;
 
 /// Crate version, as set in the workspace manifest.
@@ -23,6 +26,12 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const JSON_MINIFY_ID: &str = "json-minify";
 /// Bumped whenever `minify_json` output can change for some input.
 pub const JSON_MINIFY_VERSION: u32 = 1;
+/// Stable transform identity for the table-v1 encoder.
+pub const JSON_TABLE_ID: &str = "json-table";
+/// Bumped whenever `table::encode` output can change for some input.
+pub const JSON_TABLE_VERSION: u32 = 1;
+/// Format version of table-v1 output, as reported in `format_version`.
+pub const JSON_TABLE_FORMAT_VERSION: u32 = 1;
 /// Bumped whenever a [`CompressionReport`] field or its serialized form changes.
 pub const REPORT_SCHEMA_VERSION: u32 = 1;
 
@@ -83,6 +92,8 @@ pub enum Reason {
     /// or key-policy reason occurs earlier in the input. On the
     /// `exact-line-runs` path, input that already starts with the `lines-v1`
     /// header, so the codec never encodes its own output.
+    /// Also table-v1 shape ineligibility (see the eligibility table in
+    /// docs/compression-formats.md).
     UnsupportedFormat,
     DepthLimit,
     /// Consumers disagree on which duplicate wins. A duplicate in any object
