@@ -202,15 +202,64 @@ fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
+/// Returns the first manifest line that adds a non-dev dependency: a non-dev
+/// `[..dependencies]` header, or a `dependencies`, `build-dependencies` or
+/// `target.` key outside the `[dev-dependencies]` table.
+fn manifest_violation(manifest: &str) -> Option<&str> {
+    let mut in_dev = false;
+    for line in manifest.lines().map(str::trim) {
+        if line.starts_with('[') {
+            in_dev = line == "[dev-dependencies]";
+            if !in_dev && line.contains("dependencies") {
+                return Some(line);
+            }
+        } else if !in_dev
+            && ["dependencies", "build-dependencies", "target."]
+                .iter()
+                .any(|key| line.starts_with(key))
+        {
+            return Some(line);
+        }
+    }
+    None
+}
+
+/// Returns the first process-spawn or network needle in `src`, including
+/// grouped `use std::{net, ..}` and `use std::{process, ..}` imports.
+fn source_violation(src: &str) -> Option<&'static str> {
+    const NEEDLES: [&str; 9] = [
+        "std::process",
+        "process::",
+        "Command::new",
+        "std::net",
+        "net::",
+        "TcpStream",
+        "TcpListener",
+        "UdpSocket",
+        "ToSocketAddrs",
+    ];
+    if let Some(needle) = NEEDLES.into_iter().find(|n| src.contains(n)) {
+        return Some(needle);
+    }
+    for (start, _) in src.match_indices("std::{") {
+        let group = src[start..].split(';').next().unwrap_or_default();
+        for module in ["net", "process"] {
+            if group
+                .split(|c: char| !c.is_alphanumeric() && c != '_')
+                .any(|token| token == module)
+            {
+                return Some(module);
+            }
+        }
+    }
+    None
+}
+
 #[test]
 fn core_has_no_dependencies_or_network_client() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let manifest = fs::read_to_string(root.join("Cargo.toml")).unwrap();
-    for line in manifest.lines().map(str::trim) {
-        if line.starts_with('[') && line.contains("dependencies") {
-            assert_eq!(line, "[dev-dependencies]", "Cargo.toml header");
-        }
-    }
+    assert_eq!(manifest_violation(&manifest), None, "Cargo.toml");
     let mut files = Vec::new();
     rust_sources(&root.join("src"), &mut files);
     let build = root.join("build.rs");
@@ -220,8 +269,48 @@ fn core_has_no_dependencies_or_network_client() {
     assert!(!files.is_empty());
     for path in files {
         let src = fs::read_to_string(&path).unwrap();
-        for needle in ["std::net", "TcpStream", "UdpSocket", "process::Command"] {
-            assert!(!src.contains(needle), "{needle} in {}", path.display());
-        }
+        assert_eq!(source_violation(&src), None, "{}", path.display());
+    }
+}
+
+#[test]
+fn no_dependency_guard_rejects_every_form() {
+    for ok in [
+        "[package]\nname = \"x\"\n\n[dev-dependencies]\nserde_json = \"1\"\ntarget-lexicon = \"1\"\n",
+        "[package]\nname = \"x\"\n",
+    ] {
+        assert_eq!(manifest_violation(ok), None, "{ok}");
+    }
+    for bad in [
+        "[dependencies]\nreqwest = \"0.12\"",
+        "[build-dependencies]\ncc = \"1\"",
+        "[target.'cfg(unix)'.dependencies]\nlibc = \"0.2\"",
+        "dependencies.reqwest = \"0.12\"\n[package]",
+        "dependencies = { reqwest = \"0.12\" }\n[package]",
+        "build-dependencies.cc = \"1\"\n[package]",
+        "[dev-dependencies]\nx = \"1\"\n[dependencies]\ny = \"1\"",
+    ] {
+        assert!(manifest_violation(bad).is_some(), "{bad}");
+    }
+}
+
+#[test]
+fn no_network_guard_rejects_every_form() {
+    assert_eq!(
+        source_violation("use std::{borrow::Cow, fmt::Write, time::Duration};"),
+        None
+    );
+    for bad in [
+        "use std::process::{Command, Stdio};",
+        "Command::new(\"curl\")",
+        "Command::new(\"curl\").spawn()",
+        "use std::{net, io}; fn f() { net::TcpListener::bind(\"x\"); }",
+        "use std::{io, net};",
+        "use std::{io, process};",
+        "use std::process::Command;",
+        "std::net::TcpStream::connect(\"x\")",
+        "fn f<A: ToSocketAddrs>(a: A) {}",
+    ] {
+        assert!(source_violation(bad).is_some(), "{bad}");
     }
 }
