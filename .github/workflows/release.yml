@@ -1,0 +1,197 @@
+name: release
+
+# A pushed v* tag builds, attests and publishes a GitHub Release.
+# workflow_dispatch runs verify, build and checksums as a read-only dry run.
+# It skips the publish job, so it publishes nothing and creates no
+# attestation. Pull-request code can never start this workflow: it has no
+# pull_request or pull_request_target trigger.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            version=$(scripts/release/check-versions.sh "$GITHUB_REF_NAME")
+          else
+            version=$(scripts/release/check-versions.sh)
+          fi
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+      # fetch-depth 0 brings every branch, so origin/main is present.
+      - name: Require the release commit on main
+        run: |
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::$(git rev-parse HEAD) is not on main; releases ship from main only"
+            exit 1
+          fi
+      - name: Require operator approval for a stable release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          # Empty when the repository variable is unset: the repo owner approves.
+          RELEASE_OPERATOR: ${{ vars.RELEASE_OPERATOR }}
+        run: scripts/release/verify-approval.sh "$VERSION" "$GITHUB_REPOSITORY"
+      # A dry run on a version that is not stamped yet proves extraction on Unreleased.
+      - name: Extract release notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            scripts/release/extract-notes.sh "$VERSION" >release-notes.md
+          else
+            scripts/release/extract-notes.sh "$VERSION" >release-notes.md ||
+              scripts/release/extract-notes.sh Unreleased >release-notes.md
+          fi
+          cat release-notes.md
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-notes
+          path: release-notes.md
+          if-no-files-found: error
+
+  build:
+    needs: verify
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+          # 22.04 pins the glibc baseline at 2.35; newer runners raise it.
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    env:
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install
+          rustup target add "$TARGET"
+      - name: Build
+        run: cargo build --release --locked --target "$TARGET" -p deslag-cli
+      - name: Package
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: scripts/release/package.sh "$VERSION" "$TARGET"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist-${{ matrix.target }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  checksums:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - name: Write SHA256SUMS
+        run: |
+          scripts/release/checksums.sh dist
+          test "$(wc -l <dist/SHA256SUMS)" -eq 2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sha256sums
+          path: dist/SHA256SUMS
+          if-no-files-found: error
+
+  # The only job with write permissions. It runs for a tag push only, so a
+  # dry run stays read-only.
+  publish:
+    if: github.event_name == 'push'
+    needs: [verify, checksums]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sha256sums
+          path: dist
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-notes
+      # A re-run never replaces an asset or the notes of an existing release.
+      # Rebuilt archives are not byte-identical, so a re-run uploads only into
+      # a release that has none of the assets. A partial release fails. A
+      # complete release skips attestation and upload, so provenance covers
+      # only archives that this run publishes.
+      - name: Check release state
+        id: state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          action=$(scripts/release/release-state.sh "v$VERSION" dist/*.tar.gz dist/SHA256SUMS)
+          echo "action=$action" >>"$GITHUB_OUTPUT"
+      # Fails on a private repository whose plan has no attestations, before
+      # the release exists.
+      - name: Attest build provenance
+        if: steps.state.outputs.action != 'skip'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*.tar.gz
+      - name: Publish GitHub Release
+        if: steps.state.outputs.action != 'skip'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          ACTION: ${{ steps.state.outputs.action }}
+        run: |
+          tag="v$VERSION"
+          assets=(dist/*.tar.gz dist/SHA256SUMS)
+          if [ "$ACTION" = upload ]; then
+            gh release upload "$tag" "${assets[@]}"
+          else
+            flags=()
+            case ${VERSION%%+*} in *-*) flags+=(--prerelease) ;; esac
+            gh release create "$tag" "${assets[@]}" \
+              --verify-tag --title "$tag" --notes-file release-notes.md "${flags[@]}"
+          fi
