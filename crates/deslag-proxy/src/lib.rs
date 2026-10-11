@@ -67,9 +67,10 @@ impl Upstream {
 
     /// Joins the configured base with the request's path and query. Only an
     /// origin-form path is accepted; any authority in the request is ignored.
+    /// A path with a `..` segment is refused so it cannot leave the base path.
     fn target(&self, incoming: &Uri) -> Option<Uri> {
         let pq = incoming.path_and_query()?.as_str();
-        if !pq.starts_with('/') {
+        if !pq.starts_with('/') || has_dot_dot_segment(incoming.path()) {
             return None;
         }
         format!("{}://{}{}{pq}", self.scheme, self.authority, self.base_path)
@@ -87,6 +88,36 @@ impl fmt::Display for Upstream {
         }
         Ok(())
     }
+}
+
+/// True if the percent-decoded `path` has a `..` segment. Both `/` and `\` count
+/// as separators because some upstreams treat `\` as one. Decoding is a single
+/// pass; a malformed `%` escape is kept as literal bytes. A segment matches when
+/// the part before its first `;` is `..`, because servlet-style upstreams strip
+/// `;params` before resolving dot segments.
+fn has_dot_dot_segment(path: &str) -> bool {
+    let raw = path.as_bytes();
+    let mut decoded = Vec::with_capacity(raw.len());
+    let mut i = 0;
+    while i < raw.len() {
+        let hex = raw
+            .get(i + 1..i + 3)
+            .filter(|h| raw[i] == b'%' && h.iter().all(u8::is_ascii_hexdigit))
+            .and_then(|h| u8::from_str_radix(std::str::from_utf8(h).ok()?, 16).ok());
+        match hex {
+            Some(b) => {
+                decoded.push(b);
+                i += 3;
+            }
+            None => {
+                decoded.push(raw[i]);
+                i += 1;
+            }
+        }
+    }
+    decoded
+        .split(|&b| b == b'/' || b == b'\\')
+        .any(|seg| seg.split(|&b| b == b';').next() == Some(b".."))
 }
 
 fn is_loopback(host: &str) -> bool {
@@ -259,6 +290,57 @@ mod tests {
             Some("https://gw.example/anthropic/v1/models")
         );
         assert_eq!(t("*"), None);
+    }
+
+    #[test]
+    fn dot_dot_segments_are_detected_in_any_encoding() {
+        for bad in [
+            "/..",
+            "/../v1",
+            "/v1/../../admin",
+            "/v1/%2e%2e/x",
+            "/v1/%2E%2e/x",
+            "/v1/.%2e/x",
+            "/v1/%2e./x",
+            "/v1/..%2fx",
+            "/v1/..%2Fx",
+            "/v1/..\\x",
+            "/v1/..%5cx",
+            "/v1/..;/x",
+            "/v1/%2e%2e;a/x",
+        ] {
+            assert!(has_dot_dot_segment(bad), "{bad} accepted");
+        }
+        for good in [
+            "/",
+            "/v1/messages",
+            "/v1/./messages",
+            "/v1/foo.bar",
+            "/v1/..foo",
+            "/v1/a..b",
+            "/v1/foo..",
+            "/v1/...",
+            "/v1/%2e",
+            "/v1/%zz",
+            "/v1/%2",
+            "/v1/.%+e",
+            "/v1/a;..",
+            "/v1/.;x",
+        ] {
+            assert!(!has_dot_dot_segment(good), "{good} rejected");
+        }
+    }
+
+    #[test]
+    fn target_rejects_dot_dot_path_but_not_query() {
+        let up = Upstream::parse("https://gw.example/anthropic/").unwrap();
+        let t = |s: &str| up.target(&s.parse().unwrap()).map(|u| u.to_string());
+        assert_eq!(t("/../admin"), None);
+        assert_eq!(t("/v1/%2e%2e/%2e%2e/admin"), None);
+        assert_eq!(
+            t("/v1/messages?next=../x").as_deref(),
+            Some("https://gw.example/anthropic/v1/messages?next=../x")
+        );
     }
 
     #[test]
