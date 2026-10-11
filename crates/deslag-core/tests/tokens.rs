@@ -1,4 +1,7 @@
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use deslag_core::{
     CompressionContext, EstimateCounter, FIRST_SLICE_JSON_MINIFY_CONTEXT, TokenCounter,
@@ -7,16 +10,39 @@ use deslag_core::{
 
 /// Recorded bounds, see `tests/fixtures/tokens/README.md`. Relative error is
 /// `(estimate - reference) / reference`.
-const FIXTURE_ERROR_BOUND: f64 = 0.40;
+/// Every fixture except `cjk.txt`. `nested.min.json` sets it: the savings
+/// ceiling on cl100k_base forces an estimate 27% above o200k_base there.
+const ASCII_FIXTURE_ERROR_BOUND: f64 = 0.28;
+/// Applies only to `cjk.txt`. The two references differ by 44% on it.
+const CJK_FIXTURE_ERROR_BOUND: f64 = 0.40;
 const AGGREGATE_ERROR_BOUND: f64 = 0.10;
-/// The estimated savings ratio may undershoot the reference by this much and
-/// may never exceed it by more than `SAVINGS_OVERSHOOT`.
-const SAVINGS_UNDERSHOOT: f64 = 0.10;
-const SAVINGS_OVERSHOOT: f64 = 0.0;
+/// The estimated savings ratio may undershoot the reference by this much. It
+/// may never exceed the reference. `nested_tab.json` sets it: one estimate
+/// cannot sit below cl100k_base and within 0.10 of o200k_base there.
+const SAVINGS_UNDERSHOOT: f64 = 0.17;
 
-const PAIRS: [(&str, &str); 2] = [
+const PAIRS: [(&str, &str); 4] = [
     ("pretty.json", "pretty.min.json"),
     ("records.json", "records.min.json"),
+    ("nested.json", "nested.min.json"),
+    ("nested_tab.json", "nested_tab.min.json"),
+];
+
+/// Pinned estimate per fixture. A heuristic change that moves any value must
+/// bump `EstimateCounter::TOKENIZER` and update the README tables.
+const GOLDEN: [(&str, u64); 12] = [
+    ("pretty.json", 217),
+    ("pretty.min.json", 158),
+    ("records.json", 429),
+    ("records.min.json", 288),
+    ("nested.json", 424),
+    ("nested.min.json", 270),
+    ("nested_tab.json", 424),
+    ("nested_tab.min.json", 270),
+    ("log.txt", 396),
+    ("source_code.txt", 197),
+    ("prose.txt", 120),
+    ("cjk.txt", 149),
 ];
 
 fn dir() -> PathBuf {
@@ -60,6 +86,26 @@ fn every_estimate_is_labeled() {
 }
 
 #[test]
+fn estimates_match_golden_counts() {
+    let (_, rows) = reference();
+    let names: Vec<&str> = rows.iter().map(|(n, _)| n.as_str()).collect();
+    let golden: Vec<&str> = GOLDEN.iter().map(|(n, _)| *n).collect();
+    assert_eq!(names, golden, "GOLDEN must list every reference.tsv row");
+    for (name, want) in GOLDEN {
+        assert_eq!(EstimateCounter.count(&read(name)).count, want, "{name}");
+    }
+}
+
+#[test]
+fn non_bmp_characters_cost_two_tokens() {
+    // References: five U+1F600 is 10 tokens in cl100k_base. The ZWJ family
+    // U+1F468 U+200D U+1F469 U+200D U+1F467 is 8 in o200k_base and 13 in
+    // cl100k_base.
+    assert_eq!(EstimateCounter.count("😀😀😀😀😀").count, 10);
+    assert_eq!(EstimateCounter.count("👨\u{200d}👩\u{200d}👧").count, 8);
+}
+
+#[test]
 fn report_carries_estimate_labels() {
     let ctx = CompressionContext {
         token_counter: Some(&EstimateCounter),
@@ -77,7 +123,7 @@ fn report_carries_estimate_labels() {
     }
     let json = report.to_json();
     assert!(json.contains(r#""method":"estimate","tokenizer":"deslag-estimate-v1""#));
-    assert!(!json.contains("exact"));
+    assert!(!json.contains(r#""method":"exact""#));
 }
 
 #[test]
@@ -104,13 +150,18 @@ fn estimates_stay_within_recorded_bounds() {
         for (name, counts) in &rows {
             let (est, refc) = (estimate(name), counts[enc_i]);
             let err = (est - refc) / refc;
+            let bound = if name == "cjk.txt" {
+                CJK_FIXTURE_ERROR_BOUND
+            } else {
+                ASCII_FIXTURE_ERROR_BOUND
+            };
             eprintln!("{enc}\t{name}\test={est}\tref={refc}\terr={err:+.3}");
-            assert!(err.abs() <= FIXTURE_ERROR_BOUND, "{enc} {name}: {err:+.3}");
+            assert!(err.abs() <= bound, "{enc} {name}: {err:+.3}");
             est_sum += est;
             ref_sum += refc;
         }
         let err = (est_sum - ref_sum) / ref_sum;
-        eprintln!("{enc}\taggregate\terr={err:+.3}");
+        eprintln!("{enc}\taggregate\test={est_sum}\tref={ref_sum}\terr={err:+.3}");
         assert!(
             err.abs() <= AGGREGATE_ERROR_BOUND,
             "{enc} aggregate: {err:+.3}"
@@ -133,8 +184,20 @@ fn minify_savings_are_not_overestimated() {
             eprintln!(
                 "{enc}\t{pretty}\test_savings={est:.3}\tref_savings={refr:.3}\tdelta={delta:+.3}"
             );
-            assert!(delta <= SAVINGS_OVERSHOOT, "{enc} {pretty}: {delta:+.3}");
+            assert!(delta <= 0.0, "{enc} {pretty}: {delta:+.3}");
             assert!(-delta <= SAVINGS_UNDERSHOOT, "{enc} {pretty}: {delta:+.3}");
+        }
+    }
+}
+
+/// Collects every `.rs` file under `dir`, recursively.
+fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            rust_sources(&path, out);
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            out.push(path);
         }
     }
 }
@@ -143,14 +206,21 @@ fn minify_savings_are_not_overestimated() {
 fn core_has_no_dependencies_or_network_client() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let manifest = fs::read_to_string(root.join("Cargo.toml")).unwrap();
-    assert!(!manifest.contains("[dependencies]"));
-    for entry in fs::read_dir(root.join("src")).unwrap() {
-        let path = entry.unwrap().path();
-        if path.extension().is_none_or(|e| e != "rs") {
-            continue;
+    for line in manifest.lines().map(str::trim) {
+        if line.starts_with('[') && line.contains("dependencies") {
+            assert_eq!(line, "[dev-dependencies]", "Cargo.toml header");
         }
+    }
+    let mut files = Vec::new();
+    rust_sources(&root.join("src"), &mut files);
+    let build = root.join("build.rs");
+    if build.exists() {
+        files.push(build);
+    }
+    assert!(!files.is_empty());
+    for path in files {
         let src = fs::read_to_string(&path).unwrap();
-        for needle in ["std::net", "TcpStream", "UdpSocket"] {
+        for needle in ["std::net", "TcpStream", "UdpSocket", "process::Command"] {
             assert!(!src.contains(needle), "{needle} in {}", path.display());
         }
     }

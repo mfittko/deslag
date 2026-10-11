@@ -4,11 +4,18 @@
 # These are other-family tokenizers. Their counts are references for
 # calibration, not Claude counts.
 #
-# Usage, from any directory, in a throwaway virtualenv outside the repository:
+# Usage, from the repository root, in a throwaway virtualenv outside the
+# repository:
 #   pip install tiktoken==0.14.0
-#   python generate_reference.py <path to this directory>
+#   python -I crates/deslag-core/tests/fixtures/tokens/generate_reference.py crates/deslag-core/tests/fixtures/tokens
 #
 # Writes the minified JSON fixtures (*.min.json) and reference.tsv.
+#
+# The minified files come from json.dumps, which normalizes some lexemes:
+# number exponents, string escapes, non-ASCII escapes and duplicate keys.
+# The pretty fixtures must avoid them. The Rust test
+# minified_fixtures_match_the_core_minifier guards this: it fails when
+# json.dumps output differs from deslag_core::minify_json.
 import json
 import sys
 from pathlib import Path
@@ -16,7 +23,7 @@ from pathlib import Path
 import tiktoken
 
 ENCODINGS = ["o200k_base", "cl100k_base"]
-PRETTY_JSON = ["pretty.json", "records.json"]
+PRETTY_JSON = ["pretty.json", "records.json", "nested.json", "nested_tab.json"]
 TEXTS = ["log.txt", "source_code.txt", "prose.txt", "cjk.txt"]
 
 

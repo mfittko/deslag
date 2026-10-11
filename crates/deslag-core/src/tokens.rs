@@ -51,28 +51,38 @@ fn class(c: char) -> Class {
 /// - ASCII digits: one token per started 3 digits.
 /// - Whitespace: a single space before non-whitespace joins the next token
 ///   and costs nothing; any other run costs one token.
-/// - ASCII punctuation: one token per started 3 characters.
-/// - Other characters: one token each.
+/// - ASCII punctuation: a run of up to 3 characters costs one token; a
+///   longer run costs one token per started 2 characters, because tokenizers
+///   split dense bracket runs such as `":{},"`.
+/// - Other characters: one token each, two for a non-BMP character.
 fn estimate_tokens(text: &str) -> u64 {
     let mut total = 0u64;
     let mut chars = text.chars().peekable();
     while let Some(first) = chars.next() {
         let kind = class(first);
         let mut len = 1u64;
+        let mut other = utf8_cost(first);
         let mut single_space = first == ' ';
-        while chars.peek().is_some_and(|&c| class(c) == kind) {
+        while let Some(c) = chars.next_if(|&c| class(c) == kind) {
             single_space = false;
-            chars.next();
             len += 1;
+            other += utf8_cost(c);
         }
         total += match kind {
             Class::Letter => len.div_ceil(7),
             Class::Digit => len.div_ceil(3),
             Class::Space if single_space && chars.peek().is_some() => 0,
             Class::Space => 1,
-            Class::Punct => len.div_ceil(3),
-            Class::Other => len,
+            Class::Punct if len <= 3 => 1,
+            Class::Punct => len.div_ceil(2),
+            Class::Other => other,
         };
     }
     total
+}
+
+/// One token per character up to three UTF-8 bytes, two for a non-BMP
+/// (four-byte) character such as an emoji.
+fn utf8_cost(c: char) -> u64 {
+    c.len_utf8().div_ceil(3) as u64
 }
