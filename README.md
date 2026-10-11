@@ -60,7 +60,21 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 ```
 
-The Claude Code plugin lives in [`plugins/claude`](plugins/claude). It currently registers a no-op `PostToolUse` hook that runs `deslag hook claude`, so the `deslag` binary must be on `PATH`. Install it from the repository root with `cargo install --path crates/deslag-cli --locked`.
+The Claude Code plugin lives in [`plugins/claude`](plugins/claude). It currently registers a no-op `PostToolUse` hook. Install it from this repository's marketplace in Claude Code:
+
+```text
+/plugin marketplace add mfittko/deslag
+/plugin install deslag@deslag
+```
+
+Claude Code 2.1.275 or later also accepts one step: `/plugin install deslag --marketplace mfittko/deslag`.
+
+The plugin does not download anything on its own. Run `/deslag:install` once after you install or update the plugin. The command downloads the release archive for the plugin version and your platform (macOS arm64 or Linux x86_64), verifies it against the release `SHA256SUMS` and installs `deslag` into the private plugin data directory. It never replaces a `deslag` binary on your `PATH`. Until the matching binary is installed, the hook exits without output and tool results stay unchanged.
+
+- `/deslag:status` reports whether the matching binary is installed and how to fix it.
+- `/deslag:uninstall` removes the plugin data directory. `/plugin uninstall deslag@deslag` also removes it.
+
+For a local checkout, `claude --plugin-dir plugins/claude` loads the plugin. Its hook also needs `/deslag:install`, or a binary built with `cargo build --release -p deslag-cli` and copied to `$CLAUDE_PLUGIN_DATA/bin/<version>/deslag`.
 
 Benchmarks: `benchmarks/run.sh > docs/benchmarks/baseline.md` runs all runners in release mode and records machine and commit metadata. The committed [baseline](docs/benchmarks/baseline.md) is a measurement only; PLAN §13.2 budgets stay provisional.
 

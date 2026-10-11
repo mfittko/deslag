@@ -58,3 +58,21 @@ Status: experimental. The proxy rewrite is stateless and keeps no replay manifes
 - Client behavior when the hook stops reading oversize input early (the adapter drains stdin, untested live).
 - Composition with other result-replacement hooks.
 - `--continue` and proxy-mode resume and fork with a live client. Hook-mode resume and fork are recorded in [ADR 0006](decisions/0006-session-identity-and-replay.md).
+
+## Plugin distribution
+
+These facts were read from the Claude Code 2.1.296 client binary. `claude plugin validate` passes for the repository root and for `plugins/claude`. The other facts are untested against a live client.
+
+- `.claude-plugin/marketplace.json` at the repository root is the default marketplace path for a GitHub source. `/plugin marketplace add mfittko/deslag` reads it. The shorthand also accepts `owner/repo#ref`.
+- A marketplace plugin entry with `source: "./plugins/claude"` points at the plugin directory. The entry carries no `version`; `plugin.json` is the only plugin version surface.
+- The client substitutes `${CLAUDE_PLUGIN_ROOT}` and `${CLAUDE_PLUGIN_DATA}` in hook commands, in command markdown and in `allowed-tools`. Hook processes also receive both as environment variables.
+- The data directory is `<config dir>/plugins/data/<plugin id>/`. The config dir is `CLAUDE_CONFIG_DIR` or `~/.claude`. The client creates it on demand with default permissions. `/deslag:install` sets it to mode 0700.
+- `claude plugin uninstall` deletes the data directory unless `--keep-data` is passed.
+- A file `commands/<name>.md` in the plugin appears as `/deslag:<name>`.
+
+The hook wrapper `plugins/claude/hooks/deslag-hook.sh` runs `$CLAUDE_PLUGIN_DATA/bin/<plugin version>/deslag hook claude`. When that file is missing, the wrapper exits 0 without output. Only `/deslag:install` downloads anything. `plugins/claude/tests/test.sh` covers the install, checksum, hook and uninstall paths with `file://` fixtures.
+
+Pending live runs on the maintainer's machine:
+
+- `/plugin marketplace add mfittko/deslag` lists the plugin.
+- `/deslag:install` against a published release.
