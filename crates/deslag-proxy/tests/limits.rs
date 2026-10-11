@@ -71,6 +71,7 @@ async fn slow_header_client_is_disconnected() {
     };
     let addr = proxy(&format!("http://{up}"), limits).await;
     let mut client = TcpStream::connect(addr).await.unwrap();
+    let start = std::time::Instant::now();
     client
         .write_all(b"POST /v1/messages HTTP/1.1\r\n")
         .await
@@ -80,6 +81,7 @@ async fn slow_header_client_is_disconnected() {
     let _ = timeout(WAIT, client.read_to_end(&mut rest))
         .await
         .expect("proxy kept a slow-header connection open");
+    assert!(start.elapsed() >= SHORT, "closed before the header timeout");
 }
 
 #[tokio::test]
@@ -109,7 +111,8 @@ async fn unreachable_upstream_fails_within_connect_timeout() {
         connect_timeout: SHORT,
         ..Limits::default()
     };
-    // TEST-NET-1 is never routed: the OS either fails fast or blackholes the SYN.
+    // TEST-NET-1 is never routed. The timeout is exercised only where the SYN is
+    // blackholed; a host that fails fast with ENETUNREACH passes trivially.
     let addr = proxy("https://192.0.2.1", limits).await;
     let mut client = TcpStream::connect(addr).await.unwrap();
     let head = timeout(WAIT, exchange(&mut client))

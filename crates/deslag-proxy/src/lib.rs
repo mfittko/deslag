@@ -130,6 +130,30 @@ impl Default for Limits {
     }
 }
 
+impl Limits {
+    /// Zero would deadlock the accept loop or drop every connection; values
+    /// beyond these bounds overflow tokio's semaphore or timer arithmetic.
+    fn check(&self) -> io::Result<()> {
+        const MAX_TIMEOUT: Duration = Duration::from_secs(24 * 60 * 60);
+        let ok = (1..=Semaphore::MAX_PERMITS).contains(&self.max_connections)
+            && [
+                self.header_read_timeout,
+                self.connect_timeout,
+                self.pool_idle_timeout,
+            ]
+            .iter()
+            .all(|d| !d.is_zero() && *d <= MAX_TIMEOUT);
+        if ok {
+            Ok(())
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("limits out of range: {self:?}"),
+            ))
+        }
+    }
+}
+
 /// [`serve_with`] using [`Limits::default`].
 pub async fn serve(listener: TcpListener, upstream: Upstream) -> io::Result<()> {
     serve_with(listener, upstream, Limits::default()).await
@@ -143,6 +167,7 @@ pub async fn serve_with(
     upstream: Upstream,
     limits: Limits,
 ) -> io::Result<()> {
+    limits.check()?;
     let addr = listener.local_addr()?;
     if !addr.ip().is_loopback() {
         return Err(io::Error::new(
@@ -344,5 +369,37 @@ mod tests {
         let up = Upstream::parse("https://api.anthropic.com").unwrap();
         let err = serve(listener, up).await.unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
+    }
+
+    #[tokio::test]
+    async fn serve_rejects_out_of_range_limits() {
+        let d = Limits::default();
+        for bad in [
+            Limits {
+                max_connections: 0,
+                ..d
+            },
+            Limits {
+                max_connections: Semaphore::MAX_PERMITS + 1,
+                ..d
+            },
+            Limits {
+                header_read_timeout: Duration::ZERO,
+                ..d
+            },
+            Limits {
+                connect_timeout: Duration::ZERO,
+                ..d
+            },
+            Limits {
+                pool_idle_timeout: Duration::MAX,
+                ..d
+            },
+        ] {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let up = Upstream::parse("https://api.anthropic.com").unwrap();
+            let err = serve_with(listener, up, bad).await.unwrap_err();
+            assert_eq!(err.kind(), io::ErrorKind::InvalidInput, "{bad:?}");
+        }
     }
 }
