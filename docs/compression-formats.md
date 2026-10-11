@@ -144,13 +144,15 @@ At each unit, in input order:
 3. The variable indices are the indices where any row differs from the base.
    The group is written only when the directive and the rows are shorter than
    the rows' literal bytes, escapes included. Otherwise the base is written
-   literally, and the encoder retries once with a group that starts at the
-   next unit. A one-line attempt (no row fits the base) changes no retry
-   state. When a run directive or a one-line attempt is at the retry unit,
-   the retry moves to the first unit after it. Until the retry, no other group
-   starts inside the failed group's span. When the retry also fails, no group
-   starts at the other units of either group. A group that is written ends the
-   retry. Run directives still apply to all units.
+   literally. The encoder keeps two values: `no_group_before` and
+   `failed_end`. A group attempt runs at unit i only when i is at least
+   `no_group_before`. `failed_end` is the end of the span of the most recent
+   failed group with two or more lines. When such a group fails at unit i and
+   i is before `failed_end`, `no_group_before` becomes the larger of the two
+   span ends and `failed_end` is cleared. Otherwise `failed_end` becomes the
+   end of the failed group's span. A failed one-line attempt (no row fits the
+   base), a run directive and a written group change neither value. Run
+   directives still apply to all units.
 
 - Line order never changes and no line is dropped.
 - A partial final unit is always literal.

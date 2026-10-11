@@ -26,17 +26,18 @@ pub fn encode_templates(input: &str) -> Option<String> {
     let units: Vec<&str> = input.split_inclusive('\n').collect();
     let mut out = String::from(HEADER_V2);
     let mut i = 0;
-    // ponytail: when a group does not pay, one retry starts at the next unit, so
-    // an outlier base does not block the lines below it. When a paying run starts
-    // at the retry unit, the retry moves to the first unit after the run. A
-    // one-line attempt changes no retry state; at the retry unit it moves the
-    // retry to the next unit. Until
-    // the retry, no other group starts inside the failed span. When the retry
-    // also fails, no group starts inside either span, so each unit is scanned a
-    // bounded number of times. A shorter group in that span could still pay; it
-    // is left literal.
+    // ponytail: a group attempt runs at unit i when i >= no_group_before.
+    // failed_end is the end of the span of the most recent failed multi-line
+    // group. When a multi-line group fails at i and i is inside that span, no
+    // group starts before the end of either span, and failed_end is cleared.
+    // Otherwise the failed group's end becomes failed_end. A failed one-line
+    // attempt, a run directive and a written group change neither value. So an
+    // outlier base does not block the lines below it. Each unit lies in at most
+    // two failed spans before suppression covers it, and a one-line attempt
+    // checks one following row, so encoding is linear. A shorter group inside a
+    // suppressed span could still pay; it is left literal.
     let mut no_group_before = 0;
-    let mut retry_at = None;
+    let mut failed_end: Option<usize> = None;
     while i < units.len() {
         let unit = units[i];
         let count = units[i..].iter().take_while(|&&u| u == unit).count();
@@ -45,29 +46,25 @@ pub fn encode_templates(input: &str) -> Option<String> {
         {
             push_unit(&mut out, unit);
             out.push_str(&directive);
-            if retry_at == Some(i) {
-                retry_at = Some(i + count);
-            }
             i += count;
             continue;
         }
-        if i >= no_group_before || retry_at == Some(i) {
+        if i >= no_group_before {
             let (len, group) = template_group(&units[i..]);
             if let Some(group) = group {
                 out.push_str(&group);
-                retry_at = None;
                 i += len;
                 continue;
             }
-            if len == 1 {
-                if retry_at == Some(i) {
-                    retry_at = Some(i + 1);
+            if len >= 2 {
+                let end = i + len;
+                match failed_end {
+                    Some(e0) if i < e0 => {
+                        no_group_before = e0.max(end);
+                        failed_end = None;
+                    }
+                    _ => failed_end = Some(end),
                 }
-            } else if retry_at.take() == Some(i) {
-                no_group_before = no_group_before.max(i + len);
-            } else {
-                no_group_before = i + len;
-                retry_at = Some(i + 1);
             }
         }
         push_unit(&mut out, unit);
