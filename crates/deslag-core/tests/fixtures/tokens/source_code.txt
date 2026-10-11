@@ -1,0 +1,25 @@
+use std::collections::HashMap;
+
+/// Groups words by their first letter and counts them.
+pub fn group_counts(words: &[&str]) -> HashMap<char, usize> {
+    let mut counts = HashMap::new();
+    for word in words {
+        if let Some(first) = word.chars().next() {
+            *counts.entry(first.to_ascii_lowercase()).or_insert(0) += 1;
+        }
+    }
+    counts
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn counts_by_initial() {
+        let counts = group_counts(&["apple", "Avocado", "banana", ""]);
+        assert_eq!(counts.get(&'a'), Some(&2));
+        assert_eq!(counts.get(&'b'), Some(&1));
+        assert_eq!(counts.len(), 2);
+    }
+}
