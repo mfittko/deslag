@@ -178,16 +178,20 @@ impl Replay {
 }
 
 /// The pinned json-min version of an encoded decision, or `None` for `unchanged: true`.
+/// A decision carries exactly one of `unchanged: true` or `encoded`.
 /// Any other shape is an explicit error, never a silent replay as unchanged.
 fn pinned_version(decision: &Value, id: &str) -> Result<Option<u64>, ReplayError> {
-    if decision["unchanged"] == true && decision.get("encoded").is_none() {
-        return Ok(None);
-    }
-    let encoded = &decision["encoded"];
-    match (encoded["transform"].as_str(), encoded["version"].as_u64()) {
-        (Some("json-min"), Some(version)) => Ok(Some(version)),
-        (Some(_), Some(_)) => Err(ReplayError::RetiredTransform(id.to_owned())),
-        _ => Err(ReplayError::CorruptDecision(id.to_owned())),
+    let corrupt = || ReplayError::CorruptDecision(id.to_owned());
+    match (decision.get("unchanged"), decision.get("encoded")) {
+        (Some(Value::Bool(true)), None) => Ok(None),
+        (None, Some(encoded)) => {
+            match (encoded["transform"].as_str(), encoded["version"].as_u64()) {
+                (Some("json-min"), Some(version)) => Ok(Some(version)),
+                (Some(_), Some(_)) => Err(ReplayError::RetiredTransform(id.to_owned())),
+                _ => Err(corrupt()),
+            }
+        }
+        _ => Err(corrupt()),
     }
 }
 
@@ -455,7 +459,7 @@ async fn first_unchanged_decision_stays_unchanged() {
 }
 
 #[tokio::test]
-async fn manifest_loss_is_an_explicit_error() {
+async fn manifest_loss_and_retired_transform_are_explicit_errors() {
     let dir = temp_dir();
     let mut s = Session::start(&dir, POLICY_V1).await;
     s.turn(&[]).await.unwrap();
@@ -521,7 +525,7 @@ fn pinned_decision_forms_are_validated() {
     let body = conversation(&[("toolu_1", R1)]);
     let retired = Err(ReplayError::RetiredTransform("toolu_1".into()));
     let corrupt = Err(ReplayError::CorruptDecision("toolu_1".into()));
-    let cases: [(Value, Result<String, ReplayError>); 10] = [
+    let cases: [(Value, Result<String, ReplayError>); 12] = [
         (json!({"unchanged": true}), Ok(R1.into())),
         (
             json!({"encoded": {"transform": "json-min", "version": 1}}),
@@ -549,7 +553,15 @@ fn pinned_decision_forms_are_validated() {
             corrupt.clone(),
         ),
         (json!({}), corrupt.clone()),
-        (json!({"unchanged": false}), corrupt),
+        (json!({"unchanged": false}), corrupt.clone()),
+        (
+            json!({"unchanged": true, "encoded": {"transform": "json-min", "version": 1}}),
+            corrupt.clone(),
+        ),
+        (
+            json!({"unchanged": false, "encoded": {"transform": "json-min", "version": 1}}),
+            corrupt,
+        ),
     ];
     let path = replay.manifest_path("session-a");
     for (form, want) in &cases {
@@ -562,7 +574,7 @@ fn pinned_decision_forms_are_validated() {
             .map(|b| content_of(&Bytes::from(b), "toolu_1"));
         assert_eq!(&got, want, "decision {form}");
     }
-    println!("replay: 10 pinned decision forms, 3 replayed, 7 explicit errors");
+    println!("replay: 12 pinned decision forms, 3 replayed, 9 explicit errors");
     fs::remove_dir_all(&replay.dir).unwrap();
 }
 

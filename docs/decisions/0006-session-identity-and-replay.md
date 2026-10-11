@@ -117,7 +117,7 @@ Scenarios:
 - Multi-turn resend and restart: three turns and an identical resend of the third, then a process restart and a fourth turn. Each upstream body starts with every message byte of the previous body. An identical resend is byte-identical.
 - Policy upgrade: a session built under policy v1 is resent under policy v2 with transform v2. Results decided under v1 keep their v1 bytes. This includes `toolu_2`, which v1 left unchanged and which a fresh v2 decision encodes; the test asserts both premises. A new result uses v2.
 - First decision unchanged: a result left unchanged under simulated load stays unchanged after the load drops.
-- Manifest loss: a corrupt or deleted manifest with tool results in the request is an explicit error. Corrupt covers bytes that do not parse and a manifest with no `decisions` object. A pinned transform id or version that the binary does not know is an explicit error too. So is a malformed pinned decision: one that is neither `unchanged: true` nor `encoded` with a transform id and an unsigned integer version, such as version `1.0`, `"1"` or `-1`. A malformed decision never replays as unchanged. The replay layer rejects the request before the proxy is called.
+- Manifest loss: a corrupt or deleted manifest with tool results in the request is an explicit error. Corrupt covers bytes that do not parse and a manifest with no `decisions` object. A pinned transform id or version that the binary does not know is an explicit error too. So is a malformed pinned decision: one that does not carry exactly one of `unchanged: true` or `encoded` with a transform id and an unsigned integer version. Examples are version `1.0`, `"1"` or `-1`, and a decision with both `unchanged` and `encoded`. A malformed decision never replays as unchanged. The replay layer rejects the request before the proxy is called.
 - Digest mismatch and undecided history: changed source bytes under a known `tool_use_id`, or an unknown result outside the newest message, is an explicit error. The replay layer rejects the request before the proxy is called.
 - No scope: the body passes through byte-identical and no manifest is written.
 
@@ -129,12 +129,12 @@ test digest_mismatch_and_undecided_history_are_explicit_errors ... replay: Err(D
 ok
 test first_unchanged_decision_stays_unchanged ... replay: toolu_1 left unchanged under load stayed unchanged after load dropped
 ok
-test manifest_loss_is_an_explicit_error ... replay: corrupt and missing manifest -> Err(MissingManifest)
+test manifest_loss_and_retired_transform_are_explicit_errors ... replay: corrupt and missing manifest -> Err(MissingManifest)
 ok
 test multi_turn_resend_and_restart_keep_prefix_byte_stable ... replay: 4 turns + restart, upstream body bytes [87, 364, 586, 838], toolu_1 73 -> 57 bytes
 ok
 test no_scope_passes_bytes_through ... ok
-test pinned_decision_forms_are_validated ... replay: 10 pinned decision forms, 3 replayed, 7 explicit errors
+test pinned_decision_forms_are_validated ... replay: 12 pinned decision forms, 3 replayed, 9 explicit errors
 ok
 test policy_upgrade_replays_pinned_decisions ... replay: upgrade v1->v2 kept toolu_1@v1 and toolu_2 unchanged; toolu_3 used v2
 ok
