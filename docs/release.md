@@ -42,7 +42,7 @@ toolchain.
 | `bump.sh <version>` | Set both surfaces, refresh `Cargo.lock`, assemble fragments, stamp the changelog, stage the result. |
 | `extract-notes.sh <version\|Unreleased> [<changelog>]` | Print a `CHANGELOG.md` section body; fail when it is missing or empty. |
 | `verify-approval.sh <version> <owner/repo> [<since>]` | Fail a stable release without an operator approval comment. |
-| `package.sh <version> <target>` | Pack a built binary into `dist/deslag-<version>-<target>.tar.gz`. |
+| `package.sh <version> <target>` | Pack the `deslag` binary, both license files and `README.md` into a `deslag-<version>-<target>/` directory in `dist/deslag-<version>-<target>.tar.gz`. |
 | `checksums.sh <dir>` | Write `<dir>/SHA256SUMS` for every archive in `<dir>`. |
 
 ## 1. Collect changelog fragments
@@ -116,8 +116,9 @@ The workflow then runs four jobs:
 2. `build` runs only after `verify` passes. It builds `deslag` with
    `cargo build --release --locked` for `aarch64-apple-darwin` (macOS 14) and
    `x86_64-unknown-linux-gnu` (Ubuntu 22.04), and packs each into a `.tar.gz`.
-   The release archives contain only the `deslag` binary. `deslag-proxy` is
-   not distributed in this release.
+   Each archive holds a `deslag-<version>-<target>/` directory with the
+   `deslag` binary, `LICENSE-MIT`, `LICENSE-APACHE` and `README.md`.
+   `deslag-proxy` is not distributed in this release.
 3. `checksums` writes `SHA256SUMS` for both archives.
 4. `publish` creates a build provenance attestation for each archive, then
    creates the GitHub Release with both archives, `SHA256SUMS` and the

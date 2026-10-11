@@ -10,15 +10,23 @@ base=${1:?usage: check-changelog-fragment.sh <base-ref>}
 # shellcheck source=scripts/release/lib.sh
 . "$(dirname "$0")/lib.sh"
 
-# core.quotePath=false prints non-ASCII paths raw, so the filters see them.
+# -z lists raw, NUL-terminated names: git C-quotes nothing, so a name with a
+# quote, a backslash, a control character or a non-ASCII byte reaches the
+# filters unchanged.
 # --no-renames lists a renamed file under its new name as an addition.
 # Both lists are captured up front: under set -e a git failure (for example an
 # unresolvable base) aborts the check before any "ok".
-changed() { git -c core.quotePath=false diff --no-renames --name-only "$@" "$base...HEAD"; }
-files=$(changed)
-fragments=$(changed --diff-filter=AM)
+lists=$(mktemp -d)
+trap 'command rm -rf "$lists"' EXIT
+changed() { git diff -z --no-renames --name-only "$@" "$base...HEAD"; }
+changed >"$lists/files"
+changed --diff-filter=AM >"$lists/fragments"
 
-if ! grep -E '^(crates|plugins)/' >/dev/null <<<"$files"; then
+touched=0
+while IFS= read -r -d '' f; do
+  case $f in crates/* | plugins/*) touched=1 ;; esac
+done <"$lists/files"
+if [ "$touched" = 0 ]; then
   echo "ok: no changes under crates/ or plugins/"
   exit 0
 fi
@@ -27,7 +35,7 @@ if printf '%s\n' "${PR_BODY:-}" | tr -d '\r' | grep -iE '^[[:space:]]*changelog:
   exit 0
 fi
 found=0 bad=0
-while IFS= read -r f; do
+while IFS= read -r -d '' f; do
   case $f in changes/README.md | changes/*/*) continue ;; changes/*.md) ;; *) continue ;; esac
   if [ ! -f "$f" ] || [ -L "$f" ]; then
     echo "error: $f: a fragment must be a regular file" >&2
@@ -42,7 +50,7 @@ while IFS= read -r f; do
   else
     bad=1
   fi
-done <<<"$fragments"
+done <"$lists/fragments"
 
 if [ "$bad" = 1 ]; then
   echo "error: fix the fragment format; see changes/README.md" >&2

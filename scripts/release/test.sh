@@ -109,6 +109,12 @@ expect_fail "fragment check fails a non-ASCII crates/ path without fragment" "ch
 branch non-ascii-fragment; echo "// x" >"$r/crates/a/src/café.rs"; printf -- '- Thing.\n' >"$r/changes/café.md"; commit frag
 expect_ok "fragment check counts a non-ASCII fragment name" "$r" check ""
 
+n=0
+for name in 'x"y.rs' $'x\ty.rs' 'x\y.rs'; do
+  n=$((n + 1)); branch "quoted-$n"; echo "// x" >"$r/crates/a/src/$name"; commit code
+  expect_fail "fragment check fails a git-quoted crates/ path without fragment (${name//$'\t'/<TAB>})" "changes/" "$r" check ""
+done
+
 branch empty-fragment; echo "// z" >>"$r/crates/a/src/lib.rs"; printf '\n  \n' >"$r/changes/empty.md"; commit empty
 expect_fail "fragment check rejects an empty fragment" "changes/" "$r" check ""
 
