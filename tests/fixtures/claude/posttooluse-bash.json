@@ -1,0 +1,25 @@
+{
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "transcript_path": "/home/user/.claude/projects/sanitized-project/00000000-0000-4000-8000-000000000001.jsonl",
+  "cwd": "/home/user/project",
+  "prompt_id": "00000000-0000-4000-8000-000000000002",
+  "permission_mode": "default",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "cat sample.txt",
+    "description": "Print contents of sample.txt"
+  },
+  "tool_response": {
+    "stdout": "hello-deslag",
+    "stderr": "",
+    "interrupted": false,
+    "isImage": false,
+    "noOutputExpected": false
+  },
+  "tool_use_id": "toolu_fixture_bash",
+  "duration_ms": 486
+}

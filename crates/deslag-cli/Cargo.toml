@@ -1,0 +1,16 @@
+[package]
+name = "deslag-cli"
+description = "Command-line entry point and agent hook adapters for deslag."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "deslag"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "1.0.152"
