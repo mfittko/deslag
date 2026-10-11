@@ -51,5 +51,5 @@ jobs:
           scripts/release/check-versions.sh
       - name: Plugin scripts
         run: |
-          shellcheck plugins/claude/hooks/*.sh plugins/claude/scripts/*.sh plugins/claude/tests/*.sh
-          plugins/claude/tests/test.sh
+          shellcheck plugins/claude/hooks/*.sh plugins/claude/scripts/*.sh tests/plugin/*.sh
+          tests/plugin/test.sh

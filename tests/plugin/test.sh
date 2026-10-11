@@ -4,7 +4,7 @@
 # no test touches the network.
 set -euo pipefail
 
-root=$(cd "$(dirname "$0")/.." && pwd)
+root=$(cd "$(dirname "$0")/../../plugins/claude" && pwd)
 install_sh=$root/scripts/install.sh
 hook_sh=$root/hooks/deslag-hook.sh
 tmp=$(mktemp -d)
