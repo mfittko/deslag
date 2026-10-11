@@ -257,6 +257,7 @@ fn observe_emits_original_and_records_hypothetical_savings() {
             "tokenizer": "test-bytes",
         })
     );
+    assert!(compress(PRETTY, &ctx).into_changed().is_none());
 }
 
 #[test]
