@@ -88,10 +88,8 @@ fn replacement(event: &Value, updated: Value) -> Option<Value> {
     }))
 }
 
-/// Same JSON type; objects also need the same key set with same-shaped values.
-// ponytail: arrays compare by type only, so an array element of the wrong shape still
-// passes and the client then ignores the replacement. Compare elements before wiring
-// replacement into a tool whose output contains arrays.
+/// Same JSON type; objects need the same key set and arrays the same length,
+/// with same-shaped values at each key or index.
 fn same_shape(original: &Value, updated: &Value) -> bool {
     match (original, updated) {
         (Value::Object(a), Value::Object(b)) => {
@@ -99,11 +97,13 @@ fn same_shape(original: &Value, updated: &Value) -> bool {
                 && a.iter()
                     .all(|(key, value)| b.get(key).is_some_and(|other| same_shape(value, other)))
         }
+        (Value::Array(a), Value::Array(b)) => {
+            a.len() == b.len() && a.iter().zip(b).all(|(x, y)| same_shape(x, y))
+        }
         (Value::Null, Value::Null)
         | (Value::Bool(_), Value::Bool(_))
         | (Value::Number(_), Value::Number(_))
-        | (Value::String(_), Value::String(_))
-        | (Value::Array(_), Value::Array(_)) => true,
+        | (Value::String(_), Value::String(_)) => true,
         _ => false,
     }
 }
@@ -162,6 +162,22 @@ mod tests {
         let mut updated = event["tool_response"].clone();
         updated["file"]["numLines"] = json!("2");
         assert_eq!(replacement(&event, updated), None);
+    }
+
+    #[test]
+    fn content_block_arrays_compare_elements() {
+        let event = json!({"tool_response": [{"type": "text", "text": "long"}]});
+        let same = json!([{"type": "text", "text": "short"}]);
+        assert!(replacement(&event, same).is_some());
+        for bad in [
+            json!([{"type": "text", "body": "short"}]),
+            json!([{"type": "text", "text": 1}]),
+            json!(["short"]),
+            json!([]),
+            json!([{"type": "text", "text": "a"}, {"type": "text", "text": "b"}]),
+        ] {
+            assert_eq!(replacement(&event, bad.clone()), None, "{bad}");
+        }
     }
 
     #[test]
