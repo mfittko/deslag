@@ -1,7 +1,7 @@
 # Compression formats
 
 Formats that deslag transforms emit. Each format is versioned. A decoder for a
-version accepts exactly the output that version's encoder can produce.
+version accepts every output that version's encoder can produce.
 
 ## lines-v1
 
@@ -47,8 +47,9 @@ The encoded text is the header line followed by the body.
 
 - Units are compared byte for byte, including the terminator. Only
   consecutive units form a run. Order never changes and no unit is dropped.
-- A run is encoded only when the directive is shorter than the bytes of the
-  N-1 copies it replaces. Otherwise the copies are written out.
+- A run is encoded only when the directive is shorter than the emitted bytes
+  of the N-1 copies it replaces. A copy of a unit that starts with the prefix
+  is emitted with its escape. Otherwise the copies are written out.
 - The candidate is emitted only when it is shorter than the input
   (`insufficient_gain` otherwise).
 - Input that already starts with the header is skipped as
@@ -59,8 +60,9 @@ The encoded text is the header line followed by the body.
 - The transform is opt-in: `CompressionContext::exact_line_runs`, default
   `false`.
 - With the switch on, input that the JSON scanner rejects as
-  `unsupported_format` is plain text and goes to this codec. JSON content stays
-  on the JSON path.
+  `unsupported_format` is plain text and goes to this codec. With
+  `json_minify` on, JSON content stays on the JSON path. With `json_minify` off
+  and `exact_line_runs` on, all input goes to this codec.
 - The core decodes the candidate and compares it with the input. A mismatch
   yields `failed` / `invalid_candidate`.
 - The header, prefix, escape and unit splitting are shared, so a later

@@ -185,7 +185,7 @@ pub trait TokenCounter {
 pub struct CompressionContext<'c> {
     pub mode: Mode,
     pub policy_version: u32,
-    /// Enables the JSON minifier, the only transform so far.
+    /// Enables the JSON minifier.
     pub json_minify: bool,
     /// Enables the exact line-run codec for plain text the JSON scanner rejects.
     pub exact_line_runs: bool,
@@ -326,7 +326,7 @@ impl CompressionResult<'_> {
     }
 }
 
-/// Runs the JSON minifier under `ctx`. Any skip or failure returns the input
+/// Runs the enabled transforms under `ctx`. Any skip or failure returns the input
 /// borrowed, never a partial rewrite.
 pub fn compress<'a>(input: &'a str, ctx: &CompressionContext) -> CompressionResult<'a> {
     let start = Instant::now();
@@ -405,6 +405,9 @@ fn decide<'a>(
             report.format_version = Some(LINES_FORMAT_VERSION);
             let candidate = encode_lines(input).ok_or(Reason::UnsupportedFormat)?;
             report.candidate_bytes = Some(candidate.len());
+            if candidate.len() >= input.len() {
+                return Err(Reason::InsufficientGain);
+            }
             if decode_lines(&candidate, input.len()).as_deref() != Ok(input) {
                 report.validation_outcome = ValidationOutcome::Failed;
                 return Err(Reason::InvalidCandidate);

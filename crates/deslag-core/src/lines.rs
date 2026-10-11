@@ -44,7 +44,14 @@ pub fn encode_lines(input: &str) -> Option<String> {
             continue;
         }
         let directive = format!("{RUN}{count}\n");
-        if directive.len() < (count - 1) * unit.len() {
+        // Bytes one copy costs when written out.
+        let copy_cost = unit.len()
+            + if unit.starts_with(PREFIX) {
+                ESCAPE.len()
+            } else {
+                0
+            };
+        if directive.len() < (count - 1) * copy_cost {
             out.push_str(&directive);
         } else {
             for _ in 1..count {

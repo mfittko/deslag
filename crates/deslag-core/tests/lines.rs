@@ -203,6 +203,10 @@ fn decoder_rejects_malformed_input() {
             DecodeError::InvalidDirective,
         ),
         (
+            "#!deslag lines-v1\na\n#!deslag x3\r",
+            DecodeError::InvalidDirective,
+        ),
+        (
             "#!deslag lines-v1\na\n#!deslag x 3\n",
             DecodeError::InvalidDirective,
         ),
@@ -251,13 +255,18 @@ fn decoder_respects_output_bound() {
 
 #[test]
 fn generated_inputs_round_trip() {
-    const UNITS: [&str; 6] = [
+    const UNITS: [&str; 11] = [
         "a\n",
         "bbbbbbbbbbbbbbbb\n",
         "\n",
         "c\r\n",
         "#!deslag x2\n",
         "#!",
+        "#!deslag lines-v1\n",
+        "#!deslag|q\n",
+        "é€\n",
+        "x\ry",
+        "#!deslag",
     ];
     let mut state = 12345u64;
     for _ in 0..2000 {
@@ -272,6 +281,42 @@ fn generated_inputs_round_trip() {
             }
         }
         state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
-        roundtrip(&input);
+        if !input.starts_with(HEADER) {
+            roundtrip(&input);
+        }
+    }
+}
+
+#[test]
+fn escaped_copies_count_their_escape() {
+    let encoded = roundtrip("#!deslag\n#!deslag\n");
+    assert_eq!(encoded, format!("{HEADER}#!deslag|#!deslag\n#!deslag x2\n"));
+}
+
+#[test]
+fn header_start_input_reports_unsupported_format() {
+    let input = format!("{HEADER}{}", LINE.repeat(5));
+    let r = compress(&input, &on(Mode::Safe));
+    assert_eq!(r.report.transform_id, "exact-line-runs");
+    assert_eq!(r.report.format_version, Some(1));
+    assert_eq!(r.report.reason, Some(Reason::UnsupportedFormat));
+    assert_eq!(r.report.validation_outcome, ValidationOutcome::NotRun);
+}
+
+#[test]
+fn plain_text_without_runs_reports_insufficient_gain() {
+    let r = compress("one\ntwo\nthree\n", &on(Mode::Safe));
+    assert_eq!(r.report.reason, Some(Reason::InsufficientGain));
+    assert_eq!(r.report.validation_outcome, ValidationOutcome::NotRun);
+    assert!(r.report.candidate_bytes.is_some());
+}
+
+#[test]
+fn malformed_json_falls_through_to_the_codec() {
+    for prefix in ["[", "{"] {
+        let input = format!("{prefix}\n{}", LINE.repeat(20));
+        let r = compress(&input, &on(Mode::Safe));
+        assert_eq!(r.report.outcome, Outcome::Changed, "{input:?}");
+        assert_eq!(r.report.transform_id, "exact-line-runs");
     }
 }
