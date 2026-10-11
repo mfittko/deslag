@@ -97,6 +97,23 @@ expect_fail "fragment check rejects an empty fragment" "changes/" "$r" check ""
 branch readme-only; echo "// w" >>"$r/crates/a/src/lib.rs"; echo more >>"$r/changes/README.md"; commit readme
 expect_fail "fragment check ignores changes/README.md" "changes/" "$r" check ""
 
+branch bad-fragment; echo "// v" >>"$r/crates/a/src/lib.rs"; printf 'Just text.\n' >"$r/changes/bad.md"; commit bad
+expect_fail "fragment check rejects a line that is no entry" "expected a" "$r" check ""
+
+branch bad-heading; echo "// u" >>"$r/crates/a/src/lib.rs"; printf -- '### Removed\n- Gone.\n' >"$r/changes/bad.md"; commit bad
+expect_fail "fragment check rejects an unknown section heading" "unknown section" "$r" check ""
+
+branch one-bad; echo "// t" >>"$r/crates/a/src/lib.rs"; printf -- '- Fine.\n' >"$r/changes/good.md"; printf '## Heading\n- X.\n' >"$r/changes/bad.md"; commit bad
+expect_fail "fragment check rejects a malformed fragment next to a valid one" "expected a" "$r" check ""
+
+branch crlf-fragment; echo "// s" >>"$r/crates/a/src/lib.rs"; printf -- '### Fixed\r\n- Fine.\r\n' >"$r/changes/crlf.md"; commit crlf
+expect_ok "fragment check accepts a CRLF fragment" "$r" check ""
+
+branch rename-base; printf -- '- Old.\n' >"$r/changes/old.md"; commit old
+rename_base=$(git -C "$r" rev-parse HEAD)
+git -C "$r" mv changes/old.md changes/new.md; echo "// r" >>"$r/crates/a/src/lib.rs"; commit rename
+expect_ok "fragment check counts a renamed fragment" "$r" env PR_BODY= "$here/check-changelog-fragment.sh" "$rename_base"
+
 # --- bump.sh -----------------------------------------------------------------
 r=$(new_repo bump-empty)
 expect_fail "bump rejects a non-SemVer version" "semver" "$r" "$here/bump.sh" 1.2
@@ -157,6 +174,21 @@ r=$(new_repo bump-bad)
 printf -- '### Removed\n- Gone.\n' >"$r/changes/bad.md"
 expect_fail "bump rejects an unknown section heading" "unknown section" "$r" "$here/bump.sh" 0.2.0
 expect_eq "bump leaves the changelog untouched on error" "" "$(git -C "$r" status --porcelain -- CHANGELOG.md Cargo.toml)"
+printf 'Not an entry.\n' >"$r/changes/bad.md"
+expect_fail "bump rejects a line that is no entry" "expected a" "$r" "$here/bump.sh" 0.2.0
+
+r=$(new_repo bump-undated)
+printf '# Changelog\n\n## Unreleased\n\n- Pending.\n\n## 0.3.0\n\n## 0.0.1 - 2020-01-01\n\n- First.\n' >"$r/CHANGELOG.md"
+expect_fail "bump refuses a version with an empty undated heading" "already" "$r" "$here/bump.sh" 0.3.0
+
+r=$(new_repo bump-cargo-fail)
+printf -- '- Change.\n' >"$r/changes/change.md"
+git -C "$r" add -A && git -C "$r" commit -qm pending
+mkdir -p "$tmp/fakecargo"
+printf '#!/bin/sh\necho "cargo: simulated failure" >&2\nexit 101\n' >"$tmp/fakecargo/cargo"
+chmod +x "$tmp/fakecargo/cargo"
+expect_fail "bump fails when cargo update fails" "simulated failure" "$r" env PATH="$tmp/fakecargo:$PATH" "$here/bump.sh" 0.2.0
+expect_eq "bump restores every file when cargo update fails" "" "$(git -C "$r" status --porcelain)"
 
 # --- extract-notes.sh --------------------------------------------------------
 r=$tmp/notes; mkdir -p "$r"
@@ -169,6 +201,8 @@ expect_eq "extract-notes reads Unreleased" "- Pending." "$(cd "$r" && "$here/ext
 expect_fail "extract-notes fails on a missing section" "no '## 2.0.0' section" "$r" "$here/extract-notes.sh" 2.0.0
 expect_fail "extract-notes fails on an empty section" "empty" "$r" "$here/extract-notes.sh" 1.0.0-rc.1
 expect_fail "extract-notes does not match a version prefix" "no '## 1.0' section" "$r" "$here/extract-notes.sh" 1.0
+printf '## Unreleased\r\n\r\n## 2.0.0\r\n\r\n- Two.\r\n\r\n## 1.0.0\r\n' >"$r/CRLF.md"
+expect_eq "extract-notes reads a CRLF changelog" "- Two." "$(cd "$r" && "$here/extract-notes.sh" 2.0.0 CRLF.md)"
 
 # --- verify-approval.sh ------------------------------------------------------
 r=$(new_repo approval)

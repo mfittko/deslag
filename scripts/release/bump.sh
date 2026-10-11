@@ -4,17 +4,21 @@
 # Cargo.lock, folds changes/*.md fragments into `## Unreleased`, stamps that
 # section as `## <version> - <UTC date>` under a fresh empty `## Unreleased`,
 # and stages exactly those files. It never commits, tags or pushes.
-# All checks run before the first write, so a refusal leaves the tree untouched.
+# The checks run before the first write. Until Cargo.lock is refreshed, any
+# failure restores the original files, so a refusal or a failure changes no file.
 set -euo pipefail
 version=${1:?usage: bump.sh <version>}
 plugin=plugins/claude/.claude-plugin/plugin.json
+files=(CHANGELOG.md Cargo.toml "$plugin" Cargo.lock)
 semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+# shellcheck source=scripts/release/lib.sh
+. "$(dirname "$0")/lib.sh"
 
 if ! grep -qE "$semver" <<<"$version"; then
   echo "error: '$version' is not a SemVer version (X.Y.Z or X.Y.Z-pre)" >&2
   exit 1
 fi
-if "$(dirname "$0")/extract-notes.sh" "$version" >/dev/null 2>&1 || grep -qF "## $version " CHANGELOG.md; then
+if awk -v h="## $version" '{ sub(/\r$/, "") } $0 == h || index($0, h " ") == 1 { found = 1 } END { exit !found }' CHANGELOG.md; then
   echo "error: CHANGELOG.md already has a '## $version' section" >&2
   exit 1
 fi
@@ -25,23 +29,12 @@ for f in changes/*.md; do
 done
 
 work=$(mktemp -d)
-trap 'command rm -rf "$work"' EXIT
+restore=0
+trap 'if [ "$restore" = 1 ]; then for f in "${files[@]}"; do command cp -f "$work/orig/${f##*/}" "$f"; done; fi; command rm -rf "$work"' EXIT
 
 # Entries keep their order: existing Unreleased entries first, then fragments
-# in file-name order. A line before any `### ` heading belongs to Changed.
-awk -v cl=CHANGELOG.md -v ver="$version" -v date="$(date -u +%Y-%m-%d)" '
-  function die(msg) { printf "error: %s: %s\n", FILENAME, msg > "/dev/stderr"; err = 1; exit 1 }
-  function take(line,   s) {
-    if (line !~ /[^[:space:]]/) return
-    if (line ~ /^### /) {
-      s = substr(line, 5); sub(/[[:space:]]+$/, "", s)
-      if (!(s in known)) die("unknown section heading \"" line "\" (use Added, Changed or Fixed)")
-      sec = s; return
-    }
-    if (line ~ /^#/) die("unexpected heading \"" line "\"")
-    entries[sec] = entries[sec] line "\n"; n++
-  }
-  BEGIN { known["Added"]; known["Changed"]; known["Fixed"] }
+# in file-name order. Entries before any `### ` line belong to Changed.
+awk -v cl=CHANGELOG.md -v ver="$version" -v date="$(date -u +%Y-%m-%d)" "$fragment_awk"'
   FNR == 1 { sec = "Changed" }
   FILENAME != cl { take($0); next }
   state == 0 && /^## Unreleased[[:space:]]*$/ { state = 1; next }
@@ -67,12 +60,16 @@ awk -v ver="$version" '
 ' Cargo.toml >"$work/Cargo.toml"
 jq --arg v "$version" '.version = $v' "$plugin" >"$work/plugin.json"
 
+mkdir "$work/orig"
+for f in "${files[@]}"; do command cp -f "$f" "$work/orig/${f##*/}"; done
+restore=1
 command mv -f "$work/CHANGELOG.md" CHANGELOG.md
 command mv -f "$work/Cargo.toml" Cargo.toml
 command mv -f "$work/plugin.json" "$plugin"
 cargo update --workspace --offline --quiet
+restore=0
 
-git add -- Cargo.toml Cargo.lock "$plugin" CHANGELOG.md
+git add -- "${files[@]}"
 if [ ${#fragments[@]} -gt 0 ]; then
   command rm -f -- "${fragments[@]}"
   git rm -q --cached --ignore-unmatch -- "${fragments[@]}"

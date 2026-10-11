@@ -28,13 +28,17 @@ if ! comments=$(gh api --paginate "repos/$repo/issues/comments?since=$since_iso&
   echo "error: could not list issue comments of $repo; refusing the release" >&2
   exit 1
 fi
-match=$(jq -r --arg op "$operator" --arg phrase "approve release v$version" --argjson since "$since_epoch" '
-  .[]
-  | select((.user.login | ascii_downcase) == ($op | ascii_downcase))
-  | select((.created_at | fromdateiso8601) > $since)
-  | select(any(.body | gsub("\r"; "") | split("\n")[]; gsub("^\\s+|\\s+$"; "") | ascii_downcase == $phrase))
-  | .html_url
-' <<<"$comments" | head -n 1)
+# --paginate prints one array per page; -n with inputs reads them all, and
+# first() stops in jq, so no pipe can SIGPIPE under pipefail.
+match=$(jq -nr --arg op "$operator" --arg phrase "approve release v$version" --argjson since "$since_epoch" '
+  first(
+    inputs[]
+    | select((.user.login | ascii_downcase) == ($op | ascii_downcase))
+    | select((.created_at | fromdateiso8601) > $since)
+    | select(any(.body | gsub("\r"; "") | split("\n")[]; gsub("^\\s+|\\s+$"; "") | ascii_downcase == $phrase))
+    | .html_url
+  )
+' <<<"$comments")
 
 if [ -z "$match" ]; then
   echo "error: no approval: $operator has not commented 'approve release v$version' on an issue of $repo after $since_iso" >&2

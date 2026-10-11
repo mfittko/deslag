@@ -2,10 +2,12 @@
 # Usage: extract-notes.sh <version|Unreleased> [<changelog>]
 # Prints the body of the `## <version>` section, trimmed of leading and
 # trailing blank lines. Fails when the section is missing or empty.
+# CRLF line endings are read as LF.
 set -euo pipefail
 version=${1:?usage: extract-notes.sh <version|Unreleased> [<changelog>]}
 
 awk -v v="$version" '
+  { sub(/\r$/, "") }
   found && /^## / { exit }
   found { line[++n] = $0; if ($0 ~ /[^[:space:]]/) { if (!first) first = n; last = n }; next }
   $0 == "## " v || index($0, "## " v " ") == 1 { found = 1 }
