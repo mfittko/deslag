@@ -74,18 +74,25 @@ async fn proxy(upstream: SocketAddr, minify: bool) -> SocketAddr {
     addr
 }
 
-/// Sends WARMUP + SAMPLES sequential requests on one kept-alive connection.
-/// Returns sorted latencies and the body length the upstream last reported.
-async fn measure(target: SocketAddr, body: &Bytes) -> (Vec<Duration>, usize) {
+type Sender = hyper::client::conn::http1::SendRequest<Full<Bytes>>;
+
+/// Opens one kept-alive connection to `target`.
+async fn connect(target: SocketAddr) -> Sender {
     let stream = TcpStream::connect(target).await.unwrap();
     stream.set_nodelay(true).unwrap();
-    let (mut tx, conn) = hyper::client::conn::http1::handshake(TokioIo::new(stream))
+    let (tx, conn) = hyper::client::conn::http1::handshake(TokioIo::new(stream))
         .await
         .unwrap();
     tokio::spawn(conn);
-    let mut times = Vec::with_capacity(SAMPLES);
+    tx
+}
+
+/// Sends `n` sequential requests on one connection.
+/// Returns sorted latencies and the body length the upstream last reported.
+async fn measure(tx: &mut Sender, body: &Bytes, n: usize) -> (Vec<Duration>, usize) {
+    let mut times = Vec::with_capacity(n);
     let mut seen = 0;
-    for i in 0..WARMUP + SAMPLES {
+    for _ in 0..n {
         tx.ready().await.unwrap();
         let req = Request::post("/v1/messages")
             .header("content-type", "application/json")
@@ -94,11 +101,8 @@ async fn measure(target: SocketAddr, body: &Bytes) -> (Vec<Duration>, usize) {
         let start = Instant::now();
         let resp = tx.send_request(req).await.unwrap();
         let reply = resp.into_body().collect().await.unwrap().to_bytes();
-        let elapsed = start.elapsed();
+        times.push(start.elapsed());
         seen = std::str::from_utf8(&reply).unwrap().parse().unwrap();
-        if i >= WARMUP {
-            times.push(elapsed);
-        }
     }
     times.sort();
     (times, seen)
@@ -114,18 +118,26 @@ async fn main() {
     let upstream = mock().await;
     let transparent = proxy(upstream, false).await;
     let minifying = proxy(upstream, true).await;
+    let mut targets = Vec::new();
+    for (label, target) in [
+        ("direct to mock", upstream),
+        ("proxy, transparent", transparent),
+        ("proxy, --minify-json", minifying),
+    ] {
+        targets.push((label, connect(target).await));
+    }
+    // Warm up every target before measuring any of them.
+    for (_, tx) in &mut targets {
+        measure(tx, &body, WARMUP).await;
+    }
     println!(
         "### deslag-proxy request latency ({} byte request, concurrency 1, warmup {WARMUP}, samples {SAMPLES})\n",
         body.len()
     );
     println!("| path | upstream bytes | p50 | p95 | p99 |");
     println!("| --- | --- | --- | --- | --- |");
-    for (label, target) in [
-        ("direct to mock", upstream),
-        ("proxy, transparent", transparent),
-        ("proxy, --minify-json", minifying),
-    ] {
-        let (times, seen) = measure(target, &body).await;
+    for (label, tx) in &mut targets {
+        let (times, seen) = measure(tx, &body, SAMPLES).await;
         println!(
             "| {label} | {seen} | {:?} | {:?} | {:?} |",
             percentile(&times, 0.50),

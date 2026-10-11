@@ -14,7 +14,7 @@ else
   cpus=$(nproc)
 fi
 dirty=no
-if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
   dirty=yes
 fi
 
@@ -29,7 +29,7 @@ PLAN §13.2 budgets remain provisional. This file records measurements only; rel
 | --- | --- |
 | Date (UTC) | $(date -u +%Y-%m-%dT%H:%M:%SZ) |
 | Commit | $(git rev-parse HEAD) |
-| Uncommitted tracked changes | $dirty |
+| Uncommitted changes (tracked or untracked) | $dirty |
 | CPU | $cpu |
 | Logical CPUs | $cpus |
 | OS | $(uname -a) |
@@ -46,5 +46,5 @@ $(rustc -Vv)
 
 EOF
 
-# Only the benchmark binaries print to stdout; cargo build output goes to stderr.
-cargo bench --locked --workspace --bench minify --bench hook --bench proxy 2>/dev/null
+# Only the benchmark binaries print to stdout. cargo build output and errors stay on stderr.
+cargo bench --locked --workspace --bench minify --bench hook --bench proxy
