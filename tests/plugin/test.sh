@@ -191,11 +191,11 @@ expect_eq "hook with a missing binary exits 0" 0 "$rc"
 expect_eq "hook with a missing binary prints nothing" "" "$out"
 rc=0; out=$(echo '{"tool_name":"Bash"}' | run_hook "$tmp/data-old") || rc=$?
 expect_eq "hook with a mismatched version exits 0" 0 "$rc"
+expect_eq "hook with a mismatched version prints nothing" "" "$out"
 for d in data-partial data-empty; do
   rc=0; out=$(echo '{"tool_name":"Bash"}' | run_hook "$tmp/$d" 2>&1) || rc=$?
   expect_eq "hook with $d exits 0 with no output" "0:" "$rc:$out"
 done
-expect_eq "hook with a mismatched version prints nothing" "" "$out"
 rc=0; out=$(echo '{"tool_name":"Bash"}' | env -i PATH=/usr/bin:/bin "$hook_sh" 2>&1) || rc=$?
 expect_eq "hook without plugin env exits 0 silently" "0:" "$rc:$out"
 expect_eq "hook runs the installed binary with stdin" \
