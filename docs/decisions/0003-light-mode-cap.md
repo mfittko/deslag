@@ -12,7 +12,7 @@ ADR 0001 set light mode to 2 files and 40 lines, copied from the dev-loops repo'
 ## Decision
 
 - `localImplementation.lightMode.maxFiles: 5` and `maxLines: 200`.
-- Risk paths are unchanged. Changes to `Cargo.lock`, `Cargo.toml`, `rust-toolchain.toml`, `deny.toml`, `plugins/claude/**`, `.devloops` and `.github/workflows/**` always get full fan-out, whatever their size.
+- Risk paths are unchanged. Changes to `**/Cargo.lock`, `**/Cargo.toml`, `rust-toolchain.toml`, `deny.toml`, `plugins/claude/**`, `.devloops` and `.github/workflows/**` always get full fan-out, whatever their size.
 
 ## Consequences
 
