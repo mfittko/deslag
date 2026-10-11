@@ -49,3 +49,7 @@ jobs:
           shellcheck scripts/release/*.sh
           scripts/release/test.sh
           scripts/release/check-versions.sh
+      - name: Plugin scripts
+        run: |
+          shellcheck plugins/claude/hooks/*.sh plugins/claude/scripts/*.sh plugins/claude/tests/*.sh
+          plugins/claude/tests/test.sh
