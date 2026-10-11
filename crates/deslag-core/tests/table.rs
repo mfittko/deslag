@@ -353,6 +353,16 @@ fn gain_byte_threshold_is_inclusive() {
     );
 }
 
+#[test]
+fn gain_check_does_not_overflow() {
+    let opts = TableOptions {
+        min_savings_permille: u64::MAX / 10,
+        ..lenient()
+    };
+    let input = repeat(r#"{"identifier":12,"name":"alpha"}"#, 10);
+    reject(&input, &opts, Reason::InsufficientGain);
+}
+
 /// One token per byte, so savings are easy to compute.
 struct Bytes;
 
@@ -397,6 +407,8 @@ fn decoder_rejects_malformed_text() {
         "table-v2 [1]{a:int}\n1",
         "table-v1 []{a:int}\n1",
         "table-v1 [+1]{a:int}\n1",
+        "table-v1 [01]{a:int}\n1",
+        "table-v1 [00]{a:int}",
         "table-v1 [1]{}\n1",
         "table-v1 [1]{a}\n1",
         "table-v1 [1]{a:float}\n1",

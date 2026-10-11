@@ -29,19 +29,22 @@ The first line is the header. It has no leading or trailing whitespace.
 
 ```text
 header  = "table-v1 [" count "]{" column *( "," column ) "}"
-count   = 1*DIGIT
+count   = "0" / %x31-39 *DIGIT
 column  = name ":" type
+name    = *namechar
+namechar = %x20-21 / %x23-2B / %x2D / %x2F-5B / %x5D-10FFFF
 type    = "int" / "num" / "str" / "bool"
 ```
 
-- `count` is the number of rows.
+- `count` is the number of rows. It has no leading zeros.
+- `name` may be empty.
 - Columns appear in first-seen key order across all rows.
 - A decoder splits the column list on `,` and splits each column at its last `:`. A name may therefore contain `:`.
 - A name must not contain `.`, `,`, `"`, `\` or a control character below U+0020. Column names are unique.
 
 ### Rows
 
-Each row is one RFC 4180 record. Records are separated by `\n`. The text has no trailing newline. There are exactly `count` records, and each record has exactly one field per column.
+Each row is one RFC 4180 record. Records are joined with `\n`. An empty record, for example a row `{}` in a one-column table, can therefore make the text end with `\n`. There are exactly `count` records, and each record has exactly one field per column.
 
 A quoted field starts and ends with `"`. A `"` inside it is written as `""`. A quoted field may contain `,`, `\n` and `\r`. An unquoted field must not contain `"`, `,`, `\n` or `\r`.
 
@@ -84,6 +87,8 @@ Any other cell makes the whole text invalid, and the decoder returns no value.
 
 So `null`, a missing field and `""` stay distinct: they are `null`, an empty cell and `""`.
 
+Encoder output is canonical. The decoder also accepts some non-canonical texts, for example a quoted `str` cell such as `"abc"` that needs no quotes, or a bare string such as `1` or `NaN` in a `str` column that the encoder would quote. Such texts decode, but encoding the result does not reproduce them.
+
 ### Lexeme preservation
 
 Number lexemes are copied unchanged, for example `1.0`, `-0`, `1e3` and `12345678901234567890123`.
@@ -105,7 +110,7 @@ The encoder returns the input unchanged, with a reason, in each of these cases:
 | An item is not an object | `unsupported_format` |
 | A field holds an array or an object | `unsupported_format` |
 | A column holds non-null values of more than one type (`int` and `num` together make a `num` column) | `unsupported_format` |
-| A key contains `.`, `,`, `"`, `\n` or `\r` | `unsupported_format`, or `escaped_key` when the key needs an escape |
+| A key contains `.`, `,`, `"`, `\` or a control character below U+0020 | `unsupported_format`, or `escaped_key` when the key needs an escape |
 | An object has a duplicate key | `duplicate_key` |
 | An object has an escaped key | `escaped_key` |
 | A row's key order is not a subsequence of the column order | `unsupported_format` |

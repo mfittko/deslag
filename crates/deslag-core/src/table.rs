@@ -3,7 +3,10 @@
 //! `docs/compression-formats.md` specifies the format. The round-trip contract
 //! is `decode(&encode(x)?) == minified(x)`, byte for byte.
 
-use std::{collections::HashMap, fmt::Write};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Write,
+};
 
 use crate::{Limits, Reason, Scanner, TokenCounter, minify};
 
@@ -21,6 +24,7 @@ pub struct TableOptions<'c> {
     pub min_token_savings: u64,
     /// Containers nested deeper pass through with `DepthLimit`.
     pub max_depth: usize,
+    /// Counts tokens for the token gain check. `None` skips that check.
     pub token_counter: Option<&'c dyn TokenCounter>,
 }
 
@@ -126,14 +130,19 @@ pub fn decode(text: &str) -> Option<String> {
         .strip_prefix(MARKER)?
         .strip_prefix(" [")?
         .split_once("]{")?;
-    if count.is_empty() || !count.bytes().all(|c| c.is_ascii_digit()) {
+    // `0` or `[1-9][0-9]*`: one canonical spelling per count.
+    if count.is_empty()
+        || !count.bytes().all(|c| c.is_ascii_digit())
+        || (count.len() > 1 && count.starts_with('0'))
+    {
         return None;
     }
     let rows: usize = count.parse().ok()?;
     let mut cols: Vec<(&str, Ty)> = Vec::new();
+    let mut seen = HashSet::new();
     for spec in specs.strip_suffix('}')?.split(',') {
         let (name, ty) = spec.rsplit_once(':')?;
-        if !valid_name(name) || cols.iter().any(|(c, _)| *c == name) {
+        if !valid_name(name) || !seen.insert(name) {
             return None;
         }
         cols.push((name, Ty::parse(ty)?));
@@ -287,8 +296,9 @@ fn layout<'a>(rows: &[Row<'a>]) -> Option<(Vec<&'a str>, Vec<Ty>)> {
 /// `min_savings_permille` of the minified bytes and, with a token counter,
 /// at least `min_token_savings` tokens.
 fn enough_gain(minified: &str, encoded: &str, opts: &TableOptions) -> bool {
-    let (m, e) = (minified.len() as u64, encoded.len() as u64);
-    if e >= m || (m - e) * 1000 < opts.min_savings_permille * m {
+    // u128 keeps `permille * m` from overflowing for any option value.
+    let (m, e) = (minified.len() as u128, encoded.len() as u128);
+    if e >= m || (m - e) * 1000 < u128::from(opts.min_savings_permille) * m {
         return false;
     }
     opts.token_counter.is_none_or(|c| {
