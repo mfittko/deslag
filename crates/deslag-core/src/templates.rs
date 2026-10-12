@@ -75,6 +75,11 @@ fn template_group(units: &[&str], parts: &[Option<Vec<&str>>]) -> Option<(usize,
     let gaps: usize = base.iter().step_by(2).map(|g| g.len()).sum();
     let dead_end = gaps < base.len() / 2;
     for (j, (&unit, row)) in units.iter().zip(parts).enumerate().skip(1) {
+        // A full window with no paying prefix ends the attempt before `fits` or
+        // `run_wins` examine another row, so a failed base costs WINDOW rows.
+        if rows.len() >= WINDOW && best.is_none() {
+            break;
+        }
         let Some(row) = row.as_deref().filter(|row| fits(base, row)) else {
             break;
         };
