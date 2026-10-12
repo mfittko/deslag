@@ -1,0 +1,99 @@
+[
+  {
+    "order_id": "ord_9B8JF4G5",
+    "customer": "keen-cedar",
+    "status": "paid",
+    "amount_cents": 122,
+    "coupon": "data-team"
+  },
+  {
+    "order_id": "ord_DZGE3VSG",
+    "customer": "brisk-iguana",
+    "status": "paid",
+    "amount_cents": 179,
+    "coupon": null
+  },
+  {
+    "order_id": "ord_ZK7Y41H7",
+    "customer": "keen-egret-2",
+    "status": "paid",
+    "amount_cents": 112,
+    "coupon": null
+  },
+  {
+    "order_id": "ord_YKZ434ZR",
+    "customer": "eager-lemur",
+    "status": "paid",
+    "amount_cents": 154,
+    "coupon": "alpha-team"
+  },
+  {
+    "order_id": "ord_18X33WPN",
+    "customer": "jolly-falcon",
+    "status": "paid",
+    "amount_cents": 194,
+    "coupon": null
+  },
+  {
+    "order_id": "ord_R3YA6C03",
+    "customer": "ivory-dingo",
+    "status": "paid",
+    "amount_cents": 117,
+    "coupon": null
+  },
+  {
+    "order_id": "ord_45894FF1",
+    "customer": "amber-dingo",
+    "status": "paid",
+    "amount_cents": 135,
+    "coupon": "edge-team"
+  },
+  {
+    "order_id": "ord_ZK7Y41HH",
+    "customer": "keen-egret",
+    "status": "refunded",
+    "amount_cents": 105,
+    "coupon": "infra-team"
+  },
+  {
+    "order_id": "ord_H7JZG4RD",
+    "customer": "ivory-cedar",
+    "status": "paid",
+    "amount_cents": 168,
+    "coupon": null
+  },
+  {
+    "order_id": "ord_N5D01R3Z",
+    "customer": "eager-cedar",
+    "status": "paid",
+    "amount_cents": 130,
+    "coupon": "alpha-team"
+  },
+  {
+    "order_id": "ord_PWBT3Z4T",
+    "customer": "ivory-gecko",
+    "status": "paid",
+    "amount_cents": 144,
+    "coupon": "beta-team"
+  },
+  {
+    "order_id": "ord_NJMHR643",
+    "customer": "brisk-koala",
+    "status": "paid",
+    "amount_cents": 185
+  },
+  {
+    "order_id": "ord_0MN1XVJC",
+    "customer": "calm-iguana",
+    "status": "paid",
+    "amount_cents": 161,
+    "coupon": "infra-team"
+  },
+  {
+    "order_id": "ord_QKMM5RMD",
+    "customer": "brisk-dingo",
+    "status": "paid",
+    "amount_cents": 171,
+    "coupon": "core-team"
+  }
+]

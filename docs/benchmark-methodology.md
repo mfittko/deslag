@@ -108,9 +108,39 @@ Each result line records, when the backend reports them: input, output, cache-re
 
 The harness never retries a call. A call that the client answers with an error, a failed exit or malformed output is recorded with error kind `backend`, so the retry count is always zero. A failure to start the client or to wait for it aborts the run with exit 2, and the partial results file is kept. Tool-call count does not apply, because the corpus is single-turn read-back with tools disabled. Multi-turn agentic tasks with real tools are a follow-up.
 
+### Paired Claude prompt-token savings
+
+This measure is secondary. It never decides pass or fail. The scoring rules and the non-inferiority criterion are unchanged. It is predeclared before live run 2.
+
+The report computes it per arm over non-control pairs. The `drop-evidence` arm is a control arm and has no row. The definitions are:
+
+- The prompt tokens of one run are `input_tokens + cache_read_tokens + cache_creation_tokens`.
+- A pair counts only when both of its runs report all three values as finite numbers that are at least 0.
+- Claude saved tokens are the sum of the baseline prompt tokens minus the sum of the arm prompt tokens, over the counted pairs.
+- Claude saved % is Claude saved tokens divided by the sum of the baseline prompt tokens.
+- The report shows these values next to the `deslag-estimate-v1` payload savings of the arm. Saved tokens (estimate) sum the baseline minus the arm payload tokens over all non-control pairs that remain after the payload-estimate check, whether or not Claude counts are reported. Saved % (estimate) is that sum divided by the baseline estimate sum over the same pairs.
+- A pair is dropped from the whole row when the baseline or the arm payload estimate is not a finite number that is at least 0. Both estimate columns are `n/a` when no pair remains.
+- Each saved % is `n/a` when its baseline sum is 0. Percentages are rounded to one decimal.
+- Unchanged pairs and pairs with a backend error are included.
+- Estimate error % is the estimate saved tokens on the same Claude pairs minus Claude saved tokens, divided by the absolute value of Claude saved tokens. A positive value means the estimate overstates the saving. It is `n/a` when Claude saved tokens are 0 or when no pair counts.
+
+Prompt tokens include the system prompt and the client overhead. Both cancel in the per-pair difference, but they dilute the percentage. Cache status does not change the sum, because cache-read and cache-creation tokens count the same as input tokens. A mock results file reports no usage, so its Claude columns show `n/a`.
+
 ## Corpus and controls
 
 Each task in `tests/evaluations/manifest.json` has `id`, `category`, `input` (a path relative to the manifest), `question`, `answers`, `rule`, an optional `tolerance` (a number >= 0), `arms`, an optional `control` and, for the evidence-drop control, `evidence`. A `control`, when present, is `incompressible` or `evidence_drop`. Only a task with control `evidence_drop` may list the `drop-evidence` arm. Every accepted answer of a `number` task parses as a finite number. The manifest is trusted and committed, so an input path may also be absolute. All content is synthetic. No real user content is exported.
+
+The manifest may carry one top-level `include` key, a list of manifest paths relative to the including manifest. The tasks of each included file follow the tasks of the including file. An `input` path in an included file is relative to that included file. An included manifest cannot include another file, and the loader refuses a nested `include` with exit 2. It also refuses a task id that occurs twice across the files.
+
+The pilot tasks are hand-written. The generated tasks come from a deterministic generator, `cargo run -q -p deslag-eval --locked -- generate --seed <u64> --out <dir>`. The same seed yields the same files byte for byte. The generator writes `<dir>/manifest.json` and one input file per task under `<dir>/inputs/`. It uses splitmix64 and adds no dependencies. The committed output is `tests/evaluations/generated/`, which `tests/evaluations/manifest.json` includes. The committed seed is 7700 and is stored in the `seed` field of `tests/evaluations/generated/manifest.json`. A regeneration test reads that seed, runs the generator into a temporary directory and compares the full file set byte for byte with the committed files.
+
+The generator checks every task before it creates any directory or file, and a failed check stops generation. Each task carries a structured query. The check re-parses the payload text it writes (the uncompressed text) and recomputes the answer from it. It refuses the task when the recomputed answer differs from the accepted answer, when the answer is not unique (a lookup with more than one match, or a tie for the maximum), or when an answer (every item of a `set` answer) does not occur verbatim in the payload.
+
+The generated JSON tasks include a question form that lists the ids whose `note` field has the value null. The answer contains only rows that have a `note` key. The self-check keeps null and missing apart. Buried JSON tasks (at least 100 rows, answer in the last 40%) use lookup questions only. The self-check refuses a buried JSON task whose answer row sits above 60% depth. Decimal number lexemes appear only in fields with a fractional meaning.
+
+The generated payloads are synthetic only. They use documentation IP ranges (203.0.113.0/24 and 198.51.100.0/24) and made-up names.
+
+Freeze rule: the corpus, the generator and the seed are committed and frozen before any live run on them. No task is added, removed or changed after live results are inspected. A new corpus or a new seed needs a new commit before its live run and gets its own report.
 
 The categories are the PLAN §14.4 task kinds: `api_query`, `code_search`, `failure_diagnosis`, `issue_triage`, `logs`, `aggregation`, `exact_id` and `buried_evidence`. A control task uses its control kind (`incompressible` or `evidence_drop`) as its category. A `buried_evidence` task puts the answer in the middle or at the end of a large result. At least one input has 100 or more rows.
 
@@ -137,6 +167,7 @@ The run order is a seeded shuffle (splitmix64, Fisher-Yates) over all (task, arm
 - The client checks `--max-budget-usd` only after a turn, so one call can exceed its cap. The total can then exceed `--budget-usd` by that excess. The runner stops with exit 2 after any call whose reported cost exceeds `--per-run-usd`. The partial results file is kept.
 - `run` refuses an existing `--out` path with exit 2, so a rerun never overwrites results.
 - `cargo run -q -p deslag-eval --locked -- estimate` prints, before any money is spent, an estimated cost of a full live run under stated assumptions (estimated tokens, assumed prices and assumed output tokens) and runs times `--per-run-usd`. That product is a cap only if every call stays within `--per-run-usd`. It refuses a negative or non-finite price and a `--per-run-usd` that is not above 0.
+- The defaults of `estimate` (input 3 and output 15 USD per Mtok, 2000 overhead tokens and 256 output tokens per run) stay unchanged. They estimate USD 13.06 for the 935 runs of the full corpus, which exceeds a budget of USD 3.00. Live run 2 uses these assumptions: `--input-usd-per-mtok 1 --output-usd-per-mtok 5 --overhead-tokens 1000 --output-tokens 128`. Live run 1 measured about 740 overhead tokens per call, about 70 output tokens per run and an effective price of about 1/19 of the default price. Each run-2 assumption is above that measurement, and the prices are about 6 times the observed effective price. The run-2 estimate is predeclared in [docs/benchmarks/evaluation.md](benchmarks/evaluation.md#live-runs) before the run.
 - CI runs only `cargo test`, which uses the mock backend. CI never sets `DESLAG_EVAL_LIVE`.
 
 ## Table format read-back

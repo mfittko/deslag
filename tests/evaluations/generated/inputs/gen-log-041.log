@@ -1,0 +1,24 @@
+2026-09-30T10:00:00Z INFO request_id=req-9ef54c status=500 upstream=alpha-team
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+2026-09-30T10:00:07Z INFO request_id=req-7b3e0d status=201 upstream=beta-team
+2026-09-30T10:00:14Z INFO request_id=req-be15c5 status=201 upstream=core-team
+2026-09-30T10:00:21Z INFO request_id=req-287964 status=500 upstream=data-team
+2026-09-30T10:00:28Z INFO request_id=req-9baf24 status=201 upstream=edge-team
+2026-09-30T10:00:35Z INFO request_id=req-6cbee7 status=200 upstream=infra-team
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+2026-09-30T10:00:42Z INFO request_id=req-41a6d0 status=200 upstream=alpha-team
+2026-09-30T10:00:49Z INFO request_id=req-eb2f66 status=200 upstream=beta-team
+2026-09-30T10:00:56Z INFO request_id=req-6cbeec status=503 upstream=core-team
+2026-09-30T10:01:03Z INFO request_id=req-c3d27c status=404 upstream=data-team
+2026-09-30T10:01:10Z INFO request_id=req-85ece7 status=200 upstream=edge-team
+2026-09-30T10:01:17Z INFO request_id=req-3fd0db status=200 upstream=infra-team
+2026-09-30T10:01:24Z INFO request_id=req-f3cca0 status=200 upstream=alpha-team
+2026-09-30T10:01:31Z INFO request_id=req-697c48 status=200 upstream=beta-team

@@ -1,0 +1,24 @@
+2026-09-30T10:00:00Z INFO request_id=req-76ce56 status=200 upstream=alpha-team
+2026-09-30T10:00:07Z INFO request_id=req-b51445 status=404 upstream=beta-team
+2026-09-30T10:00:14Z INFO request_id=req-42965a status=201 upstream=core-team
+2026-09-30T10:00:21Z INFO request_id=req-044a71 status=201 upstream=data-team
+2026-09-30T10:00:28Z INFO request_id=req-5370e7 status=200 upstream=edge-team
+2026-09-30T10:00:35Z INFO request_id=req-d5e287 status=200 upstream=infra-team
+2026-09-30T10:00:42Z INFO request_id=req-b56a51 status=200 upstream=alpha-team
+2026-09-30T10:00:49Z INFO request_id=req-901a3e status=404 upstream=beta-team
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+2026-09-30T10:00:56Z INFO request_id=req-6f0bba status=404 upstream=core-team
+2026-09-30T10:01:03Z INFO request_id=req-1124d3 status=500 upstream=data-team
+2026-09-30T10:01:10Z INFO request_id=req-6de918 status=200 upstream=edge-team
+2026-09-30T10:01:17Z INFO request_id=req-336ec6 status=200 upstream=infra-team
+2026-09-30T10:01:24Z INFO request_id=req-d5e280 status=503 upstream=alpha-team

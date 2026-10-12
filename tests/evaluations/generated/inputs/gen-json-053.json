@@ -1,0 +1,70 @@
+[
+  {
+    "service_id": "svc_ZHM167RG",
+    "service_name": "lunar-dingo",
+    "tier": "bronze",
+    "error_rate": 120.76,
+    "owner": null
+  },
+  {
+    "service_id": "svc_NAHV96W7",
+    "service_name": "eager-egret-2",
+    "tier": "bronze",
+    "error_rate": 109.57,
+    "owner": "alpha-team"
+  },
+  {
+    "service_id": "svc_TBJY1Q9A",
+    "service_name": "jolly-koala",
+    "tier": "bronze",
+    "error_rate": 143.26,
+    "owner": "edge-team"
+  },
+  {
+    "service_id": "svc_S6FZM6SQ",
+    "service_name": "ivory-dingo",
+    "tier": "bronze",
+    "error_rate": 158.10
+  },
+  {
+    "service_id": "svc_C3QXP017",
+    "service_name": "hazy-lemur",
+    "tier": "bronze",
+    "error_rate": 136.05,
+    "owner": null
+  },
+  {
+    "service_id": "svc_NW929D17",
+    "service_name": "ivory-jackal",
+    "tier": "bronze",
+    "error_rate": 122.78,
+    "owner": "data-team"
+  },
+  {
+    "service_id": "svc_NAHV96WX",
+    "service_name": "eager-egret",
+    "tier": "gold",
+    "error_rate": 106.49,
+    "owner": "infra-team"
+  },
+  {
+    "service_id": "svc_RWWF2ZNB",
+    "service_name": "dusty-marmot",
+    "tier": "bronze",
+    "error_rate": 132.47,
+    "owner": null
+  },
+  {
+    "service_id": "svc_PT76SCNQ",
+    "service_name": "fuzzy-cedar",
+    "tier": "bronze",
+    "error_rate": 155.16,
+    "owner": "alpha-team"
+  },
+  {
+    "service_id": "svc_YM7DRVQM",
+    "service_name": "lunar-cedar",
+    "tier": "bronze",
+    "error_rate": 169.94
+  }
+]

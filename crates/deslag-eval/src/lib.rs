@@ -1,6 +1,7 @@
 //! Scoring and reporting for `deslag-eval`. The rules are predeclared in
 //! `docs/benchmark-methodology.md`.
 
+pub mod generate;
 pub mod report;
 pub mod score;
 

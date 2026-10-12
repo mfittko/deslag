@@ -1,0 +1,34 @@
+test billing::invoice::calm_koala ... ok
+test billing::invoice::keen_koal7 ... ok
+test auth::session::hazy_falcon ... ok
+test auth::token::lunar_jackal ... ok
+test search::index::eager_koala ... ok
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+test search::query::eager_falcon ... ok
+test billing::invoice::gentle_falcon ... ok
+test billing::ledger::gentle_lemur ... ok
+test auth::session::hazy_jackal ... ok
+test auth::token::keen_cedar ... ok
+test search::index::brisk_badger ... ok
+test search::query::eager_dingo ... ok
+test billing::invoice::brisk_lemur ... ok
+test billing::ledger::gentle_egret ... ok
+test auth::session::dusty_lemur ... ok
+test billing::invoice::keen_koala ... FAILED
+test search::index::gentle_gecko ... ok
+test search::query::brisk_iguana ... ok
+test billing::invoice::jolly_cedar ... ok
+test billing::ledger::fuzzy_egret ... ok
+failures:
+    billing::invoice::keen_koala
+test result: FAILED. 19 passed; 1 failed

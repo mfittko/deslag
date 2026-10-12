@@ -1,0 +1,1 @@
+Rotation notes for the core-team. The on-call engineer for the week of 2026-10-09 is Mina Brandt. Escalations go to the secondary after 20 minutes without acknowledgement. The handover call moved to Tuesday because of a public holiday.
