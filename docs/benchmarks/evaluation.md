@@ -50,11 +50,11 @@ On 2026-10-12, 2 live calls checked the `claude` backend plumbing: task `api-rep
 
 ## Live run 1
 
-On 2026-10-12, the command in [Live runs](#live-runs) ran at commit 2627754 (v0.1.0-alpha.2) with model `claude-haiku-5-5`, Claude Code 2.1.296 and seed 16. All 90 runs completed. The reported total spend was USD 0.0443. The results file `tmp/eval/live-claude-haiku-5-5-seed16.jsonl` is not committed.
+On 2026-10-12, the command in [Live runs](#live-runs) ran at commit 2627754 (v0.1.0-alpha.2) with model `claude-haiku-5-5`, Claude Code 2.1.296 and seed 16. All 90 runs completed. The reported total spend was USD 0.0443. The results file `tmp/eval/live-claude-haiku-5-5-seed16.jsonl` is not committed. Its sha256 is `52afddc83b72f430eb20eb2ebeccccc198475eab471063f48449fe2bc94ffa3a`.
 
 Every arm is `not shown`. The pilot corpus has 4 to 12 non-control pairs per arm, and with zero discordant pairs an arm needs at least 81 pairs to pass. No arm was `inferior`. Apart from the `drop-evidence` control, the only arm failure was `lines-v2` on `buried-artifact-sha`, and the baseline also failed that task. `lines-v1` answered it correctly, which is the single discordant pair (c = 1). Both failed answers contain the accepted hash but score `wrong` under `exact_ci`: the baseline added a sentence, and `lines-v2` added a `sha256=` prefix. The discordance is therefore an answer-format effect, not evidence loss. The controls behaved as designed: `drop-evidence` lost the evidence on both evidence-drop tasks, and every arm left both incompressible tasks unchanged. This run does not make any transform a default.
 
-The pre-run estimate of USD 1.61 overstated the cost. It assumed 337594 input tokens and 256 output tokens per run. The client reported 251775 input tokens (180 uncached, 48364 cache read, 203231 cache creation) and 6270 output tokens, about 70 per run. Priced at the assumed rates (cache reads excluded), the reported tokens cost about USD 0.86. The reported spend of USD 0.0443 is about 1/19 of that, so the effective prices were roughly 1/19 of the assumed prices.
+The pre-run estimate of USD 1.61 overstated the cost. It assumed 337594 input tokens in total and 256 output tokens per run. The client reported 251775 input tokens (180 uncached, 48364 cache read, 203231 cache creation) and 6270 output tokens, about 70 per run. Priced at the assumed rates (cache reads excluded), the reported tokens cost about USD 0.86. The reported spend of USD 0.0443 is about 1/19 of that, so the effective prices were roughly 1/19 of the assumed prices.
 
 Report output of `cargo run -q -p deslag-eval --locked -- report tmp/eval/live-claude-haiku-5-5-seed16.jsonl`, verbatim:
 
@@ -159,6 +159,8 @@ All tasks, controls included. Payload tokens are estimates (deslag-estimate-v1).
 | lines-v1 | 7 | 7/7 (100.0%) | 0 | 0 | 0 | 11834 | 14 | 377 | 8015 | 11782 | 0.0026 | 6929 | 7 | 15370 |
 | lines-v2 | 7 | 6/7 (85.7%) | 1 | 0 | 0 | 9079 | 14 | 337 | 1551 | 13935 | 0.0030 | 6924 | 7 | 15701 |
 | drop-evidence | 2 | 0/2 (0.0%) | 0 | 2 | 0 | 1136 | 4 | 135 | 0 | 2858 | 0.0006 | 2384 | 2 | 4991 |
+
+End of report output.
 
 ### Paired payload savings
 
