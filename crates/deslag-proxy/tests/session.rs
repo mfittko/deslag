@@ -179,15 +179,24 @@ fn commits_leave_other_temp_files_alone() {
 fn a_crash_leftover_at_the_first_temp_name_does_not_fail_the_commit() {
     let dir = temp_dir();
     let store = store(&dir);
-    store.replay("s", "m", &[], |_| true).unwrap();
     let path = manifest_path(&dir, "s");
-    // Left by a crashed proxy that had the same pid, for example pid 1.
-    let leftover = path.with_extension(format!("{}.0.tmp", std::process::id()));
-    fs::write(&leftover, b"{ torn").unwrap();
+    // Left by a crashed proxy that had the same pid, for example pid 1. They
+    // are planted before the first commit at the first temp names, so that
+    // commit hits them.
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let leftovers: Vec<_> = (0..256)
+        .map(|n| path.with_extension(format!("{}.{n}.tmp", std::process::id())))
+        .collect();
+    for leftover in &leftovers {
+        fs::write(leftover, b"{ torn").unwrap();
+    }
+    store.replay("s", "m", &[], |_| true).unwrap();
     store
         .replay("s", "m", &[candidate("toolu_0", "x")], |_| false)
         .unwrap();
-    assert_eq!(fs::read(&leftover).unwrap(), b"{ torn");
+    for leftover in &leftovers {
+        assert_eq!(fs::read(leftover).unwrap(), b"{ torn", "{leftover:?}");
+    }
     assert_eq!(
         manifest(&dir, "s")["decisions"]["toolu_0"]["unchanged"],
         true
