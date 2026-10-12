@@ -513,6 +513,31 @@ fn manifest_rejects_bad_tolerance_and_uncontrolled_drop_evidence() {
             "unknown control",
         ),
         (
+            "control-number",
+            r#""arms": ["json-minify"], "control": 1"#,
+            "control must be a string",
+        ),
+        (
+            "control-bool",
+            r#""arms": ["json-minify"], "control": true"#,
+            "control must be a string",
+        ),
+        (
+            "control-array",
+            r#""arms": ["json-minify"], "control": ["incompressible"]"#,
+            "control must be a string",
+        ),
+        (
+            "control-object",
+            r#""arms": ["json-minify"], "control": {}"#,
+            "control must be a string",
+        ),
+        (
+            "control-other",
+            r#""arms": ["json-minify"], "control": "other""#,
+            "unknown control",
+        ),
+        (
             "number-comma",
             r#""arms": ["json-minify"], "answers": ["1,873"]"#,
             "finite numbers",
@@ -562,6 +587,14 @@ fn manifest_rejects_bad_tolerance_and_uncontrolled_drop_evidence() {
     for (name, extra) in [
         ("ok", r#""arms": ["json-minify"], "tolerance": 0.5"#),
         ("no-control", r#""arms": ["json-minify"]"#),
+        (
+            "null-control",
+            r#""arms": ["json-minify"], "control": null"#,
+        ),
+        (
+            "evidence-drop-control",
+            r#""arms": ["json-minify"], "control": "evidence_drop""#,
+        ),
         ("two-arms", r#""arms": ["json-minify", "table-csv"]"#),
         ("no-arms", r#""arms": []"#),
         (

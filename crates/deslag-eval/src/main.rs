@@ -142,7 +142,11 @@ fn load_manifest(path: &Path) -> Result<Vec<Task>, String> {
                 return Err(err(&format!("duplicate arm {a}")));
             }
             let evidence = s("evidence");
-            let control = s("control");
+            let control = match &t["control"] {
+                Value::Null => None,
+                Value::String(c) => Some(c.clone()),
+                _ => return Err(err("control must be a string")),
+            };
             if let Some(c) = control.as_deref()
                 && !matches!(c, "incompressible" | "evidence_drop")
             {
