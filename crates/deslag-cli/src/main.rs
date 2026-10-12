@@ -398,6 +398,23 @@ mod tests {
     }
 
     #[test]
+    fn untouched_numbers_are_emitted_byte_exact() {
+        let input = format!(
+            r#"{{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{{"stdout":{},"big":123456789012345678901234567890,"neg":-98765432109876543210,"dec":0.100000000000000000000000000001}}}}"#,
+            serde_json::to_string(PRETTY).unwrap()
+        );
+        let output =
+            serde_json::to_string(&hook(input.as_bytes(), true).unwrap().unwrap()).unwrap();
+        for number in [
+            r#""big":123456789012345678901234567890"#,
+            r#""neg":-98765432109876543210"#,
+            r#""dec":0.100000000000000000000000000001"#,
+        ] {
+            assert!(output.contains(number), "{number} in {output}");
+        }
+    }
+
+    #[test]
     fn bash_image_result_is_skipped() {
         let mut event = fixture("posttooluse-bash.json");
         event["tool_response"]["stdout"] = PRETTY.into();

@@ -8,13 +8,32 @@ use serde_json::Value;
 /// Settings and plugin hooks files larger than this are ignored.
 const MAX_SETTINGS_BYTES: u64 = 1024 * 1024;
 
-/// Command fragments that mark a hook as deslag's own: the CLI, a quoted path to
-/// the binary, and the plugin wrapper script.
-const OWN_COMMANDS: [&str; 3] = [
-    "deslag hook claude",
-    "deslag\" hook claude",
-    "deslag-hook.sh",
-];
+/// True only for a whole command that runs deslag's hook: `<deslag> hook claude`
+/// with an optional `--minify-json`, or the plugin wrapper `<deslag-hook.sh>` with
+/// no arguments. The program may be a bare name or a path, optionally in double
+/// quotes. Anything else, including a command that only mentions deslag, is foreign.
+fn is_own_command(command: &str) -> bool {
+    let command = command.trim();
+    let (program, rest) = match command.strip_prefix('"') {
+        Some(quoted) => match quoted.split_once('"') {
+            Some(split) => split,
+            None => return false,
+        },
+        None => command
+            .split_once(char::is_whitespace)
+            .unwrap_or((command, "")),
+    };
+    let name = program.rsplit('/').next().unwrap_or(program);
+    let args: Vec<&str> = rest.split_whitespace().collect();
+    match name {
+        "deslag" => matches!(
+            args[..],
+            ["hook", "claude"] | ["hook", "claude", "--minify-json"]
+        ),
+        "deslag-hook.sh" => args.is_empty(),
+        _ => false,
+    }
+}
 
 /// Returns a diagnostic naming the first settings or plugin hooks file with a
 /// `PostToolUse` hook, other than deslag's own, whose matcher may match `tool`.
@@ -92,11 +111,7 @@ fn has_matching_hook(file: &Value, tool: &str) -> bool {
     groups
         .filter(|group| matcher_matches(group.get("matcher").and_then(Value::as_str), tool))
         .flat_map(|group| group["hooks"].as_array().into_iter().flatten())
-        .any(|hook| {
-            !hook["command"]
-                .as_str()
-                .is_some_and(|c| OWN_COMMANDS.iter().any(|own| c.contains(own)))
-        })
+        .any(|hook| !hook["command"].as_str().is_some_and(is_own_command))
 }
 
 fn matcher_matches(matcher: Option<&str>, tool: &str) -> bool {
@@ -182,6 +197,16 @@ mod tests {
             (PLUGIN_WRAPPER, false),
             ("~/github/deslag/scripts/fmt.sh", true),
             ("jq . # deslag-safe", true),
+            ("deslag hook claude", false),
+            ("\"/a b/deslag\" hook claude --minify-json", false),
+            ("/x/deslag-hook.sh", false),
+            ("jq '.note = \"deslag hook claude\"'", true),
+            ("/x/other-deslag-hook.sh", true),
+            ("/x/notdeslag hook claude", true),
+            ("/x/deslag hook claude; jq .", true),
+            ("/x/deslag hook claude --other", true),
+            ("/x/deslag-hook.sh && jq .", true),
+            ("\"/x/deslag hook claude", true),
         ] {
             let found = user_settings("own", "Bash", command).is_some();
             assert_eq!(found, conflict, "{command:?}");
