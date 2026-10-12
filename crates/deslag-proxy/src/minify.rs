@@ -4,17 +4,20 @@
 //! by its byte span in the original body and spliced; all other bytes are
 //! forwarded unchanged.
 //!
-//! Only requests with an `x-claude-code-session-id` header are rewritten, and
-//! only in sessions the proxy owns. Every tool result gets one decision,
-//! `unchanged` or json-minify, pinned in the session manifest (see `session`)
-//! before the request is forwarded. Resent history replays its pinned
-//! decision, so its bytes upstream stay the same across resend, restart,
-//! disable and model switch. Missing or inconsistent replay state rejects the
-//! request with `400` and is never forwarded. Requests with `content-encoding`
-//! pass through, so a client that compresses only some requests would see
-//! drift. Requests with a body-integrity header or with trailers also pass
-//! through. Trailers are not forwarded upstream. `/v1/messages/count_tokens`
-//! is not rewritten, so its counts can overstate.
+//! Only requests with an `x-claude-code-session-id` header are rewritten. New
+//! tool results are decided only while the owner is `proxy`; under any other
+//! owner they are recorded as `unchanged`. Every tool result gets one
+//! decision, `unchanged` or json-minify, pinned in the session manifest (see
+//! `session`) before the request is forwarded. Resent history replays its
+//! pinned decision under any owner, so its bytes upstream stay the same across
+//! resend, restart, disable and model switch. Missing or inconsistent replay
+//! state rejects the request with `400` and is never forwarded, while the
+//! owner is `proxy` or the session has a manifest. Requests with
+//! `content-encoding`, a body-integrity header or trailers pass through
+//! unrecorded, so their new tool results stay undecided. A later request in
+//! that session that resends them fails with `400`; start a new session.
+//! Trailers are not forwarded upstream. `/v1/messages/count_tokens` is not
+//! rewritten, so its counts can overstate.
 
 use std::{
     collections::HashSet,
