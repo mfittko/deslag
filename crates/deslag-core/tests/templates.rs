@@ -237,6 +237,27 @@ fn templates_take_precedence_over_runs() {
 }
 
 #[test]
+fn templates_route_with_json_table_on() {
+    let ctx = CompressionContext {
+        json_table: true,
+        ..on(Mode::Safe)
+    };
+    let input = format!("starting\n{}done\n", log(30, "request served", "\n"));
+    let r = compress(&input, &ctx);
+    assert_eq!(r.report.outcome, Outcome::Changed);
+    assert_eq!(r.report.transform_id, "line-templates");
+    assert_eq!(r.report.transform_version, 1);
+    assert_eq!(r.report.format_version, Some(2));
+    assert!(r.output.starts_with(HEADER));
+    assert_eq!(decode_lines(&r.output, input.len()).unwrap(), input);
+    let rows: Vec<String> = (0..10)
+        .map(|i| format!("  {{ \"id\": {i}, \"name\": \"user-{i}\", \"active\": true }}"))
+        .collect();
+    let json = format!("[\n{}\n]", rows.join(",\n"));
+    assert_eq!(compress(&json, &ctx).report.transform_id, "json-table");
+}
+
+#[test]
 fn lines_v1_output_still_decodes() {
     let input = format!("{}{}", "abcdefghijklmnop\n".repeat(5), log(5, "x", "\n"));
     let v1 = encode_lines(&input).unwrap();
