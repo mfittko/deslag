@@ -2,8 +2,7 @@
 //! for byte. Every answer is built from the generated rows, then recomputed
 //! from the written payload text by an independent solver; a task whose
 //! answer differs, is not unique or is not verbatim in the payload is refused.
-//! Payloads are synthetic: example.test mail, documentation IP ranges and
-//! made-up names.
+//! Payloads are synthetic: documentation IP ranges and made-up names.
 
 use std::{fs, path::Path};
 
@@ -204,6 +203,7 @@ impl Rng {
 }
 
 /// `s` with its last character replaced, so it differs in one place only.
+/// An IP octet of at most 249 stays at most 248, so the result stays valid.
 fn near(s: &str) -> String {
     let (head, last) = s.split_at(s.len() - 1);
     format!("{head}{}", if last == "7" { '8' } else { '7' })
@@ -265,22 +265,25 @@ fn pretty(rows: &[Vec<(&str, String)>]) -> String {
 struct Schema {
     category: &'static str,
     noun: &'static str,
+    plural: &'static str,
     /// id, name, status, num, note
     keys: [&'static str; 5],
-    /// Common status, a status held by one row, a status held by three rows.
+    /// Whether `num` has a fractional meaning, so decimal lexemes fit.
+    frac: bool,
+    /// The status of most rows, of the first special row, and of the three rows form 3 lists.
     status: [&'static str; 3],
     prefix: &'static str,
 }
 
 #[rustfmt::skip]
 const SCHEMAS: [Schema; 7] = [
-    Schema { category: "api_query", noun: "user", keys: ["user_id", "login", "role", "requests", "team"], status: ["member", "owner", "auditor"], prefix: "usr" },
-    Schema { category: "code_search", noun: "match", keys: ["match_id", "symbol", "kind", "line", "crate"], status: ["fn", "macro", "const"], prefix: "mat" },
-    Schema { category: "failure_diagnosis", noun: "CI job", keys: ["job_id", "name", "conclusion", "duration_s", "runner"], status: ["success", "failure", "cancelled"], prefix: "job" },
-    Schema { category: "issue_triage", noun: "issue", keys: ["issue_id", "title", "state", "comments", "assignee"], status: ["closed", "blocked", "stale"], prefix: "iss" },
-    Schema { category: "aggregation", noun: "service", keys: ["service_id", "service", "tier", "error_count", "owner"], status: ["bronze", "gold", "silver"], prefix: "svc" },
-    Schema { category: "exact_id", noun: "order", keys: ["order_id", "customer", "status", "amount_cents", "coupon"], status: ["paid", "refunded", "disputed"], prefix: "ord" },
-    Schema { category: "buried_evidence", noun: "audit event", keys: ["event_id", "target", "action", "seq", "actor"], status: ["read", "delete", "rotate"], prefix: "evt" },
+    Schema { category: "api_query", noun: "user", plural: "users", keys: ["user_id", "login", "role", "quota_gb", "team"], frac: true, status: ["member", "owner", "auditor"], prefix: "usr" },
+    Schema { category: "code_search", noun: "match", plural: "matches", keys: ["match_id", "symbol", "kind", "line", "crate"], frac: false, status: ["fn", "macro", "const"], prefix: "mat" },
+    Schema { category: "failure_diagnosis", noun: "CI job", plural: "CI jobs", keys: ["job_id", "name", "conclusion", "duration_s", "runner"], frac: true, status: ["success", "failure", "cancelled"], prefix: "job" },
+    Schema { category: "issue_triage", noun: "issue", plural: "issues", keys: ["issue_id", "title", "state", "comments", "assignee"], frac: false, status: ["closed", "blocked", "stale"], prefix: "iss" },
+    Schema { category: "aggregation", noun: "service", plural: "services", keys: ["service_id", "service_name", "tier", "error_rate", "owner"], frac: true, status: ["bronze", "gold", "silver"], prefix: "svc" },
+    Schema { category: "exact_id", noun: "order", plural: "orders", keys: ["order_id", "customer", "status", "amount_cents", "coupon"], frac: false, status: ["paid", "refunded", "disputed"], prefix: "ord" },
+    Schema { category: "buried_evidence", noun: "audit event", plural: "audit events", keys: ["event_id", "target", "action", "seq", "actor"], frac: false, status: ["read", "delete", "rotate"], prefix: "evt" },
 ];
 
 struct Row {
@@ -304,20 +307,22 @@ fn num(rng: &mut Rng, decimal: bool, i: usize, zero: bool) -> String {
 }
 
 fn json_task(t: usize, rng: &mut Rng) -> Gen {
-    // Only every fourth audit slot is a buried table; the others reuse another schema.
-    let si = if t % 7 == 6 && !(t / 7).is_multiple_of(4) {
+    // Only every third audit slot is a buried table; the others reuse another schema.
+    let si = if t % 7 == 6 && !(t / 7).is_multiple_of(3) {
         t / 7 % 6
     } else {
         t % 7
     };
     let s = &SCHEMAS[si];
-    let (form, buried) = (rng.below(6), si == 6);
+    // A buried table only gets lookup questions: forms 0 to 2.
+    let buried = si == 6;
+    let form = rng.below(if buried { 3 } else { 7 });
     let n = if buried {
         100 + rng.below(3)
     } else {
         10 + rng.below(5)
     };
-    let (decimal, ragged) = (rng.below(2) == 0, rng.below(3) == 0);
+    let (decimal, ragged) = (s.frac, form == 6 || rng.below(3) == 0);
     let names = rng.names(n);
     let mut rows = Vec::new();
     for (i, name) in names.into_iter().enumerate() {
@@ -338,15 +343,16 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
             note,
         });
     }
-    let mut special: Vec<Row> = rows.drain(..if form == 3 { 4 } else { 2 }).collect();
+    let take = [2, 2, 2, 4, 2, 2, 3][form];
+    let mut special: Vec<Row> = rows.drain(..take).collect();
     // The last special row is a near-duplicate decoy of the first one.
     let decoy = special.len() - 1;
     special[decoy].id = near(&special[0].id);
     special[decoy].name = format!("{}-2", special[0].name);
     let top = |rng: &mut Rng, k: usize| num(rng, decimal, n + k, true);
     special[0].status = s.status[1].into();
-    let [id, name, status, numk, _] = s.keys;
-    let (t0, noun) = (&special[0], s.noun);
+    let [id, name, status, numk, note] = s.keys;
+    let (t0, noun, plural) = (&special[0], s.noun, s.plural);
     let string = |x: &str| Value::String(x.into());
     let qa: Qa = match form {
         0 => (
@@ -388,7 +394,7 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
             ids.sort_unstable();
             (
                 format!(
-                    "List the {id} values of all {noun}s with {status} {}, comma-separated.",
+                    "List the {id} values of all {plural} with {status} {}, comma-separated.",
                     s.status[2]
                 ),
                 ids.join(","),
@@ -412,6 +418,28 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
                 },
             )
         }
+        6 => {
+            // Null and absent notes sit side by side; only an explicit null counts.
+            for r in &mut special {
+                r.note = Some("null".into());
+            }
+            let nulls = rows
+                .iter()
+                .chain(&special)
+                .filter(|r| r.note.as_deref() == Some("null"));
+            let mut ids: Vec<&str> = nulls.map(|r| r.id.as_str()).collect();
+            ids.sort_unstable();
+            (
+                format!(
+                    "List the {id} values of all {plural} whose {note} is null, comma-separated. A row with no {note} field does not count.",
+                ),
+                ids.join(","),
+                Query::Json {
+                    conds: vec![(note, Value::Null)],
+                    pick: Pick::Set(id),
+                },
+            )
+        }
         _ => {
             // Row 0 holds the global maximum under another status; row 1 the answer.
             special[0].num = top(rng, 5);
@@ -419,7 +447,7 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
             special[1].num = top(rng, 3);
             (
                 format!(
-                    "What is the highest {numk} among {noun}s with {status} {}?",
+                    "What is the highest {numk} among {plural} with {status} {}?",
                     s.status[0]
                 ),
                 special[1].num.clone(),
@@ -435,7 +463,7 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
     };
     shuffle(&mut rows, rng.next());
     // The answer rows of a buried task sit in the last 40% of the table.
-    let lo = if buried { rows.len() * 6 / 10 } else { 0 };
+    let lo = if buried { n * 6 / 10 } else { 0 };
     for r in special {
         let at = lo + rng.below(rows.len() - lo + 1);
         rows.insert(at, r);
@@ -449,7 +477,7 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
                 (status, quoted(&r.status)),
                 (numk, r.num.clone()),
             ];
-            f.extend(r.note.clone().map(|v| (s.keys[4], v)));
+            f.extend(r.note.clone().map(|v| (note, v)));
             f
         })
         .collect();
@@ -461,7 +489,7 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
         qa,
     );
     g.rule = match form {
-        3 => "set",
+        3 | 6 => "set",
         5 => "number",
         _ => "exact",
     };
@@ -485,7 +513,7 @@ fn log_task(t: usize, rng: &mut Rng) -> Gen {
     let names = rng.names(n + 2);
     let a = match kind {
         0 => format!("req-{}", rng.code(6, HEX)),
-        1 => format!("203.0.113.{}", 1 + rng.below(250)),
+        1 => format!("203.0.113.{}", 1 + rng.below(249)),
         2 => format!("{}::{}", MODS[rng.below(6)], names[n].replace('-', "_")),
         _ => rng.code(64, HEX),
     };
@@ -715,15 +743,17 @@ fn evidence_drop(k: usize, rng: &mut Rng) -> Gen {
 /// Writes `<out>/manifest.json` and `<out>/inputs/<task-id>.<ext>`.
 pub fn run(seed: u64, out: &Path) -> Result<(), String> {
     let mut rng = Rng(seed);
-    let mut gens: Vec<Gen> = (0..90).map(|t| json_task(t, &mut rng)).collect();
-    gens.extend((0..96).map(|t| log_task(t, &mut rng)));
+    let mut gens: Vec<Gen> = (0..94).map(|t| json_task(t, &mut rng)).collect();
+    gens.extend((0..101).map(|t| log_task(t, &mut rng)));
     gens.extend((0..6).map(|k| incompressible(k, &mut rng)));
     gens.extend((0..6).map(|k| evidence_drop(k, &mut rng)));
+    for g in &gens {
+        check(&g.input, &g.query, &g.answer).map_err(|e| format!("task {}: {e}", g.id))?;
+    }
     let inputs = out.join("inputs");
     fs::create_dir_all(&inputs).map_err(|e| format!("{}: {e}", inputs.display()))?;
     let mut tasks = Vec::new();
     for g in &gens {
-        check(&g.input, &g.query, &g.answer).map_err(|e| format!("task {}: {e}", g.id))?;
         let file = format!("{}.{}", g.id, g.ext);
         fs::write(inputs.join(&file), &g.input).map_err(|e| format!("{file}: {e}"))?;
         let mut t = json!({
@@ -739,6 +769,7 @@ pub fn run(seed: u64, out: &Path) -> Result<(), String> {
         tasks.push(t);
     }
     let doc = json!({ "generator": "deslag-eval generate", "seed": seed, "tasks": tasks });
+    // ponytail: byte-identical output relies on serde_json's sorted Map (preserve_order off); enabling that feature breaks the regeneration test.
     let text = serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())? + "\n";
     let path = out.join("manifest.json");
     fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))

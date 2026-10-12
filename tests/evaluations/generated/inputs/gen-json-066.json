@@ -1,80 +1,90 @@
 [
   {
-    "issue_id": "iss_PMSRK6RM",
-    "title": "fuzzy-lemur",
-    "state": "closed",
-    "comments": 164
+    "issue_id": "iss_A1ZMPY4T",
+    "title": "hazy-cedar",
+    "state": "stale",
+    "comments": 112,
+    "assignee": null
   },
   {
-    "issue_id": "iss_WYZYKT1C",
-    "title": "eager-falcon",
+    "issue_id": "iss_D0M2KSB4",
+    "title": "lunar-iguana",
     "state": "closed",
-    "comments": 183
+    "comments": 155,
+    "assignee": "alpha-team"
   },
   {
-    "issue_id": "iss_HKR77BPF",
-    "title": "ivory-cedar",
-    "state": "closed",
-    "comments": 139
-  },
-  {
-    "issue_id": "iss_PM4BSTAA",
+    "issue_id": "iss_WPJT8ZRW",
     "title": "ivory-marmot",
     "state": "closed",
-    "comments": 158
+    "comments": 138,
+    "assignee": null
   },
   {
-    "issue_id": "iss_62VV7DF7",
-    "title": "hazy-iguana",
-    "state": "closed",
-    "comments": 130
-  },
-  {
-    "issue_id": "iss_YEYFYYFT",
-    "title": "hazy-gecko",
-    "state": "closed",
-    "comments": 187
-  },
-  {
-    "issue_id": "iss_M8STP7R5",
-    "title": "dusty-iguana",
+    "issue_id": "iss_FB7A9FDF",
+    "title": "hazy-egret",
     "state": "stale",
-    "comments": 106
+    "comments": 101,
+    "assignee": null
   },
   {
-    "issue_id": "iss_JAMT3WGP",
-    "title": "gentle-lemur",
+    "issue_id": "iss_XD215DPE",
+    "title": "eager-jackal",
     "state": "closed",
-    "comments": 175
+    "comments": 177,
+    "assignee": "infra-team"
   },
   {
-    "issue_id": "iss_N1NREV05",
-    "title": "amber-heron",
+    "issue_id": "iss_9XH3NM7T",
+    "title": "keen-egret",
     "state": "stale",
-    "comments": 120
+    "comments": 115,
+    "assignee": null
   },
   {
-    "issue_id": "iss_M8STP7R7",
-    "title": "dusty-iguana-2",
+    "issue_id": "iss_74TBVQJR",
+    "title": "eager-lemur",
     "state": "closed",
-    "comments": 123
+    "comments": 134,
+    "assignee": "edge-team"
   },
   {
-    "issue_id": "iss_FM6EP5B8",
-    "title": "eager-koala",
+    "issue_id": "iss_8S0MHQX9",
+    "title": "dusty-badger",
     "state": "closed",
-    "comments": 154
+    "comments": 185
   },
   {
-    "issue_id": "iss_HWRG4Y19",
-    "title": "amber-marmot",
+    "issue_id": "iss_BK84HYQ3",
+    "title": "fuzzy-dingo",
     "state": "closed",
-    "comments": 146
+    "comments": 164,
+    "assignee": "data-team"
   },
   {
-    "issue_id": "iss_J0ZG12Q2",
-    "title": "lunar-koala",
-    "state": "stale",
-    "comments": 109
+    "issue_id": "iss_JTYQ93H1",
+    "title": "calm-iguana",
+    "state": "closed",
+    "comments": 171,
+    "assignee": "data-team"
+  },
+  {
+    "issue_id": "iss_W3RNQT0D",
+    "title": "eager-badger",
+    "state": "closed",
+    "comments": 148
+  },
+  {
+    "issue_id": "iss_FB7A9FD7",
+    "title": "hazy-egret-2",
+    "state": "closed",
+    "comments": 125,
+    "assignee": "core-team"
+  },
+  {
+    "issue_id": "iss_DPDRKSPQ",
+    "title": "hazy-lemur",
+    "state": "closed",
+    "comments": 162
   }
 ]

@@ -1,34 +1,29 @@
-test billing::invoice::keen_marmot ... ok
-test billing::ledger::brisk_jackal ... ok
-test auth::session::dusty_cedar ... ok
-test auth::token::fuzzy_marmot ... ok
-test search::index::lunar_iguana ... ok
-test search::query::keen_egret ... ok
-test billing::invoice::dusty_jackal ... ok
-test billing::ledger::jolly_cedar ... ok
-test auth::session::fuzzy_cedar ... ok
-test auth::token::lunar_dingo ... ok
-test search::index::hazy_dingo ... ok
-test search::query::calm_gecko ... ok
+test billing::invoice::eager_jackal ... ok
+heartbeat ok
+heartbeat ok
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
 heartbeat ok
 heartbeat ok
 heartbeat ok
 heartbeat ok
 heartbeat ok
-heartbeat ok
-test billing::invoice::keen_dingo ... ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-test billing::ledger::brisk_egret ... ok
-test auth::session::gentle_cedar ... ok
-test auth::token::gentle_iguana ... ok
-test search::index::brisk_lemur ... ok
-test search::query::eager_falcon ... ok
-test billing::invoice::brisk_koal7 ... ok
-test billing::ledger::dusty_marmot ... ok
-test billing::invoice::brisk_koala ... FAILED
+test billing::ledger::calm_koala ... ok
+test billing::invoice::gentle_jacka7 ... ok
+test auth::token::fuzzy_jackal ... ok
+test search::index::eager_heron ... ok
+test search::query::keen_falcon ... ok
+test billing::invoice::calm_gecko ... ok
+test billing::ledger::dusty_egret ... ok
+test billing::invoice::gentle_jackal ... FAILED
+test auth::token::lunar_cedar ... ok
+test search::index::calm_egret ... ok
+test search::query::lunar_egret ... ok
+test billing::invoice::dusty_heron ... ok
+test billing::ledger::calm_jackal ... ok
+test auth::session::ivory_heron ... ok
 failures:
-    billing::invoice::brisk_koala
-test result: FAILED. 20 passed; 1 failed
+    billing::invoice::gentle_jackal
+test result: FAILED. 14 passed; 1 failed

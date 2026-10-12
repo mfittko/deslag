@@ -1,1 +1,1 @@
-Rotation notes for the infra-team. The on-call engineer for the week of 2026-11-28 is Joran Moreau. Escalations go to the secondary after 15 minutes without acknowledgement. The handover call moved to Monday because of a public holiday.
+Rotation notes for the beta-team. The on-call engineer for the week of 2026-10-15 is Tavi Varga. Escalations go to the secondary after 30 minutes without acknowledgement. The handover call moved to Monday because of a public holiday.

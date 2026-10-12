@@ -1,39 +1,28 @@
-test billing::invoice::hazy_koala ... ok
-test billing::ledger::jolly_dingo ... ok
-test auth::session::eager_heron ... ok
-test auth::token::dusty_iguana ... ok
-test search::index::keen_dingo ... ok
-test search::query::dusty_koala ... ok
-test billing::invoice::ivory_jackal ... ok
+test billing::invoice::lunar_falcon ... ok
+test billing::ledger::lunar_marmot ... ok
+test auth::session::ivory_falcon ... ok
+test auth::token::eager_cedar ... ok
+test search::index::amber_gecko ... ok
+test search::query::gentle_badger ... ok
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+test billing::invoice::jolly_falcon ... ok
+test billing::ledger::amber_iguana ... ok
+test auth::session::fuzzy_cedar ... ok
 waiting for upstream to accept connections
 waiting for upstream to accept connections
 waiting for upstream to accept connections
 waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-test billing::ledger::gentle_marmot ... ok
-test search::index::jolly_falco7 ... ok
-test auth::token::keen_cedar ... ok
-test search::index::calm_dingo ... ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-test search::index::jolly_falcon ... FAILED
-test billing::invoice::eager_gecko ... ok
-test billing::ledger::lunar_cedar ... ok
-test auth::session::lunar_heron ... ok
-test auth::token::calm_koala ... ok
-test search::index::jolly_lemur ... ok
-test search::query::fuzzy_lemur ... ok
-test billing::invoice::keen_lemur ... ok
-test billing::ledger::jolly_badger ... ok
-test auth::session::lunar_gecko ... ok
-test auth::token::jolly_gecko ... ok
+test billing::invoice::fuzzy_heron ... FAILED
+test billing::invoice::fuzzy_hero7 ... ok
+test search::query::hazy_heron ... ok
+test billing::invoice::dusty_dingo ... ok
+test billing::ledger::hazy_lemur ... ok
+test auth::session::brisk_marmot ... ok
 failures:
-    search::index::jolly_falcon
-test result: FAILED. 21 passed; 1 failed
+    billing::invoice::fuzzy_heron
+test result: FAILED. 14 passed; 1 failed

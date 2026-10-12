@@ -19,5 +19,15 @@
 2026-09-30T12:18:00Z deploy step 18 ok
 2026-09-30T12:19:00Z deploy step 19 ok
 2026-09-30T12:20:00Z deploy step 20 ok
-2026-09-30T12:21:00Z rollback triggered by alert=fuzzy-latency-p99
-2026-09-30T12:22:00Z deploy step rollback ok
+2026-09-30T12:21:00Z deploy step 21 ok
+2026-09-30T12:22:00Z deploy step 22 ok
+2026-09-30T12:23:00Z deploy step 23 ok
+2026-09-30T12:24:00Z deploy step 24 ok
+2026-09-30T12:25:00Z deploy step 25 ok
+2026-09-30T12:26:00Z deploy step 26 ok
+2026-09-30T12:27:00Z deploy step 27 ok
+2026-09-30T12:28:00Z deploy step 28 ok
+2026-09-30T12:29:00Z deploy step 29 ok
+2026-09-30T12:30:00Z deploy step 30 ok
+2026-09-30T12:31:00Z rollback triggered by alert=jolly-latency-p99
+2026-09-30T12:32:00Z deploy step rollback ok

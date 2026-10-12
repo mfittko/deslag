@@ -1,602 +1,80 @@
 [
   {
-    "event_id": "evt_Q8JNC8CW",
-    "target": "keen-badger",
-    "action": "read",
-    "seq": 235.15
+    "service_id": "svc_PS2T7A19",
+    "service_name": "amber-marmot",
+    "tier": "bronze",
+    "error_rate": 158.66
   },
   {
-    "event_id": "evt_HC2GWDAJ",
-    "target": "ivory-badger",
-    "action": "read",
-    "seq": 127.20
+    "service_id": "svc_PFWK2EDA",
+    "service_name": "amber-cedar",
+    "tier": "bronze",
+    "error_rate": 175.10
   },
   {
-    "event_id": "evt_RJA064NE",
-    "target": "amber-koala",
-    "action": "read",
-    "seq": 503.32
+    "service_id": "svc_DJ8GV14X",
+    "service_name": "amber-heron",
+    "tier": "silver",
+    "error_rate": 117.18
   },
   {
-    "event_id": "evt_9XVZD2TE",
-    "target": "brisk-badger",
-    "action": "read",
-    "seq": 371.46
+    "service_id": "svc_MVSWEWNK",
+    "service_name": "ivory-lemur",
+    "tier": "bronze",
+    "error_rate": 132.65
   },
   {
-    "event_id": "evt_39J4A61M",
-    "target": "gentle-falcon",
-    "action": "read",
-    "seq": 156.32
+    "service_id": "svc_CVHXN3HB",
+    "service_name": "brisk-koala",
+    "tier": "silver",
+    "error_rate": 110.75
   },
   {
-    "event_id": "evt_ZDTSH6PP",
-    "target": "hazy-egret",
-    "action": "read",
-    "seq": 691.25
+    "service_id": "svc_T5W5ZT66",
+    "service_name": "ivory-iguana",
+    "tier": "silver",
+    "error_rate": 105.74
   },
   {
-    "event_id": "evt_JEYCYQHF",
-    "target": "fuzzy-cedar",
-    "action": "read",
-    "seq": 541.09
+    "service_id": "svc_056Q1JMA",
+    "service_name": "dusty-iguana",
+    "tier": "bronze",
+    "error_rate": 169.42
   },
   {
-    "event_id": "evt_XXWWW9SM",
-    "target": "brisk-egret",
-    "action": "read",
-    "seq": 352.04
+    "service_id": "svc_EBN765BQ",
+    "service_name": "dusty-koala",
+    "tier": "bronze",
+    "error_rate": 151.74
   },
   {
-    "event_id": "evt_N765BQ72",
-    "target": "eager-egret",
-    "action": "read",
-    "seq": 793.64
+    "service_id": "svc_X6T1Z6N0",
+    "service_name": "hazy-cedar",
+    "tier": "bronze",
+    "error_rate": 139.78
   },
   {
-    "event_id": "evt_FPQN5QWH",
-    "target": "gentle-badger",
-    "action": "read",
-    "seq": 477.64
+    "service_id": "svc_8Y02EPG3",
+    "service_name": "eager-cedar",
+    "tier": "bronze",
+    "error_rate": 145.12
   },
   {
-    "event_id": "evt_FD6MW4KG",
-    "target": "keen-gecko",
-    "action": "read",
-    "seq": 389.06
+    "service_id": "svc_T5W5ZT67",
+    "service_name": "ivory-iguana-2",
+    "tier": "bronze",
+    "error_rate": 122.11
   },
   {
-    "event_id": "evt_DHV8ZSRH",
-    "target": "lunar-dingo",
-    "action": "read",
-    "seq": 712.68
+    "service_id": "svc_WN4FDS30",
+    "service_name": "amber-jackal",
+    "tier": "bronze",
+    "error_rate": 186.55
   },
   {
-    "event_id": "evt_SWEWNKFD",
-    "target": "dusty-heron",
-    "action": "read",
-    "seq": 776.39
-  },
-  {
-    "event_id": "evt_D5NCX376",
-    "target": "fuzzy-badger",
-    "action": "read",
-    "seq": 605.16
-  },
-  {
-    "event_id": "evt_PWR59XR8",
-    "target": "gentle-koala",
-    "action": "read",
-    "seq": 445.03
-  },
-  {
-    "event_id": "evt_5XHKNHVM",
-    "target": "lunar-heron",
-    "action": "read",
-    "seq": 209.49
-  },
-  {
-    "event_id": "evt_7T51KNT1",
-    "target": "brisk-iguana",
-    "action": "read",
-    "seq": 616.84
-  },
-  {
-    "event_id": "evt_34Y899BD",
-    "target": "jolly-badger",
-    "action": "read",
-    "seq": 496.30
-  },
-  {
-    "event_id": "evt_THFGEKA2",
-    "target": "calm-dingo",
-    "action": "read",
-    "seq": 410.61
-  },
-  {
-    "event_id": "evt_1YH2B30E",
-    "target": "fuzzy-marmot",
-    "action": "read",
-    "seq": 362.15
-  },
-  {
-    "event_id": "evt_JQRV0QNJ",
-    "target": "keen-koala",
-    "action": "read",
-    "seq": 635.69
-  },
-  {
-    "event_id": "evt_8GV14XWE",
-    "target": "dusty-lemur",
-    "action": "read",
-    "seq": 763.54
-  },
-  {
-    "event_id": "evt_EHG3PDQC",
-    "target": "keen-heron",
-    "action": "read",
-    "seq": 166.97
-  },
-  {
-    "event_id": "evt_30W943Y8",
-    "target": "ivory-dingo",
-    "action": "read",
-    "seq": 659.93
-  },
-  {
-    "event_id": "evt_02EPG3F8",
-    "target": "calm-cedar",
-    "action": "read",
-    "seq": 787.47
-  },
-  {
-    "event_id": "evt_2ZCYTC09",
-    "target": "eager-badger",
-    "action": "read",
-    "seq": 213.96
-  },
-  {
-    "event_id": "evt_S6E0353G",
-    "target": "ivory-falcon",
-    "action": "read",
-    "seq": 154.57
-  },
-  {
-    "event_id": "evt_SQBKFZX8",
-    "target": "hazy-lemur",
-    "action": "read",
-    "seq": 398.52
-  },
-  {
-    "event_id": "evt_2XQ4XSK6",
-    "target": "dusty-jackal",
-    "action": "read",
-    "seq": 119.30
-  },
-  {
-    "event_id": "evt_GCY2S6BV",
-    "target": "dusty-gecko",
-    "action": "read",
-    "seq": 292.68
-  },
-  {
-    "event_id": "evt_XT5F67PJ",
-    "target": "gentle-lemur",
-    "action": "read",
-    "seq": 382.52
-  },
-  {
-    "event_id": "evt_W5ZT666T",
-    "target": "brisk-falcon",
-    "action": "read",
-    "seq": 744.48
-  },
-  {
-    "event_id": "evt_0X815DCW",
-    "target": "calm-lemur",
-    "action": "read",
-    "seq": 269.13
-  },
-  {
-    "event_id": "evt_YBW2JSG7",
-    "target": "amber-falcon",
-    "action": "read",
-    "seq": 280.77
-  },
-  {
-    "event_id": "evt_EX8GPCN8",
-    "target": "dusty-badger",
-    "action": "read",
-    "seq": 514.15
-  },
-  {
-    "event_id": "evt_RVF6BF01",
-    "target": "eager-gecko",
-    "action": "read",
-    "seq": 248.03
-  },
-  {
-    "event_id": "evt_3MFG6DVZ",
-    "target": "amber-gecko",
-    "action": "read",
-    "seq": 667.20
-  },
-  {
-    "event_id": "evt_176SPP7D",
-    "target": "keen-marmot",
-    "action": "read",
-    "seq": 342.09
-  },
-  {
-    "event_id": "evt_VZWSY94K",
-    "target": "lunar-lemur",
-    "action": "read",
-    "seq": 454.89
-  },
-  {
-    "event_id": "evt_YHD1DY1V",
-    "target": "jolly-falcon",
-    "action": "read",
-    "seq": 552.79
-  },
-  {
-    "event_id": "evt_F34NT8WQ",
-    "target": "jolly-koala",
-    "action": "read",
-    "seq": 191.16
-  },
-  {
-    "event_id": "evt_W7H64FEC",
-    "target": "brisk-gecko",
-    "action": "read",
-    "seq": 487.63
-  },
-  {
-    "event_id": "evt_591G4RCC",
-    "target": "dusty-marmot",
-    "action": "read",
-    "seq": 597.42
-  },
-  {
-    "event_id": "evt_8N27WR2Q",
-    "target": "calm-gecko",
-    "action": "read",
-    "seq": 770.00
-  },
-  {
-    "event_id": "evt_HBJYF9B0",
-    "target": "calm-heron",
-    "action": "read",
-    "seq": 675.54
-  },
-  {
-    "event_id": "evt_MA1B5H5V",
-    "target": "eager-cedar",
-    "action": "read",
-    "seq": 621.21
-  },
-  {
-    "event_id": "evt_ZDP157WC",
-    "target": "gentle-heron",
-    "action": "read",
-    "seq": 592.85
-  },
-  {
-    "event_id": "evt_MKHBYABV",
-    "target": "keen-jackal",
-    "action": "read",
-    "seq": 143.18
-  },
-  {
-    "event_id": "evt_5E79V6YQ",
-    "target": "lunar-iguana",
-    "action": "read",
-    "seq": 244.22
-  },
-  {
-    "event_id": "evt_HXN3HBCK",
-    "target": "amber-lemur",
-    "action": "read",
-    "seq": 757.26
-  },
-  {
-    "event_id": "evt_2JPKTB0Y",
-    "target": "dusty-iguana",
-    "action": "read",
-    "seq": 171.89
-  },
-  {
-    "event_id": "evt_0FSZP7KW",
-    "target": "jolly-jackal",
-    "action": "read",
-    "seq": 306.07
-  },
-  {
-    "event_id": "evt_G1KPPJ9A",
-    "target": "jolly-marmot",
-    "action": "read",
-    "seq": 696.84
-  },
-  {
-    "event_id": "evt_QXAD008Q",
-    "target": "keen-egret",
-    "action": "read",
-    "seq": 224.89
-  },
-  {
-    "event_id": "evt_HYVKVHDC",
-    "target": "fuzzy-dingo",
-    "action": "read",
-    "seq": 403.76
-  },
-  {
-    "event_id": "evt_CQNMFDVJ",
-    "target": "lunar-marmot",
-    "action": "read",
-    "seq": 729.00
-  },
-  {
-    "event_id": "evt_54MM2TXH",
-    "target": "gentle-cedar",
-    "action": "read",
-    "seq": 540.82
-  },
-  {
-    "event_id": "evt_FX8BXPWG",
-    "target": "calm-marmot",
-    "action": "read",
-    "seq": 430.12
-  },
-  {
-    "event_id": "evt_XYDBSHY2",
-    "target": "brisk-dingo",
-    "action": "read",
-    "seq": 521.20
-  },
-  {
-    "event_id": "evt_V68W1CY8",
-    "target": "calm-badger",
-    "action": "read",
-    "seq": 263.33
-  },
-  {
-    "event_id": "evt_TCNK0D6D",
-    "target": "eager-koala",
-    "action": "read",
-    "seq": 131.59
-  },
-  {
-    "event_id": "evt_1VMJRMK2",
-    "target": "ivory-gecko",
-    "action": "read",
-    "seq": 178.41
-  },
-  {
-    "event_id": "evt_EXKS3YSN",
-    "target": "eager-marmot",
-    "action": "read",
-    "seq": 319.98
-  },
-  {
-    "event_id": "evt_K4Y8EHRQ",
-    "target": "keen-cedar",
-    "action": "read",
-    "seq": 686.64
-  },
-  {
-    "event_id": "evt_A1A0KD2D",
-    "target": "amber-cedar",
-    "action": "read",
-    "seq": 457.67
-  },
-  {
-    "event_id": "evt_0BMADRJZ",
-    "target": "brisk-jackal",
-    "action": "read",
-    "seq": 374.03
-  },
-  {
-    "event_id": "evt_8X1SVSBY",
-    "target": "lunar-jackal",
-    "action": "read",
-    "seq": 575.65
-  },
-  {
-    "event_id": "evt_T1Z6N0V6",
-    "target": "amber-egret",
-    "action": "read",
-    "seq": 783.18
-  },
-  {
-    "event_id": "evt_206TDXAA",
-    "target": "ivory-cedar",
-    "action": "read",
-    "seq": 583.27
-  },
-  {
-    "event_id": "evt_KHBCSBA5",
-    "target": "hazy-jackal",
-    "action": "read",
-    "seq": 428.65
-  },
-  {
-    "event_id": "evt_WQT1E3RY",
-    "target": "amber-marmot",
-    "action": "read",
-    "seq": 568.79
-  },
-  {
-    "event_id": "evt_D8V1RGMM",
-    "target": "lunar-cedar",
-    "action": "read",
-    "seq": 650.96
-  },
-  {
-    "event_id": "evt_C4GHYM0F",
-    "target": "brisk-cedar",
-    "action": "read",
-    "seq": 716.07
-  },
-  {
-    "event_id": "evt_1X091Q65",
-    "target": "lunar-badger",
-    "action": "read",
-    "seq": 198.57
-  },
-  {
-    "event_id": "evt_ESPXW59S",
-    "target": "hazy-koala",
-    "action": "read",
-    "seq": 558.33
-  },
-  {
-    "event_id": "evt_PZC4VXKQ",
-    "target": "fuzzy-falcon",
-    "action": "read",
-    "seq": 739.94
-  },
-  {
-    "event_id": "evt_N7J8QJ0C",
-    "target": "amber-jackal",
-    "action": "read",
-    "seq": 661.65
-  },
-  {
-    "event_id": "evt_7KKWGK2T",
-    "target": "hazy-heron",
-    "action": "read",
-    "seq": 641.05
-  },
-  {
-    "event_id": "evt_CMXB3G35",
-    "target": "jolly-heron",
-    "action": "read",
-    "seq": 231.88
-  },
-  {
-    "event_id": "evt_XR2WRF77",
-    "target": "dusty-cedar-2",
-    "action": "read",
-    "seq": 823.40
-  },
-  {
-    "event_id": "evt_AHC6HSKT",
-    "target": "amber-iguana",
-    "action": "read",
-    "seq": 330.97
-  },
-  {
-    "event_id": "evt_NSG2FKPX",
-    "target": "eager-heron",
-    "action": "read",
-    "seq": 628.29
-  },
-  {
-    "event_id": "evt_Q5MS1M6S",
-    "target": "brisk-koala",
-    "action": "read",
-    "seq": 313.99
-  },
-  {
-    "event_id": "evt_CHNK1Z74",
-    "target": "amber-badger",
-    "action": "read",
-    "seq": 336.34
-  },
-  {
-    "event_id": "evt_1HGAF474",
-    "target": "keen-lemur",
-    "action": "read",
-    "seq": 189.32
-  },
-  {
-    "event_id": "evt_EP1P6N2Z",
-    "target": "lunar-gecko",
-    "action": "read",
-    "seq": 733.22
-  },
-  {
-    "event_id": "evt_XR2WRF78",
-    "target": "dusty-cedar",
-    "action": "delete",
-    "seq": 839.10
-  },
-  {
-    "event_id": "evt_EAMYRGZY",
-    "target": "hazy-gecko",
-    "action": "read",
-    "seq": 282.10
-  },
-  {
-    "event_id": "evt_MS2RVFVX",
-    "target": "fuzzy-iguana",
-    "action": "read",
-    "seq": 437.03
-  },
-  {
-    "event_id": "evt_BDSXEM9Y",
-    "target": "dusty-egret",
-    "action": "read",
-    "seq": 416.94
-  },
-  {
-    "event_id": "evt_C7308NRX",
-    "target": "hazy-iguana",
-    "action": "read",
-    "seq": 708.03
-  },
-  {
-    "event_id": "evt_ESQY9DCG",
-    "target": "ivory-egret",
-    "action": "read",
-    "seq": 579.32
-  },
-  {
-    "event_id": "evt_4Q5G6QZS",
-    "target": "fuzzy-lemur",
-    "action": "read",
-    "seq": 299.86
-  },
-  {
-    "event_id": "evt_8TYG1MEP",
-    "target": "hazy-falcon",
-    "action": "read",
-    "seq": 140.49
-  },
-  {
-    "event_id": "evt_RTPS0WDW",
-    "target": "amber-dingo",
-    "action": "read",
-    "seq": 256.58
-  },
-  {
-    "event_id": "evt_D466YPK0",
-    "target": "brisk-marmot",
-    "action": "read",
-    "seq": 512.37
-  },
-  {
-    "event_id": "evt_NZS2ECK0",
-    "target": "gentle-gecko",
-    "action": "read",
-    "seq": 346.61
-  },
-  {
-    "event_id": "evt_93XVXEDR",
-    "target": "ivory-lemur",
-    "action": "read",
-    "seq": 466.77
-  },
-  {
-    "event_id": "evt_4EMJ1D7V",
-    "target": "calm-koala",
-    "action": "read",
-    "seq": 484.98
-  },
-  {
-    "event_id": "evt_1DZ3S6Z2",
-    "target": "jolly-lemur",
-    "action": "read",
-    "seq": 533.86
+    "service_id": "svc_K78PA264",
+    "service_name": "amber-egret",
+    "tier": "bronze",
+    "error_rate": 183.51
   }
 ]

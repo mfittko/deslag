@@ -1,30 +1,30 @@
-test billing::invoice::keen_iguana ... ok
-test billing::ledger::fuzzy_dingo ... ok
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-test auth::session::dusty_egret ... ok
-test auth::token::dusty_jackal ... ok
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-test search::index::eager_dingo ... ok
-test search::query::fuzzy_lemur ... FAILED
-test billing::invoice::keen_lemur ... ok
-test billing::ledger::jolly_badger ... ok
-test search::query::fuzzy_lemu7 ... ok
-test auth::token::amber_falcon ... ok
-test search::index::keen_dingo ... ok
-test search::query::fuzzy_egret ... ok
-test billing::invoice::lunar_iguana ... ok
+test billing::invoice::hazy_iguana ... ok
+test auth::session::dusty_ceda7 ... ok
+test auth::session::keen_lemur ... ok
+test auth::token::gentle_jackal ... ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+test search::index::eager_jackal ... ok
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+test auth::session::dusty_cedar ... FAILED
+test billing::invoice::dusty_dingo ... ok
+test billing::ledger::amber_koala ... ok
+test auth::session::calm_badger ... ok
+test auth::token::brisk_lemur ... ok
+test search::index::lunar_badger ... ok
+test search::query::ivory_koala ... ok
 failures:
-    search::query::fuzzy_lemur
-test result: FAILED. 12 passed; 1 failed
+    auth::session::dusty_cedar
+test result: FAILED. 11 passed; 1 failed

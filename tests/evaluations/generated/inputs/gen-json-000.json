@@ -1,68 +1,68 @@
 [
   {
-    "user_id": "usr_M5YFF4HK",
-    "login": "gentle-iguana",
+    "user_id": "usr_V8MGCV45",
+    "login": "hazy-lemur",
     "role": "member",
-    "requests": 139
+    "quota_gb": 130.33
   },
   {
-    "user_id": "usr_YBC2ZBX5",
-    "login": "gentle-badger",
+    "user_id": "usr_76RAVBK0",
+    "login": "amber-falcon",
     "role": "member",
-    "requests": 162
+    "quota_gb": 115.38
   },
   {
-    "user_id": "usr_ZMACTRDK",
-    "login": "hazy-iguana",
+    "user_id": "usr_G6NDR437",
+    "login": "calm-gecko-2",
     "role": "member",
-    "requests": 154
+    "quota_gb": 112.00
   },
   {
-    "user_id": "usr_H3BYDHM3",
-    "login": "hazy-badger",
-    "role": "member",
-    "requests": 170
-  },
-  {
-    "user_id": "usr_6NDR43SK",
-    "login": "gentle-lemur",
-    "role": "owner",
-    "requests": 106
-  },
-  {
-    "user_id": "usr_6NDR43S7",
-    "login": "gentle-lemur-2",
-    "role": "member",
-    "requests": 112
-  },
-  {
-    "user_id": "usr_076RAVBK",
-    "login": "calm-cedar",
-    "role": "member",
-    "requests": 115
-  },
-  {
-    "user_id": "usr_FEMV8MGC",
+    "user_id": "usr_DK00RYBC",
     "login": "ivory-badger",
     "role": "member",
-    "requests": 128
+    "quota_gb": 154.03
   },
   {
-    "user_id": "usr_TPG18Y4E",
-    "login": "lunar-lemur",
+    "user_id": "usr_571Z50D3",
+    "login": "hazy-marmot",
     "role": "member",
-    "requests": 148
+    "quota_gb": 162.84
   },
   {
-    "user_id": "usr_PT81YSY9",
-    "login": "hazy-cedar",
-    "role": "member",
-    "requests": 124
+    "user_id": "usr_G6NDR43S",
+    "login": "calm-gecko",
+    "role": "owner",
+    "quota_gb": 204.20
   },
   {
-    "user_id": "usr_50D370D7",
-    "login": "eager-jackal",
+    "user_id": "usr_69PH3BYD",
+    "login": "brisk-falcon",
     "role": "member",
-    "requests": 163
+    "quota_gb": 167.12
+  },
+  {
+    "user_id": "usr_Y4ET98ZM",
+    "login": "jolly-koala",
+    "role": "member",
+    "quota_gb": 147.92
+  },
+  {
+    "user_id": "usr_F4HKYGCT",
+    "login": "jolly-jackal",
+    "role": "member",
+    "quota_gb": 140.80
+  },
+  {
+    "user_id": "usr_V8K7DQV2",
+    "login": "fuzzy-cedar",
+    "role": "member",
+    "quota_gb": 175.73
+  },
+  {
+    "user_id": "usr_81YSY9KV",
+    "login": "hazy-falcon",
+    "role": "member",
+    "quota_gb": 125.91
   }
 ]

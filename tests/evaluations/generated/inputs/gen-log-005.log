@@ -1,35 +1,30 @@
-test billing::invoice::jolly_cedar ... ok
-test billing::ledger::brisk_marmot ... ok
-test auth::session::amber_cedar ... ok
+test billing::invoice::lunar_iguana ... ok
+waiting for upstream to accept connections
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+test billing::ledger::hazy_lemur ... ok
+test auth::session::brisk_heron ... ok
+test billing::invoice::jolly_gecko ... FAILED
+test search::index::hazy_egret ... ok
+test search::query::brisk_marmot ... ok
+test billing::invoice::keen_koala ... ok
+test billing::ledger::amber_gecko ... ok
+test auth::session::fuzzy_koala ... ok
 test auth::token::eager_jackal ... ok
-test search::index::ivory_iguana ... ok
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-test search::query::lunar_dingo ... ok
-test billing::invoice::brisk_cedar ... ok
-test billing::ledger::calm_koala ... ok
-test auth::session::amber_heron ... ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-test auth::token::amber_badger ... ok
-test search::index::hazy_dingo ... ok
-test search::query::keen_egret ... ok
-test billing::invoice::eager_cedar ... ok
-test billing::ledger::calm_badge7 ... ok
-test billing::ledger::calm_badger ... FAILED
-test auth::token::calm_jackal ... ok
-test search::index::fuzzy_jackal ... ok
-test search::query::ivory_heron ... ok
-test billing::invoice::ivory_koala ... ok
-test billing::ledger::gentle_heron ... ok
-test auth::session::hazy_marmot ... ok
-test auth::token::lunar_cedar ... ok
+test billing::invoice::jolly_geck7 ... ok
+test search::query::lunar_badger ... ok
+test billing::invoice::calm_iguana ... ok
+test billing::ledger::fuzzy_egret ... ok
 failures:
-    billing::ledger::calm_badger
-test result: FAILED. 21 passed; 1 failed
+    billing::invoice::jolly_gecko
+test result: FAILED. 13 passed; 1 failed

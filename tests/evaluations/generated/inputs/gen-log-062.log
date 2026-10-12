@@ -1,6 +1,5 @@
-test billing::invoice::amber_badger ... ok
-test auth::session::ivory_badge7 ... ok
-test auth::session::dusty_heron ... ok
+test billing::invoice::jolly_koala ... ok
+test billing::ledger::amber_heron ... ok
 heartbeat ok
 heartbeat ok
 heartbeat ok
@@ -8,30 +7,28 @@ heartbeat ok
 heartbeat ok
 heartbeat ok
 heartbeat ok
-heartbeat ok
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-test auth::token::gentle_heron ... ok
-test search::index::amber_koala ... ok
-test search::query::hazy_koala ... ok
-test billing::invoice::keen_egret ... ok
-test billing::ledger::calm_lemur ... ok
-test auth::session::ivory_badger ... FAILED
-test auth::token::lunar_gecko ... ok
-test search::index::keen_heron ... ok
-test search::query::eager_lemur ... ok
-test billing::invoice::jolly_gecko ... ok
-test billing::ledger::jolly_koala ... ok
-test auth::session::brisk_heron ... ok
-test auth::token::fuzzy_heron ... ok
-test search::index::hazy_iguana ... ok
-test search::query::brisk_cedar ... ok
-test billing::invoice::ivory_lemur ... ok
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+test search::index::gentle_heron ... FAILED
+test auth::token::calm_iguana ... ok
+test search::index::brisk_iguana ... ok
+test search::query::ivory_egret ... ok
+test billing::invoice::calm_jackal ... ok
+test search::index::gentle_hero7 ... ok
+test auth::session::eager_dingo ... ok
+test auth::token::fuzzy_koala ... ok
+test search::index::hazy_jackal ... ok
+test search::query::keen_heron ... ok
+test billing::invoice::keen_marmot ... ok
+test billing::ledger::eager_gecko ... ok
+test auth::session::gentle_dingo ... ok
+test auth::token::brisk_gecko ... ok
+test search::index::amber_cedar ... ok
+test search::query::fuzzy_iguana ... ok
 failures:
-    auth::session::ivory_badger
-test result: FAILED. 18 passed; 1 failed
+    search::index::gentle_heron
+test result: FAILED. 17 passed; 1 failed

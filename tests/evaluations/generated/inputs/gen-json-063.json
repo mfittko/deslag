@@ -1,71 +1,68 @@
 [
   {
-    "user_id": "usr_MPY4TXRV",
-    "login": "keen-gecko",
+    "user_id": "usr_NJ7DEDQS",
+    "login": "lunar-jackal",
     "role": "member",
-    "requests": 134.09,
-    "team": "infra-team"
+    "quota_gb": 116.56
   },
   {
-    "user_id": "usr_67XZYK74",
-    "login": "jolly-egret",
+    "user_id": "usr_ZBH9K4AJ",
+    "login": "brisk-iguana",
     "role": "member",
-    "requests": 144.23,
-    "team": "beta-team"
+    "quota_gb": 129.58
   },
   {
-    "user_id": "usr_NM7TGA9A",
-    "login": "amber-jackal",
+    "user_id": "usr_E1GA2XM1",
+    "login": "fuzzy-gecko",
     "role": "member",
-    "requests": 140.63,
-    "team": "beta-team"
+    "quota_gb": 137.84
   },
   {
-    "user_id": "usr_7A9FDF33",
-    "login": "hazy-cedar",
+    "user_id": "usr_CWF8FMAZ",
+    "login": "hazy-falcon",
     "role": "member",
-    "requests": 125.42,
-    "team": null
+    "quota_gb": 154.40
   },
   {
-    "user_id": "usr_59T8QFHX",
-    "login": "amber-heron",
+    "user_id": "usr_XX69TDD7",
+    "login": "fuzzy-heron-2",
     "role": "member",
-    "requests": 120.20,
-    "team": null
+    "quota_gb": 111.92
   },
   {
-    "user_id": "usr_WDHMW3RN",
-    "login": "calm-falcon",
-    "role": "member",
-    "requests": 157.98,
-    "team": null
-  },
-  {
-    "user_id": "usr_JRXV5WPJ",
-    "login": "jolly-jackal",
-    "role": "member",
-    "requests": 154.76,
-    "team": null
-  },
-  {
-    "user_id": "usr_R0DD0M2K",
-    "login": "jolly-gecko",
-    "role": "member",
-    "requests": 167.71,
-    "team": null
-  },
-  {
-    "user_id": "usr_03ZY9ZJN",
-    "login": "brisk-dingo",
+    "user_id": "usr_XX69TDDT",
+    "login": "fuzzy-heron",
     "role": "owner",
-    "requests": 106.88,
-    "team": "infra-team"
+    "quota_gb": 199.10
   },
   {
-    "user_id": "usr_03ZY9ZJ7",
-    "login": "brisk-dingo-2",
+    "user_id": "usr_94APP2JC",
+    "login": "amber-cedar",
     "role": "member",
-    "requests": 112.88
+    "quota_gb": 164.11
+  },
+  {
+    "user_id": "usr_42TZQY8M",
+    "login": "dusty-dingo",
+    "role": "member",
+    "quota_gb": 122.85
+  },
+  {
+    "user_id": "usr_V7FGKGSG",
+    "login": "brisk-koala",
+    "role": "member",
+    "quota_gb": 175.27
+  },
+  {
+    "user_id": "usr_C70XAFGQ",
+    "login": "jolly-cedar",
+    "role": "member",
+    "quota_gb": 146.98
+  },
+  {
+    "user_id": "usr_689ZF7PJ",
+    "login": "hazy-heron",
+    "role": "member",
+    "quota_gb": 157.06
   }
 ]

@@ -1,62 +1,83 @@
 [
   {
     "user_id": "usr_FDM6VCFW",
-    "login": "brisk-lemur",
+    "login": "jolly-iguana",
     "role": "member",
-    "requests": 133.40
+    "quota_gb": 175.40
   },
   {
-    "user_id": "usr_YKB0WJ89",
-    "login": "calm-lemur",
+    "user_id": "usr_A6RXQ6QA",
+    "login": "keen-cedar",
     "role": "member",
-    "requests": 136.38
+    "quota_gb": 112.13,
+    "team": null
   },
   {
-    "user_id": "usr_2DMRYN2H",
-    "login": "brisk-gecko",
+    "user_id": "usr_26199EJ5",
+    "login": "calm-marmot",
     "role": "owner",
-    "requests": 209.40
+    "quota_gb": 106.74,
+    "team": null
   },
   {
-    "user_id": "usr_5Q8TEKVC",
-    "login": "eager-marmot",
+    "user_id": "usr_B301Q7FP",
+    "login": "hazy-koala",
     "role": "member",
-    "requests": 144.08
-  },
-  {
-    "user_id": "usr_HMQ03RHA",
-    "login": "calm-falcon",
-    "role": "member",
-    "requests": 126.60
-  },
-  {
-    "user_id": "usr_HT31XK9H",
-    "login": "lunar-egret",
-    "role": "member",
-    "requests": 167.18
+    "quota_gb": 137.06,
+    "team": "beta-team"
   },
   {
     "user_id": "usr_6D6TAVYM",
-    "login": "ivory-iguana",
+    "login": "eager-jackal",
     "role": "member",
-    "requests": 115.53
+    "quota_gb": 157.53,
+    "team": null
   },
   {
-    "user_id": "usr_ZPJCWRH9",
-    "login": "lunar-gecko",
+    "user_id": "usr_YKB0WJ89",
+    "login": "brisk-cedar",
     "role": "member",
-    "requests": 161.60
+    "quota_gb": 178.38,
+    "team": null
   },
   {
-    "user_id": "usr_6BJAY992",
-    "login": "fuzzy-heron",
+    "user_id": "usr_2DMRYN2H",
+    "login": "gentle-cedar",
     "role": "member",
-    "requests": 149.34
+    "quota_gb": 144.32,
+    "team": null
   },
   {
-    "user_id": "usr_2DMRYN27",
-    "login": "brisk-gecko-2",
+    "user_id": "usr_PMCZV4ME",
+    "login": "jolly-falcon",
     "role": "member",
-    "requests": 192.80
+    "quota_gb": 149.58,
+    "team": "core-team"
+  },
+  {
+    "user_id": "usr_ZN6CP754",
+    "login": "calm-badger",
+    "role": "member",
+    "quota_gb": 129.76,
+    "team": "infra-team"
+  },
+  {
+    "user_id": "usr_HMQ03RHA",
+    "login": "calm-gecko",
+    "role": "member",
+    "quota_gb": 168.60
+  },
+  {
+    "user_id": "usr_DE8189WC",
+    "login": "calm-lemur",
+    "role": "member",
+    "quota_gb": 125.94
+  },
+  {
+    "user_id": "usr_26199EJ7",
+    "login": "calm-marmot-2",
+    "role": "member",
+    "quota_gb": 119.22,
+    "team": null
   }
 ]

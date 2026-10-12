@@ -118,6 +118,47 @@ fn self_check_refuses_an_answer_that_is_absent_wrong_or_not_unique() {
     assert!(check("test a ... FAILED\ntest b ... FAILED\n", &scan, "a").is_err());
 }
 
+#[test]
+fn self_check_keeps_null_distinct_from_a_missing_key() {
+    let rows =
+        r#"[{"id":"a1","note":null},{"id":"b2"},{"id":"c3","note":null},{"id":"d4","note":"x"}]"#;
+    let nulls = Query::Json {
+        conds: vec![("note", Value::Null)],
+        pick: Pick::Set("id"),
+    };
+    assert_eq!(check(rows, &nulls, "a1,c3"), Ok(()));
+    assert!(check(rows, &nulls, "a1,b2,c3").is_err());
+    assert!(check(rows, &nulls, "a1,c3,d4").is_err());
+}
+
+#[test]
+fn buried_json_tasks_are_lookups_with_the_answer_in_the_last_40_percent() {
+    let dir = evaluations().join("generated");
+    let doc: Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("manifest.json")).unwrap()).unwrap();
+    let mut buried = 0;
+    for t in doc["tasks"].as_array().unwrap() {
+        let input = t["input"].as_str().unwrap();
+        if !input.ends_with(".json") || t["control"].is_string() {
+            continue;
+        }
+        let rows: Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join(input)).unwrap()).unwrap();
+        let rows = rows.as_array().unwrap();
+        if rows.len() < 100 {
+            continue;
+        }
+        buried += 1;
+        let (q, answer) = (t["question"].as_str().unwrap(), &t["answers"][0]);
+        assert!(!q.contains("highest") && !q.starts_with("List"), "{q}");
+        let at: Vec<usize> = (0..rows.len())
+            .filter(|&i| rows[i].as_object().unwrap().values().any(|v| v == answer))
+            .collect();
+        assert!(at.len() == 1 && at[0] * 10 >= rows.len() * 6, "{q} {at:?}");
+    }
+    assert!(buried >= 5, "{buried} buried JSON tasks");
+}
+
 /// Writes a one-task manifest with `extra` top-level members and returns its path.
 fn manifest_with(dir: &Path, name: &str, id: &str, extra: &str) -> PathBuf {
     let input = evaluations().join("inputs/api_query_repo.json");

@@ -1,71 +1,77 @@
 [
   {
-    "user_id": "usr_PDJ0HV7Q",
-    "login": "hazy-marmot",
+    "user_id": "usr_DV7WSBK7",
+    "login": "gentle-falcon-2",
     "role": "member",
-    "requests": 154,
-    "team": "core-team"
-  },
-  {
-    "user_id": "usr_QWQCY4G0",
-    "login": "amber-jackal",
-    "role": "member",
-    "requests": 160,
+    "quota_gb": 199.60,
     "team": null
   },
   {
-    "user_id": "usr_R4TK92KQ",
-    "login": "dusty-jackal",
+    "user_id": "usr_M88YJXPY",
+    "login": "gentle-lemur",
     "role": "member",
-    "requests": 131,
+    "quota_gb": 143.12,
     "team": "beta-team"
   },
   {
-    "user_id": "usr_KK07CJM8",
-    "login": "keen-badger-2",
+    "user_id": "usr_79TGA7B5",
+    "login": "calm-heron",
     "role": "member",
-    "requests": 123,
-    "team": "infra-team"
+    "quota_gb": 152.47,
+    "team": "beta-team"
   },
   {
-    "user_id": "usr_DMY3HBBC",
-    "login": "gentle-lemur",
+    "user_id": "usr_8XWSJ84B",
+    "login": "keen-heron",
     "role": "member",
-    "requests": 140,
-    "team": "alpha-team"
+    "quota_gb": 167.28,
+    "team": "data-team"
   },
   {
-    "user_id": "usr_STFSX1E5",
-    "login": "calm-dingo",
-    "role": "auditor",
-    "requests": 113
-  },
-  {
-    "user_id": "usr_KK07CJM7",
-    "login": "keen-badger",
-    "role": "auditor",
-    "requests": 101,
+    "user_id": "usr_DV7WSBKV",
+    "login": "gentle-falcon",
+    "role": "owner",
+    "quota_gb": 213.90,
     "team": null
   },
   {
-    "user_id": "usr_YEC84571",
-    "login": "ivory-falcon",
+    "user_id": "usr_KRV528XH",
+    "login": "brisk-cedar",
     "role": "member",
-    "requests": 167,
+    "quota_gb": 134.89
+  },
+  {
+    "user_id": "usr_0D82243H",
+    "login": "eager-dingo",
+    "role": "member",
+    "quota_gb": 174.28,
+    "team": "alpha-team"
+  },
+  {
+    "user_id": "usr_0P7ZN6ZV",
+    "login": "ivory-lemur",
+    "role": "member",
+    "quota_gb": 120.25,
     "team": "edge-team"
   },
   {
-    "user_id": "usr_9GDNECDB",
-    "login": "dusty-iguana",
-    "role": "auditor",
-    "requests": 118,
-    "team": "infra-team"
+    "user_id": "usr_9XHFF58B",
+    "login": "ivory-marmot",
+    "role": "member",
+    "quota_gb": 121.11,
+    "team": null
   },
   {
-    "user_id": "usr_6RHA5QNY",
-    "login": "lunar-gecko",
+    "user_id": "usr_TK274VJA",
+    "login": "amber-heron",
     "role": "member",
-    "requests": 144,
-    "team": "data-team"
+    "quota_gb": 136.32,
+    "team": null
+  },
+  {
+    "user_id": "usr_JMJ71631",
+    "login": "keen-dingo",
+    "role": "member",
+    "quota_gb": 156.29
   }
 ]

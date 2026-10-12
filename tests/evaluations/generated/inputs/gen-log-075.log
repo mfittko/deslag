@@ -1,29 +1,31 @@
-test billing::invoice::lunar_gecko ... ok
-test billing::ledger::jolly_koala ... ok
-test auth::session::gentle_lemur ... ok
-test auth::token::ivory_egret ... ok
-test search::index::brisk_iguana ... ok
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
+test billing::invoice::brisk_jackal ... ok
+test auth::token::lunar_koal7 ... ok
+test auth::session::keen_heron ... ok
+test auth::token::ivory_jackal ... ok
 heartbeat ok
 heartbeat ok
 heartbeat ok
 heartbeat ok
 heartbeat ok
 heartbeat ok
-test search::query::hazy_gecko ... ok
-test search::query::ivory_lemur ... FAILED
-test billing::ledger::keen_falcon ... ok
-test search::query::ivory_lemu7 ... ok
-test auth::token::hazy_jackal ... ok
-test search::index::fuzzy_iguana ... ok
-test search::query::keen_iguana ... ok
-test billing::invoice::fuzzy_lemur ... ok
+heartbeat ok
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+test search::index::eager_iguana ... ok
+test auth::token::lunar_koala ... FAILED
+test billing::invoice::fuzzy_falcon ... ok
+test billing::ledger::brisk_cedar ... ok
+test auth::session::dusty_iguana ... ok
+test auth::token::lunar_cedar ... ok
+test search::index::brisk_dingo ... ok
+test search::query::eager_heron ... ok
+test billing::invoice::hazy_koala ... ok
 failures:
-    search::query::ivory_lemur
+    auth::token::lunar_koala
 test result: FAILED. 12 passed; 1 failed

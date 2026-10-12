@@ -1,68 +1,78 @@
 [
   {
-    "user_id": "usr_J64E75B9",
-    "login": "lunar-iguana",
-    "role": "auditor",
-    "requests": 116
-  },
-  {
-    "user_id": "usr_2RR4MNR7",
-    "login": "ivory-gecko-2",
+    "user_id": "usr_V59VS4NY",
+    "login": "gentle-jackal",
     "role": "member",
-    "requests": 127
+    "quota_gb": 144.75,
+    "team": "core-team"
   },
   {
-    "user_id": "usr_HJN6NMFJ",
-    "login": "lunar-cedar",
+    "user_id": "usr_7XK8JGTN",
+    "login": "hazy-dingo",
     "role": "member",
-    "requests": 165
+    "quota_gb": 132.68,
+    "team": "data-team"
   },
   {
-    "user_id": "usr_2W4CEZW9",
-    "login": "brisk-falcon",
+    "user_id": "usr_VQXMCK7K",
+    "login": "gentle-badger",
     "role": "member",
-    "requests": 138
+    "quota_gb": 161.65,
+    "team": "data-team"
   },
   {
-    "user_id": "usr_HBSCZ5AE",
-    "login": "dusty-cedar",
+    "user_id": "usr_TYDQRX91",
+    "login": "eager-jackal",
     "role": "member",
-    "requests": 128
+    "quota_gb": 116.28,
+    "team": "infra-team"
   },
   {
-    "user_id": "usr_NQE365NW",
-    "login": "fuzzy-jackal",
+    "user_id": "usr_NSX4QXG8",
+    "login": "gentle-cedar",
     "role": "member",
-    "requests": 145
+    "quota_gb": 168.99,
+    "team": "alpha-team"
   },
   {
-    "user_id": "usr_2RR4MNR3",
-    "login": "ivory-gecko",
-    "role": "auditor",
-    "requests": 101
+    "user_id": "usr_PS0FF77V",
+    "login": "jolly-lemur",
+    "role": "member",
+    "quota_gb": 136.17
   },
   {
-    "user_id": "usr_1W61QCFB",
+    "user_id": "usr_5CTG9ACN",
+    "login": "keen-heron",
+    "role": "member",
+    "quota_gb": 125.33,
+    "team": "infra-team"
+  },
+  {
+    "user_id": "usr_37VGVQHW",
     "login": "dusty-falcon",
     "role": "member",
-    "requests": 170
+    "quota_gb": 155.29,
+    "team": "data-team"
   },
   {
-    "user_id": "usr_52K9V32G",
-    "login": "keen-falcon",
+    "user_id": "usr_RFQKWCJ7",
+    "login": "hazy-falcon-2",
     "role": "member",
-    "requests": 151
+    "quota_gb": 107.98,
+    "team": "alpha-team"
   },
   {
-    "user_id": "usr_J4GCPD0W",
-    "login": "brisk-cedar",
-    "role": "auditor",
-    "requests": 113
+    "user_id": "usr_RFQKWCJN",
+    "login": "hazy-falcon",
+    "role": "owner",
+    "quota_gb": 104.64,
+    "team": null
   },
   {
-    "user_id": "usr_89JEKQZF",
+    "user_id": "usr_7S5RA5V3",
     "login": "eager-badger",
     "role": "member",
-    "requests": 161
+    "quota_gb": 172.20,
+    "team": null
   }
 ]

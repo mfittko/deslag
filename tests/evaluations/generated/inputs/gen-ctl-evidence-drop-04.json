@@ -47,7 +47,7 @@
   {
     "session": "sess_k9",
     "user": "u27",
-    "revoked_by": "svc-amber-marmot"
+    "revoked_by": null
   },
   {
     "session": "sess_k10",
@@ -72,7 +72,7 @@
   {
     "session": "sess_k14",
     "user": "u42",
-    "revoked_by": null
+    "revoked_by": "svc-hazy-lemur"
   },
   {
     "session": "sess_k15",
@@ -112,36 +112,6 @@
   {
     "session": "sess_k22",
     "user": "u66",
-    "revoked_by": null
-  },
-  {
-    "session": "sess_k23",
-    "user": "u69",
-    "revoked_by": null
-  },
-  {
-    "session": "sess_k24",
-    "user": "u72",
-    "revoked_by": null
-  },
-  {
-    "session": "sess_k25",
-    "user": "u75",
-    "revoked_by": null
-  },
-  {
-    "session": "sess_k26",
-    "user": "u78",
-    "revoked_by": null
-  },
-  {
-    "session": "sess_k27",
-    "user": "u81",
-    "revoked_by": null
-  },
-  {
-    "session": "sess_k28",
-    "user": "u84",
     "revoked_by": null
   }
 ]

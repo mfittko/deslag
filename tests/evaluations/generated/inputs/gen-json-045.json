@@ -1,86 +1,70 @@
 [
   {
-    "issue_id": "iss_2JG5PD6T",
-    "title": "hazy-falcon",
+    "issue_id": "iss_FE5Y1BAE",
+    "title": "brisk-falcon",
     "state": "closed",
-    "comments": 196
+    "comments": 138
   },
   {
-    "issue_id": "iss_47CX2S51",
-    "title": "jolly-heron",
+    "issue_id": "iss_HTQHV00P",
+    "title": "calm-falcon",
     "state": "closed",
-    "comments": 129
+    "comments": 144,
+    "assignee": "data-team"
   },
   {
-    "issue_id": "iss_Y4NKWEPX",
-    "title": "hazy-jackal",
+    "issue_id": "iss_JEERJFGH",
+    "title": "fuzzy-koala",
     "state": "closed",
-    "comments": 151
+    "comments": 113,
+    "assignee": null
   },
   {
-    "issue_id": "iss_RWYZH1FZ",
-    "title": "lunar-lemur",
+    "issue_id": "iss_7QG3MFF5",
+    "title": "dusty-iguana",
     "state": "closed",
-    "comments": 164
+    "comments": 129,
+    "assignee": "core-team"
   },
   {
-    "issue_id": "iss_2N2YPWKS",
-    "title": "keen-gecko",
+    "issue_id": "iss_FNS2VTC7",
+    "title": "jolly-lemur-2",
     "state": "closed",
-    "comments": 140
+    "comments": 118,
+    "assignee": null
   },
   {
-    "issue_id": "iss_AXCK0333",
-    "title": "ivory-falcon",
+    "issue_id": "iss_C862ZEMB",
+    "title": "ivory-egret",
     "state": "closed",
-    "comments": 119
+    "comments": 169,
+    "assignee": "core-team"
   },
   {
-    "issue_id": "iss_D32WDD3K",
-    "title": "gentle-marmot",
+    "issue_id": "iss_37VWY9RQ",
+    "title": "eager-gecko",
     "state": "closed",
-    "comments": 176
+    "comments": 125,
+    "assignee": "core-team"
   },
   {
-    "issue_id": "iss_YSA0WH19",
-    "title": "hazy-gecko",
+    "issue_id": "iss_K7WZZHG0",
+    "title": "calm-iguana",
     "state": "closed",
-    "comments": 123
+    "comments": 152
   },
   {
-    "issue_id": "iss_816ZGEP1",
-    "title": "hazy-marmot",
-    "state": "closed",
-    "comments": 177
-  },
-  {
-    "issue_id": "iss_8HP114E6",
-    "title": "dusty-heron",
+    "issue_id": "iss_FNS2VTCS",
+    "title": "jolly-lemur",
     "state": "blocked",
-    "comments": 100
+    "comments": 104,
+    "assignee": null
   },
   {
-    "issue_id": "iss_YNFZK7Y4",
-    "title": "lunar-dingo",
+    "issue_id": "iss_CPKYW871",
+    "title": "calm-lemur",
     "state": "closed",
-    "comments": 186
-  },
-  {
-    "issue_id": "iss_5XNEVBRC",
-    "title": "brisk-gecko",
-    "state": "closed",
-    "comments": 144
-  },
-  {
-    "issue_id": "iss_8HP114E7",
-    "title": "dusty-heron-2",
-    "state": "closed",
-    "comments": 113
-  },
-  {
-    "issue_id": "iss_Z62PX875",
-    "title": "eager-dingo",
-    "state": "closed",
-    "comments": 159
+    "comments": 157,
+    "assignee": "data-team"
   }
 ]

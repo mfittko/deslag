@@ -135,9 +135,11 @@ fn load_file(
     let text = read(path)?;
     let doc: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     let dir = path.parent().unwrap_or(Path::new("."));
-    let tasks = doc["tasks"].as_array().ok_or("manifest: no tasks array")?;
+    let tasks = doc["tasks"]
+        .as_array()
+        .ok_or_else(|| format!("{}: no tasks array", path.display()))?;
     if tasks.is_empty() {
-        return Err("manifest: empty tasks array".to_string());
+        return Err(format!("{}: empty tasks array", path.display()));
     }
     let includes = match &doc["include"] {
         Value::Null => vec![],

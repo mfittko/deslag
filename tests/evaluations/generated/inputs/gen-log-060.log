@@ -1,23 +1,26 @@
-2026-09-30T10:00:00Z INFO request_id=req-a8449d status=201 upstream=alpha-team
 retrying after a transient error
 retrying after a transient error
 retrying after a transient error
 retrying after a transient error
 retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-2026-09-30T10:00:07Z INFO request_id=req-17c035 status=200 upstream=beta-team
-2026-09-30T10:00:14Z INFO request_id=req-7a1d18 status=500 upstream=core-team
-2026-09-30T10:00:21Z INFO request_id=req-7d2344 status=201 upstream=data-team
-2026-09-30T10:00:28Z INFO request_id=req-6f485e status=404 upstream=edge-team
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-2026-09-30T10:00:35Z INFO request_id=req-6b91d7 status=201 upstream=infra-team
-2026-09-30T10:00:42Z INFO request_id=req-f9d488 status=200 upstream=alpha-team
-2026-09-30T10:00:49Z INFO request_id=req-f9d487 status=503 upstream=beta-team
-2026-09-30T10:00:56Z INFO request_id=req-23dc46 status=200 upstream=core-team
-2026-09-30T10:01:03Z INFO request_id=req-df8f9a status=500 upstream=data-team
-2026-09-30T10:01:10Z INFO request_id=req-afe5b1 status=200 upstream=edge-team
-2026-09-30T10:01:17Z INFO request_id=req-ff9bd6 status=201 upstream=infra-team
+2026-09-30T10:00:00Z INFO request_id=req-e39ebe status=500 upstream=alpha-team
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+2026-09-30T10:00:07Z INFO request_id=req-c23937 status=503 upstream=beta-team
+2026-09-30T10:00:14Z INFO request_id=req-8c9ed7 status=201 upstream=core-team
+2026-09-30T10:00:21Z INFO request_id=req-1d1f72 status=200 upstream=data-team
+2026-09-30T10:00:28Z INFO request_id=req-fbbeb0 status=200 upstream=edge-team
+2026-09-30T10:00:35Z INFO request_id=req-ae9ff0 status=200 upstream=infra-team
+2026-09-30T10:00:42Z INFO request_id=req-c23938 status=200 upstream=alpha-team
+2026-09-30T10:00:49Z INFO request_id=req-5a550a status=201 upstream=beta-team
+2026-09-30T10:00:56Z INFO request_id=req-ef8802 status=404 upstream=core-team
+2026-09-30T10:01:03Z INFO request_id=req-b81389 status=500 upstream=data-team
+2026-09-30T10:01:10Z INFO request_id=req-00bda7 status=200 upstream=edge-team
+2026-09-30T10:01:17Z INFO request_id=req-22ebb2 status=200 upstream=infra-team
+2026-09-30T10:01:24Z INFO request_id=req-a7e246 status=500 upstream=alpha-team
+2026-09-30T10:01:31Z INFO request_id=req-8c8264 status=404 upstream=beta-team
+2026-09-30T10:01:38Z INFO request_id=req-4fa9b3 status=404 upstream=core-team

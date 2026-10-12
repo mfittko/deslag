@@ -1,38 +1,31 @@
-test search::query::eager_badge7 ... ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-test billing::ledger::lunar_gecko ... ok
-test auth::session::ivory_egret ... ok
-test auth::token::ivory_koala ... ok
-test search::index::amber_falcon ... ok
-test search::query::calm_jackal ... ok
-test billing::invoice::jolly_lemur ... ok
-test billing::ledger::gentle_egret ... ok
-test auth::session::hazy_jackal ... ok
-test auth::token::fuzzy_lemur ... ok
-test search::index::keen_jackal ... ok
-test search::query::dusty_falcon ... ok
 test billing::invoice::hazy_heron ... ok
-test billing::ledger::dusty_iguana ... ok
-test search::query::eager_badger ... FAILED
-test auth::token::gentle_falcon ... ok
-test search::index::ivory_badger ... ok
-test search::query::lunar_badger ... ok
-test billing::invoice::keen_heron ... ok
-test billing::ledger::dusty_jackal ... ok
+test billing::ledger::fuzzy_jackal ... ok
+test auth::session::gentle_gecko ... ok
+test auth::token::keen_gecko ... ok
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+test search::index::dusty_marmot ... ok
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+test search::query::dusty_gecko ... ok
+test billing::invoice::keen_koala ... ok
+test search::index::brisk_heron ... FAILED
+test auth::session::lunar_cedar ... ok
+test auth::token::brisk_egret ... ok
+test search::index::gentle_dingo ... ok
+test search::query::fuzzy_lemur ... ok
+test search::index::brisk_hero7 ... ok
+test billing::ledger::keen_heron ... ok
+test auth::session::jolly_lemur ... ok
 failures:
-    search::query::eager_badger
-test result: FAILED. 19 passed; 1 failed
+    search::index::brisk_heron
+test result: FAILED. 14 passed; 1 failed

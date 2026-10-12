@@ -1,33 +1,30 @@
-2026-09-30T10:00:00Z INFO request_id=req-02675f status=200 upstream=alpha-team
-2026-09-30T10:00:07Z INFO request_id=req-97c851 status=200 upstream=beta-team
-2026-09-30T10:00:14Z INFO request_id=req-9a14f6 status=200 upstream=core-team
-2026-09-30T10:00:21Z INFO request_id=req-12a17d status=404 upstream=data-team
-2026-09-30T10:00:28Z INFO request_id=req-97279c status=404 upstream=edge-team
-2026-09-30T10:00:35Z INFO request_id=req-58fb67 status=200 upstream=infra-team
-2026-09-30T10:00:42Z INFO request_id=req-28c254 status=201 upstream=alpha-team
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-2026-09-30T10:00:49Z INFO request_id=req-3de3a3 status=500 upstream=beta-team
-2026-09-30T10:00:56Z INFO request_id=req-9832c3 status=201 upstream=core-team
-2026-09-30T10:01:03Z INFO request_id=req-553ebd status=404 upstream=data-team
-2026-09-30T10:01:10Z INFO request_id=req-3254e8 status=200 upstream=edge-team
-2026-09-30T10:01:17Z INFO request_id=req-e184b9 status=200 upstream=infra-team
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-2026-09-30T10:01:24Z INFO request_id=req-ee5b50 status=200 upstream=alpha-team
-2026-09-30T10:01:31Z INFO request_id=req-d7f271 status=201 upstream=beta-team
-2026-09-30T10:01:38Z INFO request_id=req-7ab4e9 status=404 upstream=core-team
-2026-09-30T10:01:45Z INFO request_id=req-d06aac status=200 upstream=data-team
-2026-09-30T10:01:52Z INFO request_id=req-ec3c3b status=200 upstream=edge-team
-2026-09-30T10:01:59Z INFO request_id=req-7793e4 status=500 upstream=infra-team
-2026-09-30T10:02:06Z INFO request_id=req-5f3269 status=200 upstream=alpha-team
-2026-09-30T10:02:13Z INFO request_id=req-d47177 status=201 upstream=beta-team
-2026-09-30T10:02:20Z INFO request_id=req-58fb69 status=503 upstream=core-team
+2026-09-30T10:00:00Z INFO request_id=req-4ca359 status=200 upstream=alpha-team
+2026-09-30T10:00:07Z INFO request_id=req-0170d6 status=404 upstream=beta-team
+2026-09-30T10:00:14Z INFO request_id=req-738e1f status=200 upstream=core-team
+2026-09-30T10:00:21Z INFO request_id=req-20897d status=200 upstream=data-team
+2026-09-30T10:00:28Z INFO request_id=req-b8b993 status=200 upstream=edge-team
+2026-09-30T10:00:35Z INFO request_id=req-599697 status=200 upstream=infra-team
+2026-09-30T10:00:42Z INFO request_id=req-360146 status=201 upstream=alpha-team
+2026-09-30T10:00:49Z INFO request_id=req-77f6cc status=200 upstream=beta-team
+2026-09-30T10:00:56Z INFO request_id=req-cb5530 status=200 upstream=core-team
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+2026-09-30T10:01:03Z INFO request_id=req-b39f9f status=404 upstream=data-team
+2026-09-30T10:01:10Z INFO request_id=req-2d5ae1 status=200 upstream=edge-team
+2026-09-30T10:01:17Z INFO request_id=req-aed13f status=200 upstream=infra-team
+2026-09-30T10:01:24Z INFO request_id=req-fe796c status=200 upstream=alpha-team
+2026-09-30T10:01:31Z INFO request_id=req-01e951 status=500 upstream=beta-team
+2026-09-30T10:01:38Z INFO request_id=req-755f77 status=200 upstream=core-team
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+2026-09-30T10:01:45Z INFO request_id=req-9a738f status=200 upstream=data-team
+2026-09-30T10:01:52Z INFO request_id=req-599694 status=503 upstream=edge-team
+2026-09-30T10:01:59Z INFO request_id=req-9e0e5a status=404 upstream=infra-team
+2026-09-30T10:02:06Z INFO request_id=req-67fa01 status=500 upstream=alpha-team

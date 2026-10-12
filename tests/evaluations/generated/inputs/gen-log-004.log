@@ -1,29 +1,26 @@
-198.51.100.142 - - [30/Sep/2026:10:00:00 +0000] "GET /api/v2/items/0 HTTP/1.1" 404 201
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+198.51.100.145 - - [30/Sep/2026:10:00:00 +0000] "GET /api/v2/items/0 HTTP/1.1" 404 117
+198.51.100.219 - - [30/Sep/2026:10:00:07 +0000] "GET /api/v2/items/37 HTTP/1.1" 404 990
+198.51.100.239 - - [30/Sep/2026:10:00:14 +0000] "GET /api/v2/items/74 HTTP/1.1" 404 422
+198.51.100.129 - - [30/Sep/2026:10:00:21 +0000] "GET /api/v2/items/111 HTTP/1.1" 404 372
+198.51.100.199 - - [30/Sep/2026:10:00:28 +0000] "GET /api/v2/items/148 HTTP/1.1" 404 210
+198.51.100.158 - - [30/Sep/2026:10:00:35 +0000] "GET /api/v2/items/185 HTTP/1.1" 404 856
+198.51.100.167 - - [30/Sep/2026:10:00:42 +0000] "GET /api/v2/items/222 HTTP/1.1" 404 972
+198.51.100.85 - - [30/Sep/2026:10:00:49 +0000] "GET /api/v2/items/259 HTTP/1.1" 304 166
+198.51.100.206 - - [30/Sep/2026:10:00:56 +0000] "GET /api/v2/items/296 HTTP/1.1" 200 936
 flushing buffered writes
 flushing buffered writes
 flushing buffered writes
 flushing buffered writes
 flushing buffered writes
 flushing buffered writes
-flushing buffered writes
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-198.51.100.74 - - [30/Sep/2026:10:00:07 +0000] "GET /api/v2/items/37 HTTP/1.1" 200 542
-203.0.113.117 - - [30/Sep/2026:10:00:14 +0000] "GET /api/v2/items/74 HTTP/1.1" 403 998
-198.51.100.40 - - [30/Sep/2026:10:00:21 +0000] "GET /api/v2/items/111 HTTP/1.1" 200 764
-198.51.100.76 - - [30/Sep/2026:10:00:28 +0000] "GET /api/v2/items/148 HTTP/1.1" 200 617
-198.51.100.176 - - [30/Sep/2026:10:00:35 +0000] "GET /api/v2/items/185 HTTP/1.1" 200 164
-198.51.100.152 - - [30/Sep/2026:10:00:42 +0000] "GET /api/v2/items/222 HTTP/1.1" 404 270
-198.51.100.247 - - [30/Sep/2026:10:00:49 +0000] "GET /api/v2/items/259 HTTP/1.1" 200 231
-203.0.113.118 - - [30/Sep/2026:10:00:56 +0000] "GET /api/v2/items/296 HTTP/1.1" 200 989
-198.51.100.178 - - [30/Sep/2026:10:01:03 +0000] "GET /api/v2/items/333 HTTP/1.1" 200 585
-198.51.100.81 - - [30/Sep/2026:10:01:10 +0000] "GET /api/v2/items/370 HTTP/1.1" 404 392
-198.51.100.74 - - [30/Sep/2026:10:01:17 +0000] "GET /api/v2/items/407 HTTP/1.1" 304 189
-198.51.100.170 - - [30/Sep/2026:10:01:24 +0000] "GET /api/v2/items/444 HTTP/1.1" 404 185
-198.51.100.154 - - [30/Sep/2026:10:01:31 +0000] "GET /api/v2/items/481 HTTP/1.1" 200 211
-198.51.100.154 - - [30/Sep/2026:10:01:38 +0000] "GET /api/v2/items/518 HTTP/1.1" 304 794
+198.51.100.46 - - [30/Sep/2026:10:01:03 +0000] "GET /api/v2/items/333 HTTP/1.1" 404 772
+198.51.100.135 - - [30/Sep/2026:10:01:10 +0000] "GET /api/v2/items/370 HTTP/1.1" 200 135
+198.51.100.23 - - [30/Sep/2026:10:01:17 +0000] "GET /api/v2/items/407 HTTP/1.1" 404 275
+198.51.100.40 - - [30/Sep/2026:10:01:24 +0000] "GET /api/v2/items/444 HTTP/1.1" 200 618
+203.0.113.127 - - [30/Sep/2026:10:01:31 +0000] "GET /api/v2/items/481 HTTP/1.1" 200 778
+203.0.113.124 - - [30/Sep/2026:10:01:38 +0000] "GET /api/v2/items/518 HTTP/1.1" 403 286

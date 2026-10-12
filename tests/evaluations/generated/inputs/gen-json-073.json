@@ -1,71 +1,68 @@
 [
   {
-    "issue_id": "iss_RKZGYGSM",
-    "title": "hazy-jackal",
+    "issue_id": "iss_MFBTA8CV",
+    "title": "lunar-cedar",
     "state": "closed",
-    "comments": 141.40,
-    "assignee": "beta-team"
+    "comments": 153
   },
   {
-    "issue_id": "iss_F8GTM59E",
-    "title": "ivory-egret",
+    "issue_id": "iss_M9VF11KH",
+    "title": "hazy-iguana",
     "state": "closed",
-    "comments": 166.63,
-    "assignee": null
+    "comments": 158
   },
   {
-    "issue_id": "iss_HQMHX9B7",
-    "title": "gentle-cedar-2",
+    "issue_id": "iss_T7QDCDT3",
+    "title": "gentle-egret",
     "state": "closed",
-    "comments": 107.13,
-    "assignee": null
+    "comments": 123
   },
   {
-    "issue_id": "iss_AYKKC90Z",
-    "title": "brisk-egret",
+    "issue_id": "iss_ZRBX08S7",
+    "title": "amber-cedar",
     "state": "closed",
-    "comments": 155.05,
-    "assignee": "infra-team"
+    "comments": 118
   },
   {
-    "issue_id": "iss_PN79G6HH",
-    "title": "amber-badger",
+    "issue_id": "iss_56V5V4NY",
+    "title": "ivory-falcon",
     "state": "closed",
-    "comments": 128.14,
-    "assignee": "edge-team"
+    "comments": 148
   },
   {
-    "issue_id": "iss_HQMHX9B1",
-    "title": "gentle-cedar",
-    "state": "blocked",
-    "comments": 195.30,
-    "assignee": null
-  },
-  {
-    "issue_id": "iss_8Z0B9EN8",
-    "title": "eager-iguana",
-    "state": "closed",
-    "comments": 146.97,
-    "assignee": "core-team"
-  },
-  {
-    "issue_id": "iss_T11E2QB3",
-    "title": "lunar-egret",
-    "state": "closed",
-    "comments": 116.55
-  },
-  {
-    "issue_id": "iss_WXT5BA0M",
+    "issue_id": "iss_9BVB9KFF",
     "title": "lunar-iguana",
     "state": "closed",
-    "comments": 162.66,
-    "assignee": "data-team"
+    "comments": 139
   },
   {
-    "issue_id": "iss_2Y48PVBK",
+    "issue_id": "iss_HDY3TA67",
+    "title": "fuzzy-gecko-2",
+    "state": "closed",
+    "comments": 110
+  },
+  {
+    "issue_id": "iss_FXYJJBAZ",
+    "title": "amber-marmot",
+    "state": "closed",
+    "comments": 130
+  },
+  {
+    "issue_id": "iss_HDY3TA6D",
+    "title": "fuzzy-gecko",
+    "state": "blocked",
+    "comments": 101
+  },
+  {
+    "issue_id": "iss_HQWCMPSY",
+    "title": "lunar-badger",
+    "state": "closed",
+    "comments": 166
+  },
+  {
+    "issue_id": "iss_1X01J80R",
     "title": "jolly-cedar",
     "state": "closed",
-    "comments": 121.94,
-    "assignee": "infra-team"
+    "comments": 172
   }
 ]

@@ -1,37 +1,26 @@
+test billing::invoice::amber_lemur ... ok
+test billing::ledger::brisk_koala ... ok
+test auth::session::calm_iguana ... ok
+test auth::token::calm_egret ... ok
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+test auth::token::fuzzy_koal7 ... ok
+test search::query::jolly_egret ... ok
+test billing::invoice::amber_jackal ... ok
+test billing::ledger::jolly_marmot ... ok
+test auth::session::jolly_falcon ... ok
 retrying after a transient error
 retrying after a transient error
 retrying after a transient error
 retrying after a transient error
 retrying after a transient error
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-test search::index::gentle_marmot ... FAILED
-test billing::ledger::amber_lemur ... ok
-test auth::session::fuzzy_falcon ... ok
-test auth::token::gentle_koala ... ok
-test search::index::fuzzy_koala ... ok
-test search::query::keen_jackal ... ok
-test billing::invoice::lunar_egret ... ok
-test billing::ledger::lunar_iguana ... ok
-test auth::session::brisk_gecko ... ok
-test auth::token::gentle_gecko ... ok
-test search::index::gentle_cedar ... ok
-test search::query::calm_egret ... ok
-test billing::invoice::fuzzy_badger ... ok
-test billing::ledger::brisk_heron ... ok
-test auth::session::ivory_lemur ... ok
-test auth::token::lunar_jackal ... ok
-test search::index::hazy_dingo ... ok
-test search::query::jolly_heron ... ok
-test billing::invoice::eager_koala ... ok
-test search::index::gentle_marmo7 ... ok
-test auth::session::brisk_jackal ... ok
-test auth::token::dusty_gecko ... ok
+retrying after a transient error
+test auth::token::dusty_dingo ... ok
+test auth::token::fuzzy_koala ... FAILED
+test search::query::calm_marmot ... ok
 failures:
-    search::index::gentle_marmot
-test result: FAILED. 21 passed; 1 failed
+    auth::token::fuzzy_koala
+test result: FAILED. 11 passed; 1 failed

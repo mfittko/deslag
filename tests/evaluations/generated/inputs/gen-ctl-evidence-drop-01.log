@@ -22,9 +22,5 @@
 2026-09-30T12:21:00Z deploy step 21 ok
 2026-09-30T12:22:00Z deploy step 22 ok
 2026-09-30T12:23:00Z deploy step 23 ok
-2026-09-30T12:24:00Z deploy step 24 ok
-2026-09-30T12:25:00Z deploy step 25 ok
-2026-09-30T12:26:00Z deploy step 26 ok
-2026-09-30T12:27:00Z deploy step 27 ok
-2026-09-30T12:28:00Z rollback triggered by alert=dusty-latency-p99
-2026-09-30T12:29:00Z deploy step rollback ok
+2026-09-30T12:24:00Z rollback triggered by alert=hazy-latency-p99
+2026-09-30T12:25:00Z deploy step rollback ok

@@ -1,86 +1,74 @@
 [
   {
-    "user_id": "usr_74M3Y5Q1",
-    "login": "amber-koala",
+    "user_id": "usr_EAXTCMHQ",
+    "login": "lunar-cedar",
     "role": "member",
-    "requests": 155.75
+    "quota_gb": 181.04
   },
   {
-    "user_id": "usr_A1EM8HGH",
-    "login": "calm-falcon",
+    "user_id": "usr_MXNEYB1V",
+    "login": "gentle-jackal",
     "role": "member",
-    "requests": 194.87
+    "quota_gb": 146.42
   },
   {
-    "user_id": "usr_8PA264GB",
-    "login": "amber-lemur",
+    "user_id": "usr_NVASH0CS",
+    "login": "calm-dingo",
     "role": "member",
-    "requests": 116.03
+    "quota_gb": 141.59
   },
   {
-    "user_id": "usr_TMRQ7E0T",
-    "login": "hazy-gecko",
+    "user_id": "usr_P9Y57A1E",
+    "login": "fuzzy-cedar",
     "role": "member",
-    "requests": 133.46
+    "quota_gb": 161.28
   },
   {
-    "user_id": "usr_6Q1JMAM7",
-    "login": "brisk-jackal-2",
-    "role": "member",
-    "requests": 109.83
-  },
-  {
-    "user_id": "usr_0CSBZ54M",
-    "login": "dusty-badger",
-    "role": "member",
-    "requests": 171.25
-  },
-  {
-    "user_id": "usr_B1VSPSJA",
-    "login": "keen-gecko",
-    "role": "member",
-    "requests": 179.53
-  },
-  {
-    "user_id": "usr_YFJVDDMA",
-    "login": "gentle-iguana",
-    "role": "member",
-    "requests": 144.43
-  },
-  {
-    "user_id": "usr_PQPQD52P",
-    "login": "hazy-iguana",
-    "role": "member",
-    "requests": 185.86
-  },
-  {
-    "user_id": "usr_4FDS3093",
-    "login": "hazy-lemur",
-    "role": "member",
-    "requests": 127.73
-  },
-  {
-    "user_id": "usr_V438HF7N",
-    "login": "eager-iguana",
-    "role": "member",
-    "requests": 168.06
-  },
-  {
-    "user_id": "usr_0F7NFP63",
-    "login": "lunar-iguana",
-    "role": "member",
-    "requests": 161.30
-  },
-  {
-    "user_id": "usr_6Q1JMAMY",
-    "login": "brisk-jackal",
+    "user_id": "usr_T8Y0D10X",
+    "login": "eager-cedar",
     "role": "owner",
-    "requests": 106.15
+    "quota_gb": 102.15
   },
   {
-    "user_id": "usr_10XGBB70",
-    "login": "jolly-heron",
+    "user_id": "usr_TB6AZGAD",
+    "login": "calm-lemur",
     "role": "member",
-    "requests": 139.45
+    "quota_gb": 170.53
+  },
+  {
+    "user_id": "usr_A2NEVPQP",
+    "login": "amber-egret",
+    "role": "member",
+    "quota_gb": 154.09
+  },
+  {
+    "user_id": "usr_31EXMV43",
+    "login": "lunar-badger",
+    "role": "member",
+    "quota_gb": 131.09
+  },
+  {
+    "user_id": "usr_HNQZ9Y5Y",
+    "login": "keen-jackal",
+    "role": "member",
+    "quota_gb": 164.51
+  },
+  {
+    "user_id": "usr_167W70F7",
+    "login": "keen-heron",
+    "role": "member",
+    "quota_gb": 125.79
+  },
+  {
+    "user_id": "usr_T8Y0D107",
+    "login": "eager-cedar-2",
+    "role": "member",
+    "quota_gb": 107.93
+  },
+  {
+    "user_id": "usr_AX3E974M",
+    "login": "jolly-jackal",
+    "role": "member",
+    "quota_gb": 116.54
   }
 ]

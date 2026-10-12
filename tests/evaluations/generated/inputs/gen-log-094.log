@@ -1,28 +1,37 @@
-test billing::invoice::keen_marmot ... ok
-test billing::ledger::ivory_falcon ... ok
-test auth::session::calm_cedar ... ok
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-test auth::token::eager_falcon ... ok
-test auth::session::brisk_marmo7 ... ok
-test search::query::jolly_lemur ... ok
-test billing::invoice::amber_marmot ... ok
-test billing::ledger::gentle_marmot ... ok
-test auth::session::keen_iguana ... ok
-test auth::session::brisk_marmot ... FAILED
-test search::index::jolly_badger ... ok
-test search::query::calm_egret ... ok
-test billing::invoice::dusty_iguana ... ok
-test billing::ledger::jolly_heron ... ok
-test auth::session::jolly_cedar ... ok
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+test billing::invoice::ivory_egret ... ok
+test billing::ledger::calm_heron ... ok
+test auth::token::eager_koala ... FAILED
+test auth::token::brisk_falcon ... ok
+test search::index::fuzzy_jackal ... ok
+test search::query::gentle_marmot ... ok
+test billing::invoice::ivory_koala ... ok
+test billing::ledger::brisk_badger ... ok
+test auth::session::gentle_heron ... ok
+test auth::token::lunar_heron ... ok
+test search::index::fuzzy_badger ... ok
+test search::query::gentle_falcon ... ok
+test billing::invoice::brisk_iguana ... ok
+test billing::ledger::dusty_gecko ... ok
+test auth::session::jolly_dingo ... ok
+test auth::token::eager_koal7 ... ok
+test search::index::gentle_badger ... ok
+test search::query::amber_falcon ... ok
+test billing::invoice::jolly_koala ... ok
 failures:
-    auth::session::brisk_marmot
-test result: FAILED. 14 passed; 1 failed
+    auth::token::eager_koala
+test result: FAILED. 18 passed; 1 failed

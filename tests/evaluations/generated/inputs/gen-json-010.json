@@ -1,96 +1,76 @@
 [
   {
-    "issue_id": "iss_WC4VGY5V",
-    "title": "eager-badger",
+    "issue_id": "iss_KM5WNWF5",
+    "title": "eager-dingo",
     "state": "closed",
-    "comments": 162,
-    "assignee": "edge-team"
-  },
-  {
-    "issue_id": "iss_Q6FG33B0",
-    "title": "keen-badger",
-    "state": "blocked",
-    "comments": 233,
+    "comments": 160,
     "assignee": null
   },
   {
-    "issue_id": "iss_1DGR8ZDD",
-    "title": "lunar-gecko",
+    "issue_id": "iss_PAXYYDS7",
+    "title": "ivory-koala-2",
     "state": "closed",
-    "comments": 176
-  },
-  {
-    "issue_id": "iss_TDD4WY17",
-    "title": "calm-heron",
-    "state": "closed",
-    "comments": 121
-  },
-  {
-    "issue_id": "iss_HJ9133N9",
-    "title": "fuzzy-koala",
-    "state": "closed",
-    "comments": 197,
+    "comments": 107,
     "assignee": null
   },
   {
-    "issue_id": "iss_B9VRAY7T",
+    "issue_id": "iss_YVC16A2R",
+    "title": "ivory-lemur",
+    "state": "closed",
+    "comments": 127
+  },
+  {
+    "issue_id": "iss_MC82EFMB",
     "title": "calm-jackal",
     "state": "closed",
-    "comments": 139,
-    "assignee": "beta-team"
-  },
-  {
-    "issue_id": "iss_DMAAR6KQ",
-    "title": "ivory-iguana",
-    "state": "closed",
-    "comments": 169
-  },
-  {
-    "issue_id": "iss_V9AAJ71G",
-    "title": "jolly-iguana",
-    "state": "closed",
-    "comments": 151,
-    "assignee": "beta-team"
-  },
-  {
-    "issue_id": "iss_Q6FG33B7",
-    "title": "keen-badger-2",
-    "state": "closed",
-    "comments": 224
-  },
-  {
-    "issue_id": "iss_EJJ6W6GP",
-    "title": "brisk-dingo",
-    "state": "closed",
-    "comments": 120,
-    "assignee": "edge-team"
-  },
-  {
-    "issue_id": "iss_3MBWNXCS",
-    "title": "jolly-lemur",
-    "state": "closed",
-    "comments": 181,
-    "assignee": "alpha-team"
-  },
-  {
-    "issue_id": "iss_6PAXYYDS",
-    "title": "fuzzy-cedar",
-    "state": "closed",
-    "comments": 185,
-    "assignee": "alpha-team"
-  },
-  {
-    "issue_id": "iss_XP9K84JQ",
-    "title": "lunar-cedar",
-    "state": "closed",
-    "comments": 134,
+    "comments": 119,
     "assignee": null
   },
   {
-    "issue_id": "iss_YBK651Q9",
-    "title": "ivory-cedar",
-    "state": "closed",
-    "comments": 143,
+    "issue_id": "iss_PAXYYDS8",
+    "title": "ivory-koala",
+    "state": "blocked",
+    "comments": 204,
     "assignee": "edge-team"
+  },
+  {
+    "issue_id": "iss_V9SRR23T",
+    "title": "brisk-cedar",
+    "state": "closed",
+    "comments": 175
+  },
+  {
+    "issue_id": "iss_NPDFZD3K",
+    "title": "dusty-egret",
+    "state": "closed",
+    "comments": 168,
+    "assignee": null
+  },
+  {
+    "issue_id": "iss_MKQ2ZG7Q",
+    "title": "ivory-egret",
+    "state": "closed",
+    "comments": 130,
+    "assignee": "alpha-team"
+  },
+  {
+    "issue_id": "iss_YC5BPVTD",
+    "title": "calm-cedar",
+    "state": "closed",
+    "comments": 144,
+    "assignee": "infra-team"
+  },
+  {
+    "issue_id": "iss_CDJ82BGV",
+    "title": "gentle-iguana",
+    "state": "closed",
+    "comments": 136,
+    "assignee": "edge-team"
+  },
+  {
+    "issue_id": "iss_M5ES809F",
+    "title": "dusty-falcon",
+    "state": "closed",
+    "comments": 150
   }
 ]

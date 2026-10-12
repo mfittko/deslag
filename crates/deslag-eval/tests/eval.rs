@@ -496,7 +496,7 @@ fn estimate_prints_a_cost() {
     let md = String::from_utf8(o.stdout).unwrap();
     assert!(
         md.contains("| Estimated cost | USD ")
-            && md.contains("| Cap if every call stays within --per-run-usd (900 runs"),
+            && md.contains("| Cap if every call stays within --per-run-usd (935 runs"),
         "{md}"
     );
 }

@@ -1,30 +1,29 @@
-test billing::invoice::hazy_heron ... ok
-test billing::ledger::gentle_iguana ... ok
-test auth::session::eager_koala ... ok
-test auth::token::amber_koala ... ok
-test search::index::dusty_koala ... ok
-test search::query::dusty_dingo ... ok
-retrying after a transient error
+test billing::invoice::fuzzy_egret ... ok
+test auth::token::amber_egre7 ... ok
+test auth::session::keen_gecko ... ok
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+test auth::token::hazy_marmot ... ok
+test search::index::gentle_badger ... ok
+test search::query::gentle_jackal ... ok
+test billing::invoice::calm_lemur ... ok
+test billing::ledger::brisk_badger ... ok
 flushing buffered writes
 flushing buffered writes
 flushing buffered writes
 flushing buffered writes
 flushing buffered writes
 flushing buffered writes
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-test billing::invoice::ivory_koala ... ok
-test billing::ledger::gentle_cedar ... ok
-test auth::session::keen_lemur ... ok
-test billing::ledger::calm_hero7 ... ok
-test search::index::ivory_jackal ... ok
-test search::query::hazy_jackal ... ok
-test billing::ledger::calm_heron ... FAILED
+test auth::session::jolly_dingo ... ok
+test auth::token::eager_gecko ... ok
+test search::index::ivory_badger ... ok
+test search::query::dusty_falcon ... ok
+test auth::token::amber_egret ... FAILED
+test billing::ledger::brisk_heron ... ok
+test auth::session::lunar_jackal ... ok
+test auth::token::fuzzy_badger ... ok
 failures:
-    billing::ledger::calm_heron
-test result: FAILED. 12 passed; 1 failed
+    auth::token::amber_egret
+test result: FAILED. 15 passed; 1 failed

@@ -1,35 +1,32 @@
-test billing::invoice::dusty_gecko ... ok
-test billing::ledger::fuzzy_cedar ... ok
-test auth::session::lunar_falcon ... ok
-test auth::token::brisk_badger ... ok
+test billing::invoice::fuzzy_egret ... ok
+test billing::ledger::keen_gecko ... ok
 flushing buffered writes
 flushing buffered writes
 flushing buffered writes
 flushing buffered writes
-test search::index::calm_iguana ... ok
-test search::query::keen_dingo ... ok
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-test billing::invoice::ivory_jackal ... ok
-test billing::ledger::ivory_egret ... ok
-test auth::session::amber_cedar ... ok
-test auth::token::gentle_koala ... ok
-test search::index::brisk_dingo ... ok
-test search::query::brisk_falcon ... ok
-test billing::invoice::eager_jackal ... ok
-test auth::session::hazy_jacka7 ... ok
-test auth::session::calm_heron ... ok
-test auth::token::fuzzy_lemur ... ok
-test search::index::ivory_cedar ... ok
-test search::query::brisk_marmot ... ok
-test auth::session::hazy_jackal ... FAILED
-test billing::ledger::eager_badger ... ok
-test auth::session::hazy_marmot ... ok
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+test auth::session::gentle_badger ... ok
+test auth::token::brisk_egret ... ok
+test search::index::keen_cedar ... ok
+test search::index::dusty_falco7 ... ok
+test billing::invoice::ivory_dingo ... ok
+test billing::ledger::eager_heron ... ok
+test auth::session::keen_falcon ... ok
+test search::index::dusty_falcon ... FAILED
+test search::index::lunar_koala ... ok
+test search::query::lunar_jackal ... ok
+test billing::invoice::dusty_iguana ... ok
+test billing::ledger::gentle_koala ... ok
+test auth::session::hazy_jackal ... ok
 failures:
-    auth::session::hazy_jackal
-test result: FAILED. 20 passed; 1 failed
+    search::index::dusty_falcon
+test result: FAILED. 14 passed; 1 failed
