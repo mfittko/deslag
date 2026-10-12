@@ -11,7 +11,7 @@
 
 use std::fmt::Write;
 
-use super::{TableOptions, bucket, decode_rows, encode_block, enough_gain, sub};
+use super::{TableOptions, bucket, decode_block, encode_block, enough_gain, sub};
 use crate::{MAX_JSON_DEPTH_CEILING, Reason, Scanner, minify};
 
 /// First token of every table-v2 skeleton line.
@@ -20,20 +20,27 @@ pub const MARKER: &str = "table-v2";
 /// Encodes `input` as table-v2, or as table-v1 when it is a bare array that
 /// no table-v2 form shortens. `Err` means: pass the input through unchanged.
 pub fn encode(input: &str, opts: &TableOptions) -> Result<String, Reason> {
+    encode_minified(input, opts).map(|(text, _)| text)
+}
+
+/// Like [`encode`], and also returns the minified input. The input is
+/// minified once, so a caller that validates the text needs no second pass.
+pub(crate) fn encode_minified(
+    input: &str,
+    opts: &TableOptions,
+) -> Result<(String, String), Reason> {
     const NO: Reason = Reason::UnsupportedFormat;
-    if input
-        .trim_start_matches([' ', '\t', '\n', '\r'])
-        .starts_with('[')
-    {
-        return encode_bare(input, opts);
-    }
     let minified = String::from_utf8(minify(input, opts.max_depth)?).map_err(|_| NO)?;
+    if minified.starts_with('[') {
+        let text = encode_bare(&minified, opts)?;
+        return Ok((text, minified));
+    }
     let body = encode_object(&minified, "", 0, opts).ok_or(NO)?;
     let out = format!("{MARKER} {body}");
     if !enough_gain(&minified, &out, opts) {
         return Err(Reason::InsufficientGain);
     }
-    Ok(out)
+    Ok((out, minified))
 }
 
 /// The skeleton of the minified object `min` and its blocks, each block on
@@ -76,32 +83,31 @@ pub(super) fn encode_object(
     Some(skeleton + &blocks)
 }
 
-/// A bare array: table-v1 text, or `table-v2 @0` with one block when that is
-/// strictly shorter. A table block without sub-blocks is never strictly
-/// shorter in bytes, because `table-v2 @0\n@0 ` is longer than `table-v1 `.
-/// Selection compares bytes only, so a longer bucket block never reaches the
-/// gain check, even when it would pass the token check. Rejections keep their
-/// table-v1 reason, except that a block failing the gain check reports
-/// `InsufficientGain`.
-fn encode_bare(input: &str, opts: &TableOptions) -> Result<String, Reason> {
-    // ponytail: the input is minified twice, once inside `super::encode` and
-    // once here. Each pass is linear, so the cost is one extra linear pass.
-    // Share the minified text if profiling shows it matters.
-    let v1 = super::encode(input, opts);
-    let Some(minified) = minify(input, opts.max_depth)
-        .ok()
-        .and_then(|m| String::from_utf8(m).ok())
-    else {
-        return v1;
+/// The minified bare array `min`: table-v1 text, or `table-v2 @0` with one
+/// block when that is strictly shorter. A table block without sub-blocks is
+/// never strictly shorter in bytes, because `table-v2 @0\n@0 ` is longer than
+/// `table-v1 `. Selection compares bytes only, so a longer bucket block never
+/// reaches the gain check, even when it would pass the token check. Rejections
+/// keep their table-v1 reason, except that a block failing the gain check
+/// reports `InsufficientGain`.
+fn encode_bare(min: &str, opts: &TableOptions) -> Result<String, Reason> {
+    // The table-v1 text is `table-v1 ` and the same table block that competes
+    // below, so the block is built once.
+    let table = encode_block(min, 2, opts.max_rows);
+    let v1 = match &table {
+        None => Err(Reason::UnsupportedFormat),
+        Some(block) => Some(format!("{} {block}", super::MARKER))
+            .filter(|t| enough_gain(min, t, opts))
+            .ok_or(Reason::InsufficientGain),
     };
-    let Some(block) = encode_array(&minified, "@0", 0, opts) else {
+    let Some(block) = select(min, table, "@0", 0, opts) else {
         return v1;
     };
     let out = format!("{MARKER} @0\n@0 {block}");
     if v1.as_ref().is_ok_and(|t| t.len() <= out.len()) {
         return v1;
     }
-    if !enough_gain(&minified, &out, opts) {
+    if !enough_gain(min, &out, opts) {
         return v1.or(Err(Reason::InsufficientGain));
     }
     Ok(out)
@@ -110,23 +116,49 @@ fn encode_bare(input: &str, opts: &TableOptions) -> Result<String, Reason> {
 /// The block for one minified array labelled `label` at nesting `level`.
 /// Sub-tables apply to the table block and to the bucket block, then the
 /// shorter wins, the table block on a tie. `None` when neither applies.
-// ponytail: both candidates recurse, so text at nesting level `k` is encoded
-// up to 2^k times, at most 2^MAX_NESTING. Still linear. Cache sub-blocks by
-// (text, label, level) if profiling shows it matters.
 pub(super) fn encode_array(
     array: &str,
     label: &str,
     level: usize,
     opts: &TableOptions,
 ) -> Option<String> {
-    [
+    select(
+        array,
         encode_block(array, 2, opts.max_rows),
-        bucket::encode(array, label, opts.max_rows),
-    ]
-    .into_iter()
-    .flatten()
-    .map(|block| sub::apply(&block, label, level, opts))
-    .min_by_key(String::len)
+        label,
+        level,
+        opts,
+    )
+}
+
+/// [`encode_array`] with the table block of `array` already built.
+// ponytail: both candidates recurse, so text at nesting level `k` is encoded
+// up to 2^k times, at most 2^MAX_NESTING. Still linear. A sub-block embeds
+// its label, and the two candidates label the same cell differently, so a
+// cache would have to relabel blocks. Add one if nested inputs show it matters.
+fn select(
+    array: &str,
+    table: Option<String>,
+    label: &str,
+    level: usize,
+    opts: &TableOptions,
+) -> Option<String> {
+    // A cell becomes a sub-block only when its string starts with `[` or `{`.
+    // Strings hold only canonical escapes, so such a string starts `"[` or
+    // `"{` in the minified array. Without one, sub::apply returns each block
+    // unchanged, and its parse and rewrite are skipped.
+    let nested = array.contains("\"[") || array.contains("\"{");
+    [table, bucket::encode(array, label, opts.max_rows)]
+        .into_iter()
+        .flatten()
+        .map(|block| {
+            if nested {
+                sub::apply(&block, label, level, opts)
+            } else {
+                block
+            }
+        })
+        .min_by_key(String::len)
 }
 
 /// Byte spans of the member values of the minified top-level object that are
@@ -236,9 +268,6 @@ pub(super) fn decode_array(text: &str, i: &mut usize, label: &str, level: usize)
     if bucket::is_bucket(&text[*i..]) {
         bucket::decode(text, i, label, level)
     } else {
-        Some(format!(
-            "[{}]",
-            decode_rows(text, i, Some((label, level)))?.join(",")
-        ))
+        decode_block(text, i, Some((label, level)))
     }
 }

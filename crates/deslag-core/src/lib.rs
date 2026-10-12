@@ -452,8 +452,8 @@ fn decide<'a>(
             token_counter: ctx.token_counter,
             ..TableOptions::default()
         };
-        match table::v2::encode(input, &opts) {
-            Ok(text) => {
+        match table::v2::encode_minified(input, &opts) {
+            Ok((text, minified)) => {
                 report.transform_id = JSON_TABLE_ID;
                 report.transform_version = JSON_TABLE_VERSION;
                 report.format_version = Some(if text.starts_with(table::v2::MARKER) {
@@ -462,9 +462,7 @@ fn decide<'a>(
                     JSON_TABLE_FORMAT_VERSION
                 });
                 report.candidate_bytes = Some(text.len());
-                // The encoder validated `input`, so minifying it again succeeds.
-                let minified = minify(input, limits.max_json_depth)?;
-                if table::v2::decode(&text).map(String::into_bytes) != Some(minified) {
+                if table::v2::decode(&text) != Some(minified) {
                     report.validation_outcome = ValidationOutcome::Failed;
                     return Err(Reason::InvalidCandidate);
                 }
@@ -578,6 +576,8 @@ pub fn minify_json(input: &str) -> Option<String> {
 
 /// Scans `input` and returns its minified bytes, with no gain check.
 fn minify(input: &str, max_depth: usize) -> Result<Vec<u8>, Reason> {
+    #[cfg(test)]
+    tests::MINIFIED.with_borrow_mut(|v| v.push(input.as_ptr()));
     let bytes = input.as_bytes();
     let mut s = Scanner {
         b: bytes,
@@ -788,10 +788,44 @@ impl<'a> Scanner<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::VERSION;
+    use super::*;
+
+    thread_local! {
+        /// The address of each text passed to `minify` on this thread.
+        pub(super) static MINIFIED: std::cell::RefCell<Vec<*const u8>> =
+            const { std::cell::RefCell::new(Vec::new()) };
+    }
 
     #[test]
     fn version_is_set() {
         assert!(!VERSION.is_empty());
+    }
+
+    #[test]
+    fn table_path_minifies_the_input_once() {
+        let rows = |n: usize| -> String {
+            let items: Vec<String> = (0..n)
+                .map(|i| format!(r#"{{"id":{i},"name":"user-{i}","on":true}}"#))
+                .collect();
+            format!("[{}]", items.join(",\n"))
+        };
+        let nested = format!(
+            r#"[{{"t":"a","j":"{0}"}},{{"t":"b","j":"{0}"}}]"#,
+            rows(6).replace('\n', "").replace('"', "\\\"")
+        );
+        let ctx = CompressionContext {
+            json_minify: false,
+            json_table: true,
+            ..FIRST_SLICE_JSON_MINIFY_CONTEXT
+        };
+        // table-v1, table-v2 with sub-blocks, and a wrapper object.
+        for input in [rows(40), nested, format!(r#"{{"rows":{}}}"#, rows(40))] {
+            MINIFIED.with_borrow_mut(Vec::clear);
+            let result = compress(&input, &ctx);
+            assert_eq!(result.report.outcome, Outcome::Changed, "{input}");
+            let passes =
+                MINIFIED.with_borrow(|v| v.iter().filter(|&&p| p == input.as_ptr()).count());
+            assert_eq!(passes, 1, "{input}");
+        }
     }
 }
