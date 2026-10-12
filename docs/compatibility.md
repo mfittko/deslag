@@ -74,7 +74,7 @@ Subagent tool calls carry `agent_id` and `agent_type` and the parent's `session_
 
 ### Hook conflict reporting
 
-Before it emits a replacement, the hook looks for another `PostToolUse` hook that may match the same tool. The client keeps only the last rewrite, so on a match the hook writes one line to stderr, such as `deslag: PostToolUse hook in <file> also matches Bash; leaving the output unchanged`, and exits 0 with empty stdout. The compression diagnostic from [Hook field routing](#hook-field-routing) is the other stderr line the hook can write; it is reported before this check runs. It reads:
+Before it emits a replacement, the hook looks for another `PostToolUse` hook that may match the same tool. The client keeps only the last rewrite, so on a match the hook writes one line to stderr, such as `deslag: PostToolUse hook in <file> also matches Bash; leaving the output unchanged`, and exits 0 with empty stdout. The compression diagnostic from [Hook field routing](#hook-field-routing) is the other stderr line the hook can write; it is reported before this check runs. On `job_panicked`, the default Rust panic message (`thread ... panicked at ...`) also appears on stderr before the `deslag: compression job_panicked; tool output unchanged` line. It reads:
 
 - user settings: `$CLAUDE_CONFIG_DIR/settings.json`, else `$HOME/.claude/settings.json`
 - project settings: `.claude/settings.json` and `.claude/settings.local.json` under `$CLAUDE_PROJECT_DIR`, else under the event `cwd`

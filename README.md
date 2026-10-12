@@ -45,7 +45,7 @@ Compression in the proxy and in `deslag hook claude --minify-json` runs under `B
 | `max_parallel_jobs` | 4 | A job that finds every slot taken is rejected as `busy`. |
 | `processing_budget` | 10 ms | A job that runs longer is rejected as `budget_exceeded`. |
 
-A rejected or panicked job fails open. The proxy forwards the original body unrewritten. The hook leaves the tool output unchanged and writes `deslag: compression <busy|budget_exceeded|job_panicked>; tool output unchanged` to stderr.
+A rejected or panicked job fails open. The proxy forwards the original body unrewritten. The hook leaves the tool output unchanged and writes `deslag: compression <busy|budget_exceeded|job_panicked>; tool output unchanged` to stderr. A panicked job also prints the default Rust panic message to stderr before that line.
 
 No limit applies to a response body after the upstream has answered, so long streams are never cut. Other request bodies stream and are not time-bounded: a client that never finishes its body keeps its slot. Zero or out-of-range limit values are rejected at startup.
 

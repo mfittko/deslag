@@ -4,6 +4,10 @@ Formats that deslag transforms emit. Each format is versioned. A decoder for a
 version accepts every output that version's encoder can produce. Each format
 has a local decoder in `deslag-core`.
 
+## Token gain thresholds
+
+`compress` applies these thresholds to every transform: json-minify, the table encoder (table-v1 and table-v2), lines-v1 and lines-v2. With a token counter in the context, every transform also checks the token gain of a validated candidate that is shorter in bytes. It skips with `insufficient_gain` when the candidate has more tokens than the original, saves fewer than `Limits::min_estimated_token_savings` tokens (default 64) or saves less than `Limits::min_estimated_savings_permille` of the original tokens (default 100, which is the policy ratio 0.10). Observe mode applies the same check. Without a counter, no token check runs. `FIRST_SLICE_JSON_MINIFY_CONTEXT` sets both thresholds to 0.
+
 ## lines-v1
 
 Exact codec for runs of byte-identical consecutive lines in plain text. The
@@ -52,7 +56,8 @@ The encoded text is the header line followed by the body.
   of the N-1 copies it replaces. A copy of a unit that starts with the prefix
   is emitted with its escape. Otherwise the copies are written out.
 - The candidate is emitted only when it is shorter than the input
-  (`insufficient_gain` otherwise).
+  (`insufficient_gain` otherwise). With a token counter in the context, it
+  must also pass the [token gain thresholds](#token-gain-thresholds).
 - Input that already starts with the header is skipped as
   `unsupported_format`, so the codec never encodes its own output.
 
@@ -165,7 +170,8 @@ At each unit, in input order:
 - Line order never changes and no line is dropped.
 - A partial final unit is always literal.
 - The candidate is emitted only when it is shorter than the input
-  (`insufficient_gain` otherwise).
+  (`insufficient_gain` otherwise). With a token counter in the context, it
+  must also pass the [token gain thresholds](#token-gain-thresholds).
 - Input that already starts with the `lines-v1` or `lines-v2` header is
   skipped as `unsupported_format`.
 
@@ -335,7 +341,7 @@ The encoder returns the input unchanged, with a reason, in each of these cases:
 
 ### Gain
 
-The gain check compares the encoded text, header included, with the minified original. Let `m` be the minified byte length and `e` the encoded byte length. Encoding applies only when `e < m` and `(m - e) * 1000 >= min_savings_permille * m`. When a token counter is set, the minified original must also have at least `min_token_savings` more tokens than the encoded text.
+The gain check compares the encoded text, header included, with the minified original. Let `m` be the minified byte length and `e` the encoded byte length. Encoding applies only when `e < m` and `(m - e) * 1000 >= min_savings_permille * m`. When a token counter is set, the minified original must also have at least `min_token_savings` more tokens than the encoded text. In `compress`, the candidate must also pass the [token gain thresholds](#token-gain-thresholds).
 
 `TableOptions::default()` sets `max_rows` to 20000, `min_savings_permille` to 100, `min_token_savings` to 64 and `max_depth` to 64, with no token counter.
 
@@ -376,8 +382,6 @@ When the switch is on, `compress` calls `encode` with `max_rows` set to `Limits:
 - If `exact_line_runs` or `line_templates` is true, input that the JSON transforms reject as `unsupported_format` goes to the line codec as described in its Integration section. The report has transform id `line-templates` when `line_templates` is true. Otherwise it has transform id `exact-line-runs`. The report names one selected transform: the table encoder (table-v1 or table-v2), else the minifier, else the line codec. More than one transform can run. When `json_minify` is true, input that the table encoder rejects falls through to the minifier. An eligible table encoder candidate is always validated against the minified original.
 - If `json_table` is true and `json_minify` is false, every other skip reports transform id `json-table`, including the mode and size checks that run before encoding.
 - If `json_table`, `json_minify`, `exact_line_runs` and `line_templates` are all false, `compress` skips with `transform_disabled`.
-
-With a token counter in the context, every transform also checks the token gain of a validated candidate that is shorter in bytes. It skips with `insufficient_gain` when the candidate has more tokens than the original, saves fewer than `Limits::min_estimated_token_savings` tokens (default 64) or saves less than `Limits::min_estimated_savings_permille` of the original tokens (default 100, which is the policy ratio 0.10). Observe mode applies the same check. Without a counter, no token check runs. `FIRST_SLICE_JSON_MINIFY_CONTEXT` sets both thresholds to 0.
 
 ## table-v2
 
