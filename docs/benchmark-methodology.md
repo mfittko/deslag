@@ -16,13 +16,14 @@ One task is one paired observation. Each task runs once per arm. The analysis pa
 | --- | --- |
 | `baseline` | The original tool result. |
 | `json-minify` | `deslag_core::minify_json` output. |
-| `table-csv` | table-v1 output of `deslag_core::compress` with only `json_table` on, the estimate token counter and the evaluation limits. |
+| `table-csv` | table-v1 encoder output, `deslag_core::table::encode`, with the row and depth limits of the evaluation limits, the default savings thresholds of `TableOptions` and the estimate token counter. |
 | `table-mdkv` | `deslag_core::table::render_markdown_kv` output with the row and depth limits of the evaluation limits, the default savings thresholds of `TableOptions` and the estimate token counter. Evaluation only. |
+| `table-v2` | The json-table transform as `deslag_core::compress` ships it, with only `json_table` on, the estimate token counter and the evaluation limits. The payload is table-v1 or table-v2 text. |
 | `lines-v1` | lines-v1 output of `deslag_core::compress` with only `exact_line_runs` on and the evaluation limits. |
 | `lines-v2` | lines-v2 output of `deslag_core::compress` with only `line_templates` on and the evaluation limits. |
 | `drop-evidence` | The original with every line that contains the task's `evidence` substring removed. Negative control only. |
 
-The evaluation limits are the limits of `FIRST_SLICE_JSON_MINIFY_CONTEXT`: no input byte limits, at most 20000 table rows and a JSON depth of 128. The `table-csv` and `table-mdkv` arms share the row and depth limits, so both formats accept the same inputs.
+The evaluation limits are the limits of `FIRST_SLICE_JSON_MINIFY_CONTEXT`: no input byte limits, at most 20000 table rows and a JSON depth of 128. The `table-csv` and `table-mdkv` arms share the row and depth limits, so both formats accept the same inputs. The `table-csv` versus `table-mdkv` read-back comparison therefore uses the same table-v1 encoding scope. The `table-csv` and `table-v2` arm definitions were added before any live evaluation run. The scoring rules and the non-inferiority criterion are unchanged.
 
 Every task runs the `baseline` arm. A task lists the other arms that apply to it. When a transform declines the input, the arm's payload equals the baseline payload. The run still happens and its result line has `variant_unchanged: true`. Such pairs stay in the analysis, because the deployed transform would decline the same input.
 

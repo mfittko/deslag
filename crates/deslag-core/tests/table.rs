@@ -31,7 +31,7 @@ fn repeat(rows: &str, n: usize) -> String {
 #[test]
 fn identity_is_stable() {
     assert_eq!(JSON_TABLE_ID, "json-table");
-    assert_eq!(JSON_TABLE_VERSION, 1);
+    assert_eq!(JSON_TABLE_VERSION, 4);
     assert_eq!(JSON_TABLE_FORMAT_VERSION, 1);
     assert_eq!(MARKER, "table-v1");
 }

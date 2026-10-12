@@ -38,7 +38,7 @@ fuzz_target!(|data: &[u8]| {
                 let reference = common::reference_minify(input);
                 match result.report.transform_id {
                     JSON_TABLE_ID => {
-                        assert_eq!(table::decode(out).as_deref(), Some(reference.as_str()))
+                        assert_eq!(table::v2::decode(out).as_deref(), Some(reference.as_str()))
                     }
                     EXACT_LINE_RUNS_ID | LINE_TEMPLATES_ID => {
                         assert_eq!(decode_lines(out, input.len()).as_deref(), Ok(input))

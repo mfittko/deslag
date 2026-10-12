@@ -10,6 +10,10 @@ use std::{collections::HashMap, fmt::Write, iter};
 
 use crate::{Limits, Reason, Scanner, TokenCounter, minify};
 
+mod bucket;
+mod sub;
+pub mod v2;
+
 /// First token of every table-v1 header line.
 pub const MARKER: &str = "table-v1";
 
@@ -42,13 +46,15 @@ impl Default for TableOptions<'_> {
 }
 
 /// Column type. A column of any type may also hold `null`. Only an undotted
-/// column may hold missing cells.
+/// column may hold missing cells. `Json` is a `str` column whose reference
+/// cells hold JSON text as sub-blocks; only table-v2 blocks use it.
 #[derive(Clone, Copy, PartialEq)]
 enum Ty {
     Int,
     Num,
     Str,
     Bool,
+    Json,
 }
 
 impl Ty {
@@ -58,11 +64,12 @@ impl Ty {
             Ty::Num => "num",
             Ty::Str => "str",
             Ty::Bool => "bool",
+            Ty::Json => "json",
         }
     }
 
     fn parse(s: &str) -> Option<Ty> {
-        [Ty::Int, Ty::Num, Ty::Str, Ty::Bool]
+        [Ty::Int, Ty::Num, Ty::Str, Ty::Bool, Ty::Json]
             .into_iter()
             .find(|t| t.name() == s)
     }
@@ -141,36 +148,14 @@ fn build(input: &str, opts: &TableOptions, kv: bool) -> Result<String, Reason> {
     }
     let minified = String::from_utf8(minify(input, opts.max_depth)?).map_err(|_| NO)?;
     let (rows, paths) = parse_rows(&minified).ok_or(NO)?;
-    if rows.len() < 2 || rows.len() > opts.max_rows {
-        return Err(NO);
-    }
-    let (cols, names, types) = layout(&rows, &paths).ok_or(NO)?;
-
-    let mut out = format!("{MARKER} [{}]{{", rows.len());
-    for (j, (col, ty)) in names.iter().zip(&types).enumerate() {
-        let sep = if j == 0 { "" } else { "," };
-        let _ = write!(out, "{sep}{col}:{}", ty.name());
-    }
-    out.push('}');
-    let header_len = out.len();
-    for row in &rows {
-        out.push('\n');
-        // Row keys are a subsequence of `cols`, so one pass aligns them.
-        let mut fields = row.iter().peekable();
-        for (j, col) in cols.iter().enumerate() {
-            if j > 0 {
-                out.push(',');
-            }
-            if let Some((_, v)) = fields.next_if(|(k, _)| k == col) {
-                push_cell(&mut out, v);
-            }
-        }
-    }
+    let mut out = format!("{MARKER} ");
+    push_block(&mut out, &rows, &paths, 2, opts.max_rows).ok_or(NO)?;
     if !enough_gain(&minified, &out, opts) {
         return Err(Reason::InsufficientGain);
     }
     if kv {
-        out.truncate(header_len);
+        // Column names hold no line break, so the header is the first line.
+        out.truncate(out.find('\n').unwrap_or(out.len()));
         for row in &rows {
             out.push_str("\n-");
             for (j, (key, v)) in row.iter().enumerate() {
@@ -189,6 +174,50 @@ fn build(input: &str, opts: &TableOptions, kv: bool) -> Result<String, Reason> {
     Ok(out)
 }
 
+/// Encodes one minified JSON array as a block: the `[count]{columns}` header
+/// and its records. `None` when the array is ineligible.
+fn encode_block(array: &str, min_rows: usize, max_rows: usize) -> Option<String> {
+    let (rows, paths) = parse_rows(array)?;
+    let mut out = String::new();
+    push_block(&mut out, &rows, &paths, min_rows, max_rows)?;
+    Some(out)
+}
+
+/// Writes the `[count]{columns}` header and one record per row. `None` when
+/// the rows are ineligible.
+fn push_block(
+    out: &mut String,
+    rows: &[Row],
+    paths: &Paths,
+    min_rows: usize,
+    max_rows: usize,
+) -> Option<()> {
+    if rows.len() < min_rows || rows.len() > max_rows {
+        return None;
+    }
+    let (cols, names, types) = layout(rows, paths)?;
+    let _ = write!(out, "[{}]{{", rows.len());
+    for (j, (col, ty)) in names.iter().zip(&types).enumerate() {
+        let sep = if j == 0 { "" } else { "," };
+        let _ = write!(out, "{sep}{col}:{}", ty.name());
+    }
+    out.push('}');
+    for row in rows {
+        out.push('\n');
+        // Row keys are a subsequence of `cols`, so one pass aligns them.
+        let mut fields = row.iter().peekable();
+        for (j, col) in cols.iter().enumerate() {
+            if j > 0 {
+                out.push(',');
+            }
+            if let Some((_, v)) = fields.next_if(|(k, _)| k == col) {
+                push_cell(out, v);
+            }
+        }
+    }
+    Some(())
+}
+
 /// Writes a present field as a cell; a missing field is the empty cell.
 fn push_cell(out: &mut String, value: &Value) {
     match value {
@@ -201,44 +230,61 @@ fn push_cell(out: &mut String, value: &Value) {
 
 /// Decodes table-v1 text to minified JSON. `None` for malformed text.
 pub fn decode(text: &str) -> Option<String> {
-    let (header, body) = match text.split_once('\n') {
-        Some((h, b)) => (h, Some(b)),
-        None => (text, None),
-    };
-    let (count, specs) = header
-        .strip_prefix(MARKER)?
-        .strip_prefix(" [")?
-        .split_once("]{")?;
-    // `0` or `[1-9][0-9]*`: one canonical spelling per count.
+    let block = text.strip_prefix(MARKER)?.strip_prefix(' ')?;
+    let mut i = 0;
+    let out = decode_block(block, &mut i)?;
+    (i == block.len()).then_some(out)
+}
+
+/// Decodes the block at `*i` of `text` to a minified JSON array and moves
+/// `*i` to the end of its last record. A block is a `[count]{columns}` header
+/// line and `count` records, each after a `\n`.
+fn decode_block(text: &str, i: &mut usize) -> Option<String> {
+    Some(format!("[{}]", decode_rows(text, i, None)?.join(",")))
+}
+
+/// Parses `0` or `[1-9][0-9]*`: one canonical spelling per count or index.
+fn parse_count(count: &str) -> Option<usize> {
     if count.is_empty()
         || !count.bytes().all(|c| c.is_ascii_digit())
         || (count.len() > 1 && count.starts_with('0'))
     {
         return None;
     }
-    let rows: usize = count.parse().ok()?;
+    count.parse().ok()
+}
+
+/// Like [`decode_block`], but returns each row as a minified JSON object.
+/// `sub` is the block's label and nesting level in a table-v2 text, where
+/// `json` columns are allowed and their sub-blocks follow the records.
+fn decode_rows(text: &str, i: &mut usize, sub: Option<(&str, usize)>) -> Option<Vec<String>> {
+    let header_end = text[*i..].find('\n').map_or(text.len(), |e| *i + e);
+    let (count, specs) = text[*i..header_end].strip_prefix('[')?.split_once("]{")?;
+    let count = parse_count(count)?;
     let cols = columns(specs.strip_suffix('}')?)?;
-    // A header with zero rows has no body; every row is one line after it.
-    if (rows == 0) != body.is_none() {
+    if sub.is_none() && cols.iter().any(|c| c.ty == Ty::Json) {
         return None;
     }
-    let body = body.unwrap_or("");
+    *i = header_end;
 
-    let mut out = String::from("[");
-    let mut i = 0;
-    for r in 0..rows {
-        let cells = parse_record(body, &mut i)?;
-        let last = r + 1 == rows;
-        let at_end = if last {
-            i == body.len()
-        } else {
-            body[i..].starts_with('\n')
-        };
-        if cells.len() != cols.len() || !at_end {
+    let mut records = Vec::new();
+    for _ in 0..count {
+        if !text[*i..].starts_with('\n') {
             return None;
         }
-        i += 1;
-        out.push_str(if r == 0 { "{" } else { ",{" });
+        *i += 1;
+        let cells = parse_record(text, i)?;
+        if cells.len() != cols.len() {
+            return None;
+        }
+        records.push(cells);
+    }
+    // Reference cells are numbered in record order; their sub-blocks follow
+    // the last record in that order, so each is decoded when its row is built.
+    let mut refs = 0;
+    let mut rows = Vec::new();
+    for cells in &records {
+        let mut out = String::from("{");
         // True right after `{`, where the next member needs no comma.
         let mut opened = true;
         for (cell, col) in cells.iter().zip(&cols) {
@@ -259,14 +305,29 @@ pub fn decode(text: &str) -> Option<String> {
                 opened = true;
             }
             push_key(&mut out, opened, col.leaf);
-            push_json_value(&mut out, cell, col.ty)?;
+            match (cell, sub) {
+                (Cell::Bare(s), Some((label, level))) if col.ty == Ty::Json && sub::is_ref(s) => {
+                    if parse_count(&s[1..])? != refs {
+                        return None;
+                    }
+                    let child = sub::child(label, refs);
+                    let start = format!("\n{child} ");
+                    if !text[*i..].starts_with(&start) {
+                        return None;
+                    }
+                    *i += start.len();
+                    refs += 1;
+                    push_json_str(&mut out, &sub::decode(text, i, &child, level + 1)?);
+                }
+                _ => push_json_value(&mut out, cell, col.ty)?,
+            }
             opened = false;
         }
         out.extend(iter::repeat_n('}', cols.last().map_or(0, |c| c.depth)));
         out.push('}');
+        rows.push(out);
     }
-    out.push(']');
-    Some(out)
+    Some(rows)
 }
 
 fn push_key(out: &mut String, opened: bool, name: &str) {
@@ -546,12 +607,17 @@ fn push_str_cell(out: &mut String, text: &str) {
         || text.parse::<f64>().is_ok()
         || text.contains([',', '"', '\n', '\r']);
     if quote {
-        out.push('"');
-        out.push_str(&text.replace('"', "\"\""));
-        out.push('"');
+        push_quoted(out, text);
     } else {
         out.push_str(text);
     }
+}
+
+/// Writes `text` as a quoted cell with each `"` doubled.
+fn push_quoted(out: &mut String, text: &str) {
+    out.push('"');
+    out.push_str(&text.replace('"', "\"\""));
+    out.push('"');
 }
 
 enum Cell<'t> {
@@ -599,13 +665,13 @@ fn parse_record<'t>(body: &'t str, i: &mut usize) -> Option<Vec<Cell<'t>>> {
 /// Writes a non-missing cell as JSON, interpreted by the column type.
 fn push_json_value(out: &mut String, cell: &Cell, ty: Ty) -> Option<()> {
     match (cell, ty) {
-        (Cell::Quoted(s), Ty::Str) => push_json_str(out, s),
+        (Cell::Quoted(s), Ty::Str | Ty::Json) => push_json_str(out, s),
         (Cell::Quoted(_), _) => return None,
         (Cell::Bare(s @ "null"), _) => out.push_str(s),
         (Cell::Bare(s), Ty::Int) if is_int(s) => out.push_str(s),
         (Cell::Bare(s), Ty::Num) if is_number(s) => out.push_str(s),
         (Cell::Bare(s @ ("true" | "false")), Ty::Bool) => out.push_str(s),
-        (Cell::Bare(s), Ty::Str) => push_json_str(out, s),
+        (Cell::Bare(s), Ty::Str | Ty::Json) => push_json_str(out, s),
         _ => return None,
     }
     Some(())

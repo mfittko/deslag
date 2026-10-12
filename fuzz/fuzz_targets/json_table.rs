@@ -2,7 +2,7 @@
 
 use deslag_core::{
     FIRST_SLICE_JSON_MINIFY_CONTEXT, Outcome, TableOptions, compress,
-    table::{decode, encode},
+    table::v2::{decode, encode},
 };
 use libfuzzer_sys::fuzz_target;
 
