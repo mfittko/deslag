@@ -118,7 +118,7 @@ The report computes it per arm over non-control pairs. The `drop-evidence` arm i
 - A pair counts only when both of its runs report all three values as finite numbers that are at least 0.
 - Claude saved tokens are the sum of the baseline prompt tokens minus the sum of the arm prompt tokens, over the counted pairs.
 - Claude saved % is Claude saved tokens divided by the sum of the baseline prompt tokens.
-- The report shows these values next to the `deslag-estimate-v1` payload savings of the arm. Saved tokens (estimate) sum the baseline minus the arm payload tokens over the counted pairs. Saved % (estimate) is that sum divided by the baseline estimate sum over the same pairs.
+- The report shows these values next to the `deslag-estimate-v1` payload savings of the arm. Saved tokens (estimate) sum the baseline minus the arm payload tokens over all non-control pairs that remain after the payload-estimate check, whether or not Claude counts are reported. Saved % (estimate) is that sum divided by the baseline estimate sum over the same pairs.
 - A pair is dropped from the whole row when the baseline or the arm payload estimate is not a finite number that is at least 0. Both estimate columns are `n/a` when no pair remains.
 - Each saved % is `n/a` when its baseline sum is 0. Percentages are rounded to one decimal.
 - Unchanged pairs and pairs with a backend error are included.
