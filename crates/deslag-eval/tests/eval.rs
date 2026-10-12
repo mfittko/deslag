@@ -201,26 +201,56 @@ fn report_renders_format_comparison_and_controls() {
     );
     assert!(md.contains("| incompressible | lines-v2 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | 2 | 0 | all variants unchanged |"), "{md}");
     assert!(!md.contains("a transform changed a control input"), "{md}");
-    // Edit one arm's evidence_drop results and check one control row.
+    // Edit one arm's control results and check one control row.
     let (_, lines) = mock_run("16", "mock-report-fail.jsonl");
-    let (v2, drop) = (
+    let (v2, drop, inc) = (
         "| evidence_drop | lines-v2 | 1 |",
         "| evidence_drop | drop-evidence | 2 |",
+        "| incompressible | lines-v2 | 2 |",
     );
-    for (edit_arm, success, row, result) in [
-        ("baseline", false, v2, "baseline failed"),
-        ("baseline", false, drop, "baseline failed"),
-        ("lines-v2", false, v2, "a transform lost evidence"),
-        ("drop-evidence", true, drop, "evidence loss not detected"),
+    for (control, edit_arm, success, row, result) in [
+        ("evidence_drop", "baseline", false, v2, "baseline failed"),
+        ("evidence_drop", "baseline", false, drop, "baseline failed"),
+        (
+            "evidence_drop",
+            "lines-v2",
+            false,
+            v2,
+            "a transform lost evidence",
+        ),
+        (
+            "evidence_drop",
+            "drop-evidence",
+            true,
+            drop,
+            "evidence loss not detected",
+        ),
+        (
+            "incompressible",
+            "lines-v2",
+            true,
+            inc,
+            "a transform changed a control input",
+        ),
     ] {
         let mut text = String::new();
+        let mut edited = false;
         for mut l in lines.clone() {
-            if l["control"] == "evidence_drop" && l["arm"] == edit_arm {
-                l["success"] = success.into();
-                l["error_kind"] = if success { "none" } else { "wrong" }.into();
+            if l["control"] == control && l["arm"] == edit_arm {
+                if control == "incompressible" {
+                    // One changed line out of two must fail the control.
+                    if !edited {
+                        l["variant_unchanged"] = false.into();
+                    }
+                } else {
+                    l["success"] = success.into();
+                    l["error_kind"] = if success { "none" } else { "wrong" }.into();
+                }
+                edited = true;
             }
             text += &format!("{l}\n");
         }
+        assert!(edited, "no {control} line for {edit_arm}");
         let path = Path::new(env!("CARGO_TARGET_TMPDIR")).join("mock-report-fail-edit.jsonl");
         std::fs::write(&path, text).unwrap();
         let o = eval(&["report", path.to_str().unwrap()]);
