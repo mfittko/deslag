@@ -10,6 +10,7 @@ use std::{collections::HashMap, fmt::Write, iter};
 
 use crate::{Limits, Reason, Scanner, TokenCounter, minify};
 
+mod bucket;
 pub mod v2;
 
 /// First token of every table-v1 header line.
@@ -144,7 +145,7 @@ fn build(input: &str, opts: &TableOptions, kv: bool) -> Result<String, Reason> {
     let minified = String::from_utf8(minify(input, opts.max_depth)?).map_err(|_| NO)?;
     let (rows, paths) = parse_rows(&minified).ok_or(NO)?;
     let mut out = format!("{MARKER} ");
-    push_block(&mut out, &rows, &paths, opts.max_rows).ok_or(NO)?;
+    push_block(&mut out, &rows, &paths, 2, opts.max_rows).ok_or(NO)?;
     if !enough_gain(&minified, &out, opts) {
         return Err(Reason::InsufficientGain);
     }
@@ -171,17 +172,23 @@ fn build(input: &str, opts: &TableOptions, kv: bool) -> Result<String, Reason> {
 
 /// Encodes one minified JSON array as a block: the `[count]{columns}` header
 /// and its records. `None` when the array is ineligible.
-fn encode_block(array: &str, max_rows: usize) -> Option<String> {
+fn encode_block(array: &str, min_rows: usize, max_rows: usize) -> Option<String> {
     let (rows, paths) = parse_rows(array)?;
     let mut out = String::new();
-    push_block(&mut out, &rows, &paths, max_rows)?;
+    push_block(&mut out, &rows, &paths, min_rows, max_rows)?;
     Some(out)
 }
 
 /// Writes the `[count]{columns}` header and one record per row. `None` when
 /// the rows are ineligible.
-fn push_block(out: &mut String, rows: &[Row], paths: &Paths, max_rows: usize) -> Option<()> {
-    if rows.len() < 2 || rows.len() > max_rows {
+fn push_block(
+    out: &mut String,
+    rows: &[Row],
+    paths: &Paths,
+    min_rows: usize,
+    max_rows: usize,
+) -> Option<()> {
+    if rows.len() < min_rows || rows.len() > max_rows {
         return None;
     }
     let (cols, names, types) = layout(rows, paths)?;
@@ -229,21 +236,30 @@ pub fn decode(text: &str) -> Option<String> {
 /// `*i` to the end of its last record. A block is a `[count]{columns}` header
 /// line and `count` records, each after a `\n`.
 fn decode_block(text: &str, i: &mut usize) -> Option<String> {
-    let header_end = text[*i..].find('\n').map_or(text.len(), |e| *i + e);
-    let (count, specs) = text[*i..header_end].strip_prefix('[')?.split_once("]{")?;
-    // `0` or `[1-9][0-9]*`: one canonical spelling per count.
+    Some(format!("[{}]", decode_rows(text, i)?.join(",")))
+}
+
+/// Parses `0` or `[1-9][0-9]*`: one canonical spelling per count or index.
+fn parse_count(count: &str) -> Option<usize> {
     if count.is_empty()
         || !count.bytes().all(|c| c.is_ascii_digit())
         || (count.len() > 1 && count.starts_with('0'))
     {
         return None;
     }
-    let rows: usize = count.parse().ok()?;
+    count.parse().ok()
+}
+
+/// Like [`decode_block`], but returns each row as a minified JSON object.
+fn decode_rows(text: &str, i: &mut usize) -> Option<Vec<String>> {
+    let header_end = text[*i..].find('\n').map_or(text.len(), |e| *i + e);
+    let (count, specs) = text[*i..header_end].strip_prefix('[')?.split_once("]{")?;
+    let count = parse_count(count)?;
     let cols = columns(specs.strip_suffix('}')?)?;
     *i = header_end;
 
-    let mut out = String::from("[");
-    for r in 0..rows {
+    let mut rows = Vec::new();
+    for _ in 0..count {
         if !text[*i..].starts_with('\n') {
             return None;
         }
@@ -252,7 +268,7 @@ fn decode_block(text: &str, i: &mut usize) -> Option<String> {
         if cells.len() != cols.len() {
             return None;
         }
-        out.push_str(if r == 0 { "{" } else { ",{" });
+        let mut out = String::from("{");
         // True right after `{`, where the next member needs no comma.
         let mut opened = true;
         for (cell, col) in cells.iter().zip(&cols) {
@@ -278,9 +294,9 @@ fn decode_block(text: &str, i: &mut usize) -> Option<String> {
         }
         out.extend(iter::repeat_n('}', cols.last().map_or(0, |c| c.depth)));
         out.push('}');
+        rows.push(out);
     }
-    out.push(']');
-    Some(out)
+    Some(rows)
 }
 
 fn push_key(out: &mut String, opened: bool, name: &str) {
