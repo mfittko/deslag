@@ -28,7 +28,7 @@ DESLAG_EVAL_LIVE=1 cargo run -q -p deslag-eval --locked -- run \
 cargo run -q -p deslag-eval --locked -- report tmp/eval/live-claude-haiku-5-5-seed16.jsonl
 ```
 
-Estimated cost from `deslag-eval estimate --manifest tests/evaluations/manifest.json` (default assumptions). The prices are conservative assumptions for an upper bound, not the published price of the model. Before each call, the runner stops when the spent amount plus the per-run cap of USD 0.30 would exceed `--budget-usd 3.00`. Each call passes `--max-budget-usd 0.30`, but the client checks it only after a turn. One call can therefore exceed its cap, and the total can exceed USD 3.00 by that excess. The runner stops with exit 2 after any call that reports more than USD 0.30 and keeps the partial results file. `run` refuses an existing `--out` path.
+Estimated cost from `deslag-eval estimate --manifest tests/evaluations/manifest.json` (default assumptions). The estimate rests on estimated tokens, assumed output tokens and conservative assumed prices that may exceed the published price of the model. The hard cap of runs times `--per-run-usd` is the only bound in the output. Before each call, the runner stops when the spent amount plus the per-run cap of USD 0.30 would exceed `--budget-usd 3.00`. Each call passes `--max-budget-usd 0.30`, but the client checks it only after a turn. One call can therefore exceed its cap, and the total can exceed USD 3.00 by that excess. The runner stops with exit 2 after any call that reports more than USD 0.30 and keeps the partial results file. `run` refuses an existing `--out` path.
 
 | Field | Value |
 | --- | --- |
@@ -43,11 +43,11 @@ After the run, add its report as a new section above the mock dry run, with the 
 
 ## Live plumbing smoke check
 
-On 2026-10-12, 2 live calls checked the `claude` backend plumbing: task `api-repo-branch`, arms `baseline` and `json-minify`, model `claude-haiku-5-5`, client 2.1.296, seed 16, `--per-run-usd 0.30`, `--budget-usd 0.60`. Both calls answered correctly. The total reported cost was USD 0.0004. The cache-creation tokens were 918 and 868 against payload estimates of 178 and 130. The per-call overhead was therefore about 740 tokens, below the 2000-token overhead that the estimate assumes. This is plumbing evidence only. It is not part of any analysis.
+On 2026-10-12, 2 live calls checked the `claude` backend plumbing: task `api-repo-branch`, arms `baseline` and `json-minify`, model `claude-haiku-5-5`, client 2.1.296, seed 16, `--per-run-usd 0.30`, `--budget-usd 0.60`. Both calls answered correctly. The total reported cost was USD 0.0004. The cache-creation tokens were 918 and 868 against payload estimates of 178 and 130. The per-call overhead was therefore about 740 tokens, below the 2000-token overhead that the estimate assumes. This is plumbing evidence only, and the analysis excludes it.
 
 ## Mock dry run
 
-The mock backend answers with the accepted answer when it occurs verbatim in the payload, else `NOT_FOUND`. It measures evidence presence, not model reading. Its results show that the harness pairs runs, scores them, detects evidence loss and keeps the incompressible controls unchanged. They are no evidence about any model.
+The mock backend answers with the accepted answer when it occurs verbatim in the payload, else `NOT_FOUND`. It measures evidence presence only. Its results show that the harness pairs runs, scores them, detects evidence loss and keeps the incompressible controls unchanged.
 
 ```sh
 mkdir -p tmp/eval

@@ -152,12 +152,11 @@ fn mock_run_detects_evidence_loss_and_keeps_controls_unchanged() {
 
 #[test]
 fn run_order_is_seeded() {
-    // Wall-clock time is the one field that varies between identical runs.
+    // The mock records wall_ms as 0, so identical runs are byte-identical.
     let order = |seed, name| -> Vec<Value> {
-        let (_, mut lines) = mock_run(seed, name);
-        for l in &mut lines {
-            assert!(l["wall_ms"].is_u64(), "{l}");
-            l.as_object_mut().unwrap().remove("wall_ms");
+        let (_, lines) = mock_run(seed, name);
+        for l in &lines {
+            assert_eq!(l["wall_ms"], 0, "{l}");
         }
         lines
     };
@@ -258,24 +257,79 @@ fn claude_backend_refuses_without_live_opt_in() {
 }
 
 #[test]
-fn claude_backend_needs_model_and_budget() {
+fn claude_backend_needs_model_and_valid_caps() {
+    const NEEDS: &str = "needs --model, --budget-usd >= 0 and --per-run-usd > 0";
     let out = Path::new(env!("CARGO_TARGET_TMPDIR")).join("unbudgeted.jsonl");
     let m = manifest();
-    let o = Command::new(BIN)
-        .args([
-            "run",
-            "--manifest",
-            m.to_str().unwrap(),
-            "--backend",
-            "claude",
-        ])
-        .args(["--seed", "1", "--out", out.to_str().unwrap()])
-        .env("DESLAG_EVAL_LIVE", "1")
-        .env("PATH", "")
-        .output()
-        .unwrap();
-    assert_eq!(o.status.code(), Some(2));
-    assert!(!out.exists());
+    for (extra, msg) in [
+        (&["--budget-usd", "1"][..], NEEDS),
+        (&["--budget-usd", "1", "--model", ""], NEEDS),
+        (&["--budget-usd", "1", "--model", "   "], NEEDS),
+        (&["--model", "x"], "--budget-usd is required"),
+        (&["--model", "x", "--budget-usd", "-1"], NEEDS),
+        (&["--model", "x", "--budget-usd", "NaN"], NEEDS),
+        (&["--model", "x", "--budget-usd", "inf"], NEEDS),
+        (
+            &["--model", "x", "--budget-usd", "1", "--per-run-usd", "0"],
+            NEEDS,
+        ),
+        (
+            &["--model", "x", "--budget-usd", "1", "--per-run-usd", "-1"],
+            NEEDS,
+        ),
+        (
+            &["--model", "x", "--budget-usd", "1", "--per-run-usd", "NaN"],
+            NEEDS,
+        ),
+        // Accepted: the guard passes and the empty PATH stops the client start.
+        (
+            &["--model", "claude-haiku-4-5", "--budget-usd", "1"],
+            "cannot start claude",
+        ),
+    ] {
+        let o = Command::new(BIN)
+            .args([
+                "run",
+                "--manifest",
+                m.to_str().unwrap(),
+                "--backend",
+                "claude",
+            ])
+            .args(["--seed", "1", "--out", out.to_str().unwrap()])
+            .args(extra)
+            .env("DESLAG_EVAL_LIVE", "1")
+            .env("PATH", "")
+            .output()
+            .unwrap();
+        assert_eq!(o.status.code(), Some(2), "{extra:?}");
+        let err = String::from_utf8_lossy(&o.stderr);
+        assert!(err.contains(msg), "{extra:?}: {err}");
+        assert!(!out.exists(), "{extra:?}");
+    }
+}
+
+#[test]
+fn estimate_validates_prices_and_cap() {
+    let m = manifest();
+    for (extra, ok) in [
+        (&["--per-run-usd", "0.30"][..], true),
+        (&["--input-usd-per-mtok", "0"], true),
+        (&["--per-run-usd", "-1"], false),
+        (&["--per-run-usd", "0"], false),
+        (&["--input-usd-per-mtok", "NaN"], false),
+        (&["--output-usd-per-mtok", "inf"], false),
+    ] {
+        let o = Command::new(BIN)
+            .args(["estimate", "--manifest", m.to_str().unwrap()])
+            .args(extra)
+            .output()
+            .unwrap();
+        assert_eq!(o.status.success(), ok, "{extra:?}");
+        if !ok {
+            assert_eq!(o.status.code(), Some(2), "{extra:?}");
+            assert!(o.stdout.is_empty(), "{extra:?}");
+        }
+    }
 }
 
 #[test]
@@ -291,29 +345,48 @@ fn estimate_prints_a_cost() {
 }
 
 #[test]
-fn report_pairs_within_each_seed() {
-    let (a, _) = mock_run("16", "seed-a.jsonl");
-    let (_, lines) = mock_run("17", "seed-b.jsonl");
-    // Seed 17's baselines all fail, so every seed-17 pair is discordant for the arm.
-    let mut text = a;
+fn report_takes_one_run_per_file() {
+    let (a, lines) = mock_run("16", "seed-a.jsonl");
+    let (b, _) = mock_run("17", "seed-b.jsonl");
+    let first = a.lines().next().unwrap();
+    let mut other_model = lines[1].clone();
+    other_model["model"] = "sonnet".into();
+    // Repeated runs of a task are not independent pairs, so each case is refused.
+    for (name, text, msg) in [
+        ("two-seeds", format!("{a}{b}"), "differs from line 1"),
+        (
+            "two-models",
+            format!("{first}\n{other_model}\n"),
+            "differs from line 1",
+        ),
+        ("duplicate", format!("{a}{first}\n"), "duplicate task"),
+    ] {
+        let path = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("{name}.jsonl"));
+        std::fs::write(&path, text).unwrap();
+        let o = eval(&["report", path.to_str().unwrap()]);
+        assert_eq!(o.status.code(), Some(2), "{name}");
+        assert!(String::from_utf8_lossy(&o.stderr).contains(msg), "{name}");
+        assert!(o.stdout.is_empty(), "{name}");
+    }
+}
+
+#[test]
+fn report_escapes_table_cells() {
+    let (_, lines) = mock_run("16", "escape.jsonl");
+    let mut text = String::new();
     for mut l in lines {
-        if l["arm"] == "baseline" {
-            l["success"] = false.into();
-            l["error_kind"] = "wrong".into();
-        }
+        l["client_version"] = "2.1 | passes\n| forged | row |".into();
         text += &format!("{l}\n");
     }
-    let path = Path::new(env!("CARGO_TARGET_TMPDIR")).join("two-seeds.jsonl");
+    let path = Path::new(env!("CARGO_TARGET_TMPDIR")).join("escape-edit.jsonl");
     std::fs::write(&path, text).unwrap();
     let o = eval(&["report", path.to_str().unwrap()]);
     let md = String::from_utf8(o.stdout).unwrap();
-    assert!(md.contains("| seed | 16, 17 |"), "{md}");
     assert!(
-        md.contains("| runs without a baseline partner | 0 |"),
+        md.contains("| client version | 2.1 \\| passes \\| forged \\| row \\| |"),
         "{md}"
     );
-    assert!(md.contains("| json-minify | 22 | 0 | 0 | 11 |"), "{md}");
-    assert!(md.contains("| table-v1 CSV | table-csv | 20 |"), "{md}");
+    assert!(!md.lines().any(|l| l.starts_with("| forged")), "{md}");
 }
 
 /// A fresh, empty directory under the target tmpdir.
@@ -346,12 +419,42 @@ fn manifest_rejects_bad_tolerance_and_uncontrolled_drop_evidence() {
         .unwrap()
         .join("inputs/api_query_repo.json");
     let task = |extra: &str| {
+        let answers = if extra.contains("answers") {
+            ""
+        } else {
+            r#""answers": ["1873"], "#
+        };
         format!(
-            r#"{{"tasks": [{{"id": "t", "category": "api_query", "input": {:?}, "question": "q", "answers": ["a"], "rule": "number", {extra}}}]}}"#,
+            r#"{{"tasks": [{{"id": "t", "category": "api_query", "input": {:?}, "question": "q", {answers}"rule": "number", {extra}}}]}}"#,
             input.to_str().unwrap()
         )
     };
     for (name, extra, msg) in [
+        (
+            "control-typo",
+            r#""arms": ["json-minify"], "control": "incompressable""#,
+            "unknown control",
+        ),
+        (
+            "control-dash",
+            r#""arms": ["json-minify"], "control": "evidence-drop""#,
+            "unknown control",
+        ),
+        (
+            "control-space",
+            r#""arms": ["json-minify"], "control": "incompressible ""#,
+            "unknown control",
+        ),
+        (
+            "number-comma",
+            r#""arms": ["json-minify"], "answers": ["1,873"]"#,
+            "finite numbers",
+        ),
+        (
+            "number-nan",
+            r#""arms": ["json-minify"], "answers": ["NaN"]"#,
+            "finite numbers",
+        ),
         (
             "neg",
             r#""arms": ["json-minify"], "tolerance": -1"#,
@@ -379,9 +482,28 @@ fn manifest_rejects_bad_tolerance_and_uncontrolled_drop_evidence() {
     let o = eval(&["variants", empty.to_str().unwrap()]);
     assert_eq!(o.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&o.stderr).contains("empty tasks array"));
-    let ok = dir.join("ok.json");
-    std::fs::write(&ok, task(r#""arms": ["json-minify"], "tolerance": 0.5"#)).unwrap();
-    assert!(eval(&["variants", ok.to_str().unwrap()]).status.success());
+    for (name, extra) in [
+        ("ok", r#""arms": ["json-minify"], "tolerance": 0.5"#),
+        ("no-control", r#""arms": ["json-minify"]"#),
+        (
+            "incompressible",
+            r#""arms": ["json-minify"], "control": "incompressible""#,
+        ),
+        (
+            "evidence-drop",
+            r#""arms": ["drop-evidence"], "control": "evidence_drop", "evidence": "trunk""#,
+        ),
+        ("decimal", r#""arms": ["json-minify"], "answers": ["18.5"]"#),
+    ] {
+        let ok = dir.join(format!("{name}.json"));
+        std::fs::write(&ok, task(extra)).unwrap();
+        let o = eval(&["variants", ok.to_str().unwrap()]);
+        assert!(
+            o.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&o.stderr)
+        );
+    }
 }
 
 #[test]
@@ -406,7 +528,8 @@ fn run_refuses_an_existing_out_path() {
 }
 
 /// Live-backend runs against a fake `claude` script. `mode` selects its reply:
-/// `ok` (no cost field), `is_error`, `bad` (malformed JSON, exit 1) or `pricey`.
+/// `ok` (no cost field), `is_error`, `bad` (malformed JSON, exit 1), `pricey`
+/// or `cost-<json number>`.
 #[cfg(unix)]
 fn fake_live_run(mode: &str, out_exists: bool) -> (Output, Vec<Value>, PathBuf) {
     use std::os::unix::fs::PermissionsExt;
@@ -425,6 +548,7 @@ case "$FAKE_CLAUDE_MODE" in
   ok) echo '{"type":"result","is_error":false,"result":"trunk-2026","usage":{"input_tokens":3,"output_tokens":2},"num_turns":1}' ;;
   is_error) echo '{"type":"result","is_error":true,"result":"boom","num_turns":1}' ;;
   pricey) echo '{"type":"result","is_error":false,"result":"x","total_cost_usd":0.5,"num_turns":1}' ;;
+  cost-*) echo "{\"type\":\"result\",\"is_error\":false,\"result\":\"x\",\"total_cost_usd\":${FAKE_CLAUDE_MODE#cost-},\"num_turns\":1}" ;;
   *) echo 'not json'; exit 1 ;;
 esac
 "#,
@@ -485,7 +609,11 @@ fn live_backend_stops_at_the_budget_and_cleans_up() {
         let (o, lines, _) = fake_live_run(mode, false);
         let err = String::from_utf8_lossy(&o.stderr);
         assert_eq!(o.status.code(), Some(2), "{mode}: {err}");
-        assert!(err.contains("budget stop before run 3"), "{mode}: {err}");
+        // A missing cost counts as the full per-run cap.
+        assert!(
+            err.contains("budget stop before run 3: spent 0.9000"),
+            "{mode}: {err}"
+        );
         assert_eq!(lines.len(), 3, "{mode}");
         for l in &lines {
             assert!(kinds.contains(&l["error_kind"].as_str().unwrap()), "{l}");
@@ -504,6 +632,34 @@ fn live_backend_stops_after_a_call_over_the_per_run_cap() {
     assert!(err.contains("cost stop after run 0"), "{err}");
     assert_eq!(lines.len(), 1);
     assert_eq!(lines[0]["cost_usd"], 0.5);
+}
+
+#[cfg(unix)]
+#[test]
+fn live_backend_counts_only_a_valid_reported_cost() {
+    // --budget-usd 1.0, --per-run-usd 0.3. An invalid cost counts as 0.3, like a missing one.
+    for (mode, stop) in [
+        ("cost-0.0", None),
+        ("cost-0.25", Some("budget stop before run 3: spent 0.7500")),
+        ("cost--1.0", Some("budget stop before run 3: spent 0.9000")),
+        // NaN is not JSON, so the reply is malformed and has no cost.
+        ("cost-NaN", Some("budget stop before run 3: spent 0.9000")),
+    ] {
+        let (o, lines, _) = fake_live_run(mode, false);
+        let err = String::from_utf8_lossy(&o.stderr);
+        match stop {
+            Some(msg) => {
+                assert_eq!(o.status.code(), Some(2), "{mode}: {err}");
+                assert!(err.contains(msg), "{mode}: {err}");
+                assert_eq!(lines.len(), 3, "{mode}");
+            }
+            None => {
+                assert!(o.status.success(), "{mode}: {err}");
+                assert!(err.contains("spent 0.0000 USD"), "{mode}: {err}");
+                assert_eq!(lines.len(), 73, "{mode}");
+            }
+        }
+    }
 }
 
 #[cfg(unix)]

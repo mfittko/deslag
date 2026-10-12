@@ -138,6 +138,11 @@ fn load_manifest(path: &Path) -> Result<Vec<Task>, String> {
             }
             let evidence = s("evidence");
             let control = s("control");
+            if let Some(c) = control.as_deref()
+                && !matches!(c, "incompressible" | "evidence_drop")
+            {
+                return Err(err(&format!("unknown control {c:?}")));
+            }
             if arms.iter().any(|a| a == "drop-evidence") {
                 if control.as_deref() != Some("evidence_drop") {
                     return Err(err("drop-evidence needs control evidence_drop"));
@@ -155,15 +160,20 @@ fn load_manifest(path: &Path) -> Result<Vec<Task>, String> {
             };
             // ponytail: the manifest is trusted and committed, so an input may be absolute or leave its directory.
             let input_path = dir.join(s("input").ok_or_else(|| err("no input"))?);
+            let rule = s("rule")
+                .as_deref()
+                .and_then(Rule::parse)
+                .ok_or_else(|| err("unknown rule"))?;
+            let finite = |a: &String| score::normalize(a).parse().is_ok_and(f64::is_finite);
+            if rule == Rule::Number && !answers.iter().all(finite) {
+                return Err(err("number answers must parse as finite numbers"));
+            }
             Ok(Task {
                 input: read(&input_path).map_err(|e| err(&e))?,
                 category: s("category").ok_or_else(|| err("no category"))?,
                 control,
                 question: s("question").ok_or_else(|| err("no question"))?,
-                rule: s("rule")
-                    .as_deref()
-                    .and_then(Rule::parse)
-                    .ok_or_else(|| err("unknown rule"))?,
+                rule,
                 tolerance,
                 answers,
                 arms,
@@ -189,9 +199,12 @@ fn variant(arm: &str, task: &Task) -> Option<String> {
     let out = match arm {
         "json-minify" => minify_json(input),
         "table-csv" => compress(input, &only(true, false, false)).into_changed(),
+        // Same row and depth limits as the table-csv arm, so both formats see the same inputs.
         "table-mdkv" => table::render_markdown_kv(
             input,
             &TableOptions {
+                max_rows: FIRST_SLICE_JSON_MINIFY_CONTEXT.limits.max_table_rows,
+                max_depth: FIRST_SLICE_JSON_MINIFY_CONTEXT.limits.max_json_depth,
                 token_counter: Some(&EstimateCounter),
                 ..TableOptions::default()
             },
@@ -301,9 +314,19 @@ fn live_dir() -> Result<PathBuf, String> {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos());
-    let dir = std::env::temp_dir().join(format!("deslag-eval-{}-{nanos}", std::process::id()));
+    let parent = std::env::temp_dir();
+    fs::create_dir_all(&parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+    let dir = parent.join(format!("deslag-eval-{}-{nanos}", std::process::id()));
     let settings = dir.join(".claude");
-    fs::create_dir_all(&settings).map_err(|e| format!("{}: {e}", settings.display()))?;
+    // `create` refuses an existing path, so no one else can own the settings directory.
+    let mut builder = fs::DirBuilder::new();
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
+    for d in [&dir, &settings] {
+        builder
+            .create(d)
+            .map_err(|e| format!("{}: {e}", d.display()))?;
+    }
     fs::write(
         settings.join("settings.json"),
         "{\"disableAllHooks\": true}\n",
@@ -329,11 +352,10 @@ fn run(args: &[String]) -> Result<(), String> {
             "the claude backend calls a paid model; set DESLAG_EVAL_LIVE=1 to allow it".into(),
         );
     }
-    let model: Option<String> = f.get("model").cloned();
+    let model: Option<String> = f.get("model").filter(|m| !m.trim().is_empty()).cloned();
     let budget: f64 = parsed(&f, "budget-usd", (!live).then_some(0.0))?;
     let per_run: f64 = parsed(&f, "per-run-usd", Some(DEFAULT_PER_RUN_USD))?;
-    let caps_valid = per_run.is_finite() && per_run > 0.0 && budget.is_finite() && budget >= 0.0;
-    if live && (model.is_none() || !caps_valid) {
+    if live && (model.is_none() || !usd_valid(per_run, &[budget])) {
         return Err(
             "the claude backend needs --model, --budget-usd >= 0 and --per-run-usd > 0".into(),
         );
@@ -379,8 +401,17 @@ fn run(args: &[String]) -> Result<(), String> {
                 Some(d) => ask_claude(d, model.as_deref().unwrap_or(""), per_run, &prompt)?,
                 None => ask_mock(task, payload),
             };
-            reply["wall_ms"] = json!(started.elapsed().as_millis() as u64);
-            let cost = reply["cost_usd"].as_f64();
+            // The mock records 0, so its report depends only on the manifest and the seed.
+            let wall_ms = if live {
+                started.elapsed().as_millis() as u64
+            } else {
+                0
+            };
+            reply["wall_ms"] = json!(wall_ms);
+            // A negative or non-finite reported cost counts as the per-run cap, like a missing one.
+            let cost = reply["cost_usd"]
+                .as_f64()
+                .filter(|c| c.is_finite() && *c >= 0.0);
             if live {
                 spent += cost.unwrap_or(per_run);
             }
@@ -416,7 +447,14 @@ fn run(args: &[String]) -> Result<(), String> {
     result
 }
 
-/// Upper-bound cost of a full live run, from estimated prompt tokens.
+/// True when `per_run` is finite and above 0 and every one of `others` is finite and >= 0.
+fn usd_valid(per_run: f64, others: &[f64]) -> bool {
+    per_run.is_finite() && per_run > 0.0 && others.iter().all(|x| x.is_finite() && *x >= 0.0)
+}
+
+/// Estimated cost of a full live run under stated assumptions (estimated
+/// prompt tokens, assumed prices and output tokens), plus the hard cap of
+/// runs times `--per-run-usd`, the only bound in the output.
 fn estimate(args: &[String]) -> Result<(), String> {
     let f = flags(
         args,
@@ -428,6 +466,9 @@ fn estimate(args: &[String]) -> Result<(), String> {
     let overhead: u64 = parsed(&f, "overhead-tokens", Some(2000))?;
     let out_tokens: u64 = parsed(&f, "output-tokens", Some(256))?;
     let per_run: f64 = parsed(&f, "per-run-usd", Some(DEFAULT_PER_RUN_USD))?;
+    if !usd_valid(per_run, &[in_price, out_price]) {
+        return Err("estimate needs prices per Mtok >= 0 and --per-run-usd > 0".into());
+    }
     let runs = pairs(&tasks);
     let input: u64 = runs
         .iter()

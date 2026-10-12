@@ -2,13 +2,13 @@
 
 This document predeclares the scoring rules and the non-inferiority criterion for the paired task evaluation in PLAN §14.4. It was committed before any evaluation run. A change to the scoring rules or to the criterion after results have been inspected needs a decision record in `docs/decisions/`.
 
-This document was revised after its first commit. The revisions are the `lines-v2` arm, the `inferior` verdict through the upper bound, the rule for transform arms on `evidence_drop` controls, and the scope of the table format read-back, which excludes control tasks. Every revision precedes any live evaluation run. The two-call plumbing smoke check of the `claude` backend is not an analysis run.
+This document was revised after its first commit. The revisions are the `lines-v2` arm, the `inferior` verdict through the upper bound, the rule for transform arms on `evidence_drop` controls, the scope of the table format read-back, which excludes control tasks, the shared row and depth limits of the two table arms, and one run per report file. Every revision precedes any live evaluation run. The two-call plumbing smoke check of the `claude` backend is not an analysis run.
 
 The harness is the `deslag-eval` binary in `crates/deslag-eval`. The corpus is `tests/evaluations/manifest.json`. Results are in `docs/benchmarks/evaluation.md`.
 
 ## Unit of analysis
 
-One task is one paired observation. Each task runs once per arm. The analysis pairs the baseline run of a task with each compressed run of the same task. Repeated turns and repeated runs are never treated as independent samples.
+One task is one paired observation. Each task runs once per arm. The analysis pairs the baseline run of a task with each compressed run of the same task. Repeated turns and repeated runs are never treated as independent samples. The report therefore takes one run per results file: one seed, one backend and one model, with each (task, arm) at most once. It refuses any other file with exit 2. A repeated run gets its own report.
 
 ## Arms
 
@@ -16,11 +16,13 @@ One task is one paired observation. Each task runs once per arm. The analysis pa
 | --- | --- |
 | `baseline` | The original tool result. |
 | `json-minify` | `deslag_core::minify_json` output. |
-| `table-csv` | table-v1 output of `deslag_core::compress` with only `json_table` on, the estimate token counter and no size limits. |
-| `table-mdkv` | `deslag_core::table::render_markdown_kv` output with `TableOptions::default()` and the estimate token counter. Evaluation only. |
-| `lines-v1` | lines-v1 output of `deslag_core::compress` with only `exact_line_runs` on and no size limits. |
-| `lines-v2` | lines-v2 output of `deslag_core::compress` with only `line_templates` on and no size limits. The arm was added after this document was first committed and before any live evaluation run. |
+| `table-csv` | table-v1 output of `deslag_core::compress` with only `json_table` on, the estimate token counter and the evaluation limits. |
+| `table-mdkv` | `deslag_core::table::render_markdown_kv` output with the row and depth limits of the evaluation limits, the default savings thresholds of `TableOptions` and the estimate token counter. Evaluation only. |
+| `lines-v1` | lines-v1 output of `deslag_core::compress` with only `exact_line_runs` on and the evaluation limits. |
+| `lines-v2` | lines-v2 output of `deslag_core::compress` with only `line_templates` on and the evaluation limits. The arm was added after this document was first committed and before any live evaluation run. |
 | `drop-evidence` | The original with every line that contains the task's `evidence` substring removed. Negative control only. |
+
+The evaluation limits are the limits of `FIRST_SLICE_JSON_MINIFY_CONTEXT`: no input byte limits, at most 20000 table rows and a JSON depth of 128. The `table-csv` and `table-mdkv` arms share the row and depth limits, so both formats accept the same inputs.
 
 Every task runs the `baseline` arm. A task lists the other arms that apply to it. When a transform declines the input, the arm's payload equals the baseline payload. The run still happens and its result line has `variant_unchanged: true`. Such pairs stay in the analysis, because the deployed transform would decline the same input.
 
@@ -101,13 +103,13 @@ The criterion is evaluated per arm over all non-control tasks that list the arm.
 
 ## Secondary measures
 
-Each result line records, when the backend reports them: input, output, cache-read and cache-creation tokens, cost in USD, backend duration in ms and the number of turns. It also records the payload bytes, the estimated payload tokens (`deslag-estimate-v1`) and `wall_ms`, the harness wall clock around each backend call. Every backend records `wall_ms`, the mock included. Reported usage and estimated tokens are different measurements and are never mixed.
+Each result line records, when the backend reports them: input, output, cache-read and cache-creation tokens, cost in USD, backend duration in ms and the number of turns. It also records the payload bytes, the estimated payload tokens (`deslag-estimate-v1`) and `wall_ms`, the harness wall clock around each backend call. The mock records `wall_ms` as 0, so its report depends only on the manifest and the seed. Reported usage and estimated tokens are different measurements and are never mixed.
 
-The harness never retries a call. A failed call is recorded with error kind `backend`, so the retry count is always zero. Tool-call count does not apply, because the corpus is single-turn read-back with tools disabled. Multi-turn agentic tasks with real tools are a follow-up.
+The harness never retries a call. A call that the client answers with an error, a failed exit or malformed output is recorded with error kind `backend`, so the retry count is always zero. A failure to start the client or to wait for it aborts the run with exit 2, and the partial results file is kept. Tool-call count does not apply, because the corpus is single-turn read-back with tools disabled. Multi-turn agentic tasks with real tools are a follow-up.
 
 ## Corpus and controls
 
-Each task in `tests/evaluations/manifest.json` has `id`, `category`, `input` (a path relative to the manifest), `question`, `answers`, `rule`, an optional `tolerance` (a number >= 0), `arms`, an optional `control` and, for the evidence-drop control, `evidence`. Only a task with control `evidence_drop` may list the `drop-evidence` arm. The manifest is trusted and committed, so an input path may also be absolute. All content is synthetic. No real user content is exported.
+Each task in `tests/evaluations/manifest.json` has `id`, `category`, `input` (a path relative to the manifest), `question`, `answers`, `rule`, an optional `tolerance` (a number >= 0), `arms`, an optional `control` and, for the evidence-drop control, `evidence`. A `control`, when present, is `incompressible` or `evidence_drop`. Only a task with control `evidence_drop` may list the `drop-evidence` arm. Every accepted answer of a `number` task parses as a finite number. The manifest is trusted and committed, so an input path may also be absolute. All content is synthetic. No real user content is exported.
 
 The categories are the PLAN §14.4 task kinds: `api_query`, `code_search`, `failure_diagnosis`, `issue_triage`, `logs`, `aggregation`, `exact_id` and `buried_evidence`. A `buried_evidence` task puts the answer in the middle or at the end of a large result. At least one input has 100 or more rows.
 
@@ -118,7 +120,7 @@ Two control kinds validate the harness:
 
 ## Backends
 
-The `mock` backend is offline and deterministic. It answers with the first accepted answer when that answer occurs verbatim in the payload, else `NOT_FOUND`. For a `set` task, every item must occur. The mock measures evidence presence only. It is plumbing evidence for the harness, never evidence about a model.
+The `mock` backend is offline and deterministic. It answers with the first accepted answer when that answer occurs verbatim in the payload, else `NOT_FOUND`. For a `set` task, every item must occur. The mock measures evidence presence only. It is plumbing evidence for the harness only.
 
 The `claude` backend runs `claude -p` in a throwaway directory with a project `.claude/settings.json`, `--setting-sources project`, `--strict-mcp-config`, `--no-session-persistence`, `--tools ""` and the fixed system prompt. The prompt goes on stdin. It loads no user or local settings files, no MCP servers and no hooks. The client still uses the user's credentials and may update its own state file.
 
@@ -133,9 +135,9 @@ The run order is a seeded shuffle (splitmix64, Fisher-Yates) over all (task, arm
 - Before each call, the runner stops when the spent amount plus the per-run cap would exceed `--budget-usd`. A call that reports no cost counts as the full per-run cap.
 - The client checks `--max-budget-usd` only after a turn, so one call can exceed its cap. The total can then exceed `--budget-usd` by that excess. The runner stops with exit 2 after any call whose reported cost exceeds `--per-run-usd`. The partial results file is kept.
 - `run` refuses an existing `--out` path with exit 2, so a rerun never overwrites results.
-- `deslag-eval estimate` prints an upper-bound cost of a full live run before any money is spent.
+- `deslag-eval estimate` prints, before any money is spent, an estimated cost of a full live run under stated assumptions (estimated tokens, assumed prices and assumed output tokens) and a hard cap of runs times `--per-run-usd`. The hard cap is the only bound in its output. It refuses a negative or non-finite price and a `--per-run-usd` that is not above 0.
 - CI runs only `cargo test`, which uses the mock backend. CI never sets `DESLAG_EVAL_LIVE`.
 
 ## Table format read-back
 
-The `table-csv` and `table-mdkv` arms run on the same tasks. The report gives per-format accuracy for both, over non-control tasks that ran both arms in the same seed. The CSV form cannot become a default until a live comparison exists. The default decision belongs to the DF-025 release gate (#22), not to this harness.
+The `table-csv` and `table-mdkv` arms run on the same tasks. The report gives per-format accuracy for both, over non-control tasks that ran both arms. The CSV form cannot become a default until a live comparison exists. The DF-025 release gate (#22) owns the default decision.

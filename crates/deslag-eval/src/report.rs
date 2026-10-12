@@ -2,7 +2,7 @@
 //! baseline run of the same task; a run without its partner is not analysed.
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt::Write,
 };
 
@@ -73,7 +73,10 @@ fn section(md: &mut String, title: &str, note: &str, head: &str, rows: Vec<Vec<S
     let sep = " --- |".repeat(head.split('|').count());
     let _ = write!(md, "### {title}\n\n{note}");
     let _ = writeln!(md, "| {} |\n|{sep}", head.replace('|', " | "));
+    // Cells may carry result-file or client text, so `|` and line breaks cannot shift columns.
+    let escape = |c: &String| c.replace('|', "\\|").replace(['\r', '\n'], " ");
     for r in rows {
+        let r: Vec<String> = r.iter().map(escape).collect();
         let _ = writeln!(md, "| {} |", r.join(" | "));
     }
     md.push('\n');
@@ -112,9 +115,30 @@ pub fn render(text: &str) -> Result<String, String> {
         })
         .collect::<Result<Vec<Value>, String>>()?;
     let first = rows.first().ok_or("no result lines")?;
-    // Runs pair within one seed, so concatenated seeds stay apart.
-    let key = |r: &Value| (r["seed"].to_string(), r["task"].to_string());
-    let base: HashMap<(String, String), &Value> = rows
+    // One task is one paired observation, so a file holds one run: one seed,
+    // backend and model, and each (task, arm) at most once.
+    let mut seen = HashSet::new();
+    for (i, r) in rows.iter().enumerate() {
+        if ["seed", "backend", "model"]
+            .iter()
+            .any(|k| r[*k] != first[*k])
+        {
+            return Err(format!(
+                "line {}: seed, backend or model differs from line 1; report one run per file",
+                i + 1
+            ));
+        }
+        if !seen.insert((r["task"].as_str(), r["arm"].as_str())) {
+            return Err(format!(
+                "line {}: duplicate task {} arm {}",
+                i + 1,
+                r["task"],
+                r["arm"]
+            ));
+        }
+    }
+    let key = |r: &Value| r["task"].to_string();
+    let base: HashMap<String, &Value> = rows
         .iter()
         .filter(|r| r["arm"] == "baseline")
         .map(|r| (key(r), r))
@@ -139,13 +163,12 @@ pub fn render(text: &str) -> Result<String, String> {
 
     let mut md = String::new();
     let all: Vec<&Value> = rows.iter().collect();
-    let seeds: BTreeSet<String> = rows.iter().map(|r| r["seed"].to_string()).collect();
     let meta = |k: &str| first[k].as_str().unwrap_or("n/a").to_string();
     let run = vec![
         cells!["backend", meta("backend")],
         cells!["model", meta("model")],
         cells!["client version", meta("client_version")],
-        cells!["seed", seeds.into_iter().collect::<Vec<_>>().join(", ")],
+        cells!["seed", first["seed"]],
         cells!["result lines", rows.len()],
         cells!["runs without a baseline partner", unpaired],
         cells!["reported cost, USD", reported(&all, "cost_usd")],
@@ -174,8 +197,8 @@ pub fn render(text: &str) -> Result<String, String> {
     let per_category = scoped(&|s| s != "all" && !s.starts_with("control:"), true);
     section(&mut md, "Per category", "", head, per_category);
 
-    // Non-control tasks that ran both table formats in the same seed, so both
-    // rows score the same inputs.
+    // Non-control tasks that ran both table formats, so both rows score the
+    // same inputs.
     let has = |r: &Value, arm: &str| rows.iter().any(|x| key(x) == key(r) && x["arm"] == arm);
     let formats = [("table-v1 CSV", "table-csv"), ("Markdown-KV", "table-mdkv")];
     let both = |r: &Value| r["control"].is_null() && has(r, "table-csv") && has(r, "table-mdkv");
@@ -186,7 +209,7 @@ pub fn render(text: &str) -> Result<String, String> {
             .collect();
         [cells![label, arm, rs.len()], kinds(&rs)].concat()
     });
-    let note = "Non-control tasks that ran both table arms in the same seed. Control tasks are excluded.\n\n";
+    let note = "Non-control tasks that ran both table arms. Control tasks are excluded.\n\n";
     let head = "Format|Arm|Runs|Success|Wrong|Abstain|Backend error";
     let format_rows = format_rows.collect();
     section(&mut md, "Table format read-back", note, head, format_rows);
