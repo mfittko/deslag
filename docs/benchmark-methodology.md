@@ -17,6 +17,7 @@ One task is one paired observation. Each task runs once per arm. The analysis pa
 | `table-csv` | table-v1 output of `deslag_core::compress` with only `json_table` on, the estimate token counter and no size limits. |
 | `table-mdkv` | `deslag_core::table::render_markdown_kv` output with `TableOptions::default()` and the estimate token counter. Evaluation only. |
 | `lines-v1` | lines-v1 output of `deslag_core::compress` with only `exact_line_runs` on and no size limits. |
+| `lines-v2` | lines-v2 output of `deslag_core::compress` with only `line_templates` on and no size limits. The arm was added after this document was first committed and before any live run. |
 | `drop-evidence` | The original with every line that contains the task's `evidence` substring removed. Negative control only. |
 
 Every task runs the `baseline` arm. A task lists the other arms that apply to it. When a transform declines the input, the arm's payload equals the baseline payload. The run still happens and its result line has `variant_unchanged: true`. Such pairs stay in the analysis, because the deployed transform would decline the same input.
@@ -39,7 +40,7 @@ Every run sends this user prompt, with `{payload}` replaced by the arm's payload
 Question: {question}
 ```
 
-The prompt does not explain table-v1, Markdown-KV or lines-v1. A deployed hook does not explain them either.
+The prompt does not explain table-v1, Markdown-KV, lines-v1 or lines-v2. A deployed hook does not explain them either.
 
 One evaluation run uses one model. `claude -p` does not expose temperature, so the result lines record the model id and the client version instead. Tools are disabled (`--tools ""`). Each run is a single turn.
 

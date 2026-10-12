@@ -43,7 +43,7 @@
       "question": "Which test failed? Answer with the full test path.",
       "answers": ["billing::invoice::rounds_half_even"],
       "rule": "exact",
-      "arms": ["lines-v1"]
+      "arms": ["lines-v1", "lines-v2"]
     },
     {
       "id": "fail-ci-job",
@@ -79,7 +79,7 @@
       "question": "Which request_id failed with status 503?",
       "answers": ["req-7f3a9c"],
       "rule": "exact",
-      "arms": ["lines-v1"]
+      "arms": ["lines-v1", "lines-v2"]
     },
     {
       "id": "logs-403-ip",
@@ -88,7 +88,7 @@
       "question": "Which client IP address received the only 403 response?",
       "answers": ["203.0.113.77"],
       "rule": "exact",
-      "arms": ["lines-v1"]
+      "arms": ["lines-v1", "lines-v2"]
     },
     {
       "id": "agg-max-errors",
@@ -142,7 +142,7 @@
       "question": "What sha256 checksum is reported for the artifact deslag-0.1.0.tar.gz?",
       "answers": ["3f9ac2e817b4d6059e1c8a7f2b3d4e5f60718293a4b5c6d7e8f9012a3b4c5d6e"],
       "rule": "exact_ci",
-      "arms": ["lines-v1"]
+      "arms": ["lines-v1", "lines-v2"]
     },
     {
       "id": "control-prose",
@@ -152,7 +152,7 @@
       "question": "Who is the on-call engineer for the week of 2026-09-28?",
       "answers": ["Priya Raman"],
       "rule": "exact_ci",
-      "arms": ["json-minify", "table-csv", "table-mdkv", "lines-v1"]
+      "arms": ["json-minify", "table-csv", "table-mdkv", "lines-v1", "lines-v2"]
     },
     {
       "id": "control-minimal-json",
@@ -162,7 +162,7 @@
       "question": "How many rows did the nightly-export job write?",
       "answers": ["18342"],
       "rule": "number",
-      "arms": ["json-minify", "table-csv", "table-mdkv", "lines-v1"]
+      "arms": ["json-minify", "table-csv", "table-mdkv", "lines-v1", "lines-v2"]
     },
     {
       "id": "control-drop-revoker",
@@ -183,7 +183,7 @@
       "question": "Which alert triggered the rollback?",
       "answers": ["checkout-latency-p99"],
       "rule": "exact",
-      "arms": ["drop-evidence"],
+      "arms": ["drop-evidence", "lines-v2"],
       "evidence": "rollback triggered by"
     }
   ]

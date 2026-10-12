@@ -171,16 +171,17 @@ fn load_manifest(path: &Path) -> Result<Vec<Task>, String> {
 /// the original.
 fn variant(arm: &str, task: &Task) -> Option<String> {
     let input = task.input.as_str();
-    let only = |json_table, exact_line_runs| CompressionContext {
+    let only = |json_table, exact_line_runs, line_templates| CompressionContext {
         json_minify: false,
         json_table,
         exact_line_runs,
+        line_templates,
         token_counter: Some(&EstimateCounter),
         ..FIRST_SLICE_JSON_MINIFY_CONTEXT
     };
     let out = match arm {
         "json-minify" => minify_json(input),
-        "table-csv" => compress(input, &only(true, false)).into_changed(),
+        "table-csv" => compress(input, &only(true, false, false)).into_changed(),
         "table-mdkv" => table::render_markdown_kv(
             input,
             &TableOptions {
@@ -188,7 +189,8 @@ fn variant(arm: &str, task: &Task) -> Option<String> {
                 ..TableOptions::default()
             },
         ),
-        "lines-v1" => compress(input, &only(false, true)).into_changed(),
+        "lines-v1" => compress(input, &only(false, true, false)).into_changed(),
+        "lines-v2" => compress(input, &only(false, false, true)).into_changed(),
         "drop-evidence" => {
             let ev = task.evidence.as_deref()?;
             Some(
