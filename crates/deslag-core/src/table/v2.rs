@@ -64,6 +64,9 @@ pub fn encode(input: &str, opts: &TableOptions) -> Result<String, Reason> {
 /// that is strictly shorter. Rejections keep their table-v1 reason, except
 /// that a bucket block failing the gain check reports `InsufficientGain`.
 fn encode_bare(input: &str, opts: &TableOptions) -> Result<String, Reason> {
+    // ponytail: the input is minified twice, once inside `super::encode` and
+    // once here. Each pass is linear, so the cost is one extra linear pass.
+    // Share the minified text if profiling shows it matters.
     let v1 = super::encode(input, opts);
     let Some(minified) = minify(input, opts.max_depth)
         .ok()
