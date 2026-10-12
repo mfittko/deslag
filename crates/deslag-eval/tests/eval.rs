@@ -186,6 +186,13 @@ fn report_renders_format_comparison_and_controls() {
         "{md}"
     );
     assert!(md.contains("| evidence_drop | drop-evidence | 2 | 2/2 (100.0%) | 0/2 (0.0%) | 0 | 2 | evidence loss detected |"), "{md}");
+    assert!(
+        md.contains(
+            "| evidence_drop | lines-v2 | 1 | 1/1 (100.0%) | 1/1 (100.0%) | 0 | 0 | evidence kept |"
+        ),
+        "{md}"
+    );
+    assert!(md.contains("| incompressible | lines-v2 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | 2 | 0 | all variants unchanged |"), "{md}");
     assert!(!md.contains("a transform changed a control input"), "{md}");
     // The pilot is below 81 pairs per arm, so no arm can pass.
     assert!(
