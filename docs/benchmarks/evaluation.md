@@ -28,7 +28,7 @@ DESLAG_EVAL_LIVE=1 cargo run -q -p deslag-eval --locked -- run \
 cargo run -q -p deslag-eval --locked -- report tmp/eval/live-claude-haiku-5-5-seed16.jsonl
 ```
 
-Estimated cost from `deslag-eval estimate --manifest tests/evaluations/manifest.json` (default assumptions). The estimate rests on estimated tokens, assumed output tokens and conservative assumed prices that may exceed the published price of the model. Runs times `--per-run-usd` is a cap only if every call stays within `--per-run-usd`. Before each call, the runner stops when the spent amount plus the per-run cap of USD 0.30 would exceed `--budget-usd 3.00`. Each call passes `--max-budget-usd 0.30`, but the client checks it only after a turn. One call can therefore exceed its cap, and the total can exceed USD 3.00 by that excess. The runner stops with exit 2 after any call that reports more than USD 0.30 and keeps the partial results file. `run` refuses an existing `--out` path.
+Estimated cost from `cargo run -q -p deslag-eval --locked -- estimate --manifest tests/evaluations/manifest.json` (default assumptions). The estimate rests on estimated tokens, assumed output tokens and conservative assumed prices that may exceed the published price of the model. Runs times `--per-run-usd` is a cap only if every call stays within `--per-run-usd`. Before each call, the runner stops when the spent amount plus the per-run cap of USD 0.30 would exceed `--budget-usd 3.00`. Each call passes `--max-budget-usd 0.30`, but the client checks it only after a turn. One call can therefore exceed its cap, and the total can exceed USD 3.00 by that excess. The runner stops with exit 2 after any call that reports more than USD 0.30 and keeps the partial results file. `run` refuses an existing `--out` path.
 
 | Field | Value |
 | --- | --- |
@@ -161,7 +161,7 @@ All tasks, controls included. Payload tokens are estimates (deslag-estimate-v1).
 
 ## Payload sizes
 
-From `deslag-eval variants tests/evaluations/manifest.json`. Bytes and estimated tokens (`deslag-estimate-v1`) of each arm's payload. `Changed: no` means the transform declined and the arm sends the original.
+From `cargo run -q -p deslag-eval --locked -- variants tests/evaluations/manifest.json`. Bytes and estimated tokens (`deslag-estimate-v1`) of each arm's payload. `Changed: no` means the transform declined and the arm sends the original.
 
 | Task | Arm | Bytes | Estimated tokens | Changed |
 | --- | --- | --- | --- | --- |
