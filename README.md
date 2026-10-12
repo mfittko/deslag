@@ -4,7 +4,7 @@ A small, native, deterministic context-compression layer for AI agents.
 
 deslag reduces the representation overhead of tool results before a model sees them. It does not change executed tool calls, it does not silently drop evidence, and telemetry stays off the request path.
 
-> **Status:** early development. The M0 Claude Code plugin and a no-op `PostToolUse` hook adapter (`deslag hook claude`) exist. A first JSON-minification slice is available behind an opt-in `--minify-json` flag on `deslag hook claude` and `deslag proxy`; the hook applies it to Bash stdout and MCP text results, the proxy to Bash results only, and neither is tested against a live client. The [implementation plan](docs/PLAN.md) is the product brief and backlog. Progress is tracked in the [v0.1 epic](https://github.com/mfittko/deslag/issues/1).
+> **Status:** early development. The M0 Claude Code plugin and a no-op `PostToolUse` hook adapter (`deslag hook claude`) exist. A first JSON-minification slice is available behind an opt-in `--minify-json` flag on `deslag hook claude` and `deslag proxy`; the hook applies it to Bash stdout and MCP text results, the proxy to Bash results only. The hook flag has run against a live client; the proxy flag has not. The [implementation plan](docs/PLAN.md) is the product brief and backlog. Progress is tracked in the [v0.1 epic](https://github.com/mfittko/deslag/issues/1).
 
 ## Planned v0.1
 
