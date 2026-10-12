@@ -98,23 +98,43 @@ fn several_wrapped_arrays_number_their_buckets_by_hole() {
 
 #[test]
 fn discriminator_is_the_shortest_candidate() {
-    // `name` is unique per row, `status` has two values that do not match
-    // the shapes, and `type` matches them. `type` gives the shortest block.
-    let items: Vec<String> = (0..9)
-        .map(|i| {
-            let status = if i % 2 == 0 { "ok" } else { "late" };
-            if i % 3 == 0 {
-                format!(r#"{{"name":"n{i}","status":"{status}","type":"num","v":{i}}}"#)
-            } else {
-                format!(r#"{{"name":"n{i}","status":"{status}","type":"txt","v":"t{i}"}}"#)
-            }
-        })
-        .collect();
-    let encoded = round_trip(&format!("[{}]", items.join(",")));
+    // `status` (first key) and `type` both split the rows into buckets that
+    // each form a table. `status` gives three buckets, `type` gives two, so
+    // the `by type` block is shorter and wins.
+    let status = ["ok", "late", "gone"];
+    let row = |i: usize| match i % 3 {
+        0 => format!(r#"{{"status":"ok","type":"num","v":{i}}}"#),
+        k => format!(r#"{{"status":"{}","type":"txt","v":"t{i}"}}"#, status[k]),
+    };
+    let input = format!("[{}]", (0..9).map(row).collect::<Vec<_>>().join(","));
+    let encoded = round_trip(&input);
     assert!(
-        encoded.starts_with("table-v2 @0\n@0 [9] by type\n"),
+        encoded.starts_with("table-v2 @0\n@0 [9] by type\n0,1,1,0,1,1,0,1,1\n"),
         "{encoded}"
     );
+    // The `by status` block decodes to the same array and is longer.
+    let bucket = |k: usize| {
+        let rows: Vec<String> = (0..9)
+            .filter(|i| i % 3 == k)
+            .map(|i| match k {
+                0 => format!("ok,num,{i}"),
+                _ => format!("{},txt,t{i}", status[k]),
+            })
+            .collect();
+        let v = if k == 0 { "int" } else { "str" };
+        format!(
+            "\n@0.{k} [3]{{status:str,type:str,v:{v}}}\n{}",
+            rows.join("\n")
+        )
+    };
+    let by_status = format!(
+        "table-v2 @0\n@0 [9] by status\n0,1,2,0,1,2,0,1,2{}{}{}",
+        bucket(0),
+        bucket(1),
+        bucket(2)
+    );
+    assert_eq!(v2::decode(&by_status), Some(input));
+    assert!(by_status.len() > encoded.len(), "{by_status}");
 }
 
 #[test]
