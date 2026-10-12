@@ -14,7 +14,7 @@ This file records only observed behavior. Untested versions and platforms are un
 
 ### Observed contract
 
-- The client sends one JSON object on stdin. Captured Bash and Read payloads are in `tests/fixtures/claude/` (paths and IDs replaced with placeholders).
+- The client sends one JSON object on stdin. Captured Bash, Read, MCP and subagent payloads are in `tests/fixtures/claude/` (paths and IDs replaced with placeholders).
 - A hook that exits 0 with empty stdout leaves the tool output unchanged.
 - A Bash replacement whose shape matches the tool's output schema replaces the output the model sees.
 - A Bash replacement with the wrong shape is ignored. The client logs `PostToolUse hook returned updatedToolOutput that does not match Bash's output shape: reason=schema_invalid` and sends the original output to the model.
@@ -38,7 +38,7 @@ Runs 2 and 3 used throwaway `jq` hooks to characterize the client. The deslag ad
 
 ### JSON minification (opt-in)
 
-`deslag hook claude --minify-json` and `deslag proxy --minify-json` remove insignificant whitespace from JSON in Bash tool results only. Both call `deslag_core::compress` with `FIRST_SLICE_JSON_MINIFY_CONTEXT` and commit the output only for a `Changed` result, through `into_changed`. The plugin hook in `plugins/claude` does not pass the flag, so it stays a no-op. Neither flag has been run against a live client. Token savings from whitespace removal have not been measured.
+`deslag hook claude --minify-json` and `deslag proxy --minify-json` remove insignificant whitespace from JSON in tool results. The hook covers the fields in [Hook field routing](#hook-field-routing). The proxy covers Bash tool results only. Both call `deslag_core::compress` with `FIRST_SLICE_JSON_MINIFY_CONTEXT` and commit the output only for a `Changed` result, through `into_changed`. The plugin hook in `plugins/claude` does not pass the flag, so it stays a no-op. The hook flag has run against a live client (runs L2 and L3 below). The proxy flag has not. Token savings from whitespace removal have not been measured.
 
 Status: experimental. Each flag compresses only when the configured owner in `<state dir>/owner` names its component, so the hook and the proxy never both transform one session while the owner stays fixed for it. After a mid-session change from `proxy` to `hook`, the proxy keeps replaying earlier pinned decisions while the hook compresses new results. Start a new session after an owner change. The proxy pins per-result decisions in a session manifest and replays them; see the README section on the compression owner and proxy replay.
 
@@ -49,13 +49,60 @@ Status: experimental. Each flag compresses only when the configured owner in `<s
 - The proxy does not rewrite `/v1/messages/count_tokens`. Its token counts can overstate the rewritten request.
 - The proxy buffers and rewrites at most 4 eligible requests at once (`INSPECT_PERMITS`). Others wait for a permit. A body over 32 MiB (`MAX_INSPECT_BYTES`) is forwarded unrewritten. A buffered body that does not arrive within `BODY_READ_TIMEOUT` (300 s) of its permit fails with `408`. The deadline covers only the read of the first 32 MiB, never the session replay. For a larger body the permit is released and the rest streams without a deadline. See the README proxy limits.
 
+### Hook field routing
+
+With `--minify-json`, `deslag hook claude` passes only these fields through the core. Each field is compressed on its own. Other fields keep their values. The hook re-serializes the whole `tool_response`. Key order can change. Numbers keep their exact value and digits, including integers outside the 64-bit range. Only an exponent can change form, for example `1e3` becomes `1e+3`.
+
+| Tool | Routed field | Unchanged |
+| --- | --- | --- |
+| `Bash` | `tool_response.stdout`, skipped when `isImage` is `true` | `stderr`, `interrupted`, `isImage`, `noOutputExpected` and unknown keys |
+| `mcp__*` | `text` of each content block with `"type": "text"` | Image, resource and other blocks; other keys in a text block; any `tool_response` that is not an array |
+| Every other tool (`Read`, `Edit`, `Agent`, `ToolSearch`, ...) | None | The whole result |
+
+The hook emits one complete replacement or nothing. A replacement whose shape differs from the original `tool_response` is dropped.
+
+Observed MCP shape (live capture, Claude Code 2.1.296, fixtures `posttooluse-mcp-text.json` and `posttooluse-mcp-mixed.json`):
+
+- `tool_response` is an array of Anthropic content blocks, for example `[{"type":"text","text":"..."}]`. Images arrive as `{"type":"image","source":{"type":"base64",...}}`.
+- The event carries `mcp_server` with `name` and `source`.
+- When the MCP result has `structuredContent`, the client drops the original text block and sends one text block with the compact JSON of `structuredContent`, after the image block.
+- An MCP result with `isError: true` produced no `PostToolUse` event.
+
+Subagent tool calls carry `agent_id` and `agent_type` and the parent's `session_id` (fixture `posttooluse-subagent-bash.json`). Routing ignores these fields. The hook keeps no state, and each invocation reads only its own stdin, so parallel tools and subagents cannot affect each other.
+
+### Hook conflict reporting
+
+Before it emits a replacement, the hook looks for another `PostToolUse` hook that may match the same tool. The client keeps only the last rewrite, so on a match the hook writes one line to stderr, such as `deslag: PostToolUse hook in <file> also matches Bash; leaving the output unchanged`, and exits 0 with empty stdout. It reads:
+
+- user settings: `$CLAUDE_CONFIG_DIR/settings.json`, else `$HOME/.claude/settings.json`
+- project settings: `.claude/settings.json` and `.claude/settings.local.json` under `$CLAUDE_PROJECT_DIR`, else under the event `cwd`
+- `hooks/hooks.json` of each plugin set to `true` in `enabledPlugins` of those files, located through `<config dir>/plugins/installed_plugins.json`
+
+An empty `CLAUDE_CONFIG_DIR`, `HOME` or `CLAUDE_PROJECT_DIR` counts as unset, so the lookup falls through to the next source.
+
+A missing, `""` or `"*"` matcher matches every tool. A matcher made only of letters, digits, `_` and `|` matches when one `|`-separated name equals the tool name. Any other matcher is a regex. The hook does not evaluate it and treats it as matching. A hook counts as deslag's own, and is ignored, only when its whole `command` is `<deslag> hook claude`, optionally followed by `--minify-json`, or the plugin wrapper `<deslag-hook.sh>` with no arguments. The program is a bare name or a path whose last segment is `deslag` or `deslag-hook.sh`, optionally in double quotes. Any other command that mentions `deslag` still counts as a conflict. Missing, unreadable and malformed files are ignored. A file that is not a regular file or is larger than 1 MiB is ignored too.
+
+Limits: plugins loaded with `--plugin-dir`, managed settings, hooks declared inline in `plugin.json` and `PostToolUse` hooks declared in skill or subagent frontmatter are not scanned. A conflict with these sources goes unreported. A regex matcher is treated as matching without evaluation, so it can report a false conflict. The hook cannot see which setting sources the client loaded. It reads user settings even when the client runs with `--setting-sources project,local`, so a user-level hook that the client does not run still reports a conflict (run L2). `enabledPlugins` is the union of `true` values across the files, so a project or local `false` does not override a user `true`. That case can report a false conflict, which is the safe direction.
+
+### Hook routing live runs
+
+Each run used a throwaway project directory, `--setting-sources project,local`, `--strict-mcp-config`, a throwaway stdio MCP server (`--mcp-config`), a throwaway plugin (`--plugin-dir`), `--no-session-persistence` and `--output-format json`. No global settings were edited.
+
+| Run | Hook | Client | Model | Result | total_cost_usd |
+| --- | --- | --- | --- | --- | --- |
+| L1 | Capture script (stdin to file); three MCP tools and one subagent Bash call | 2.1.296 | claude-haiku-5-5 | MCP, structured-content and subagent payloads captured; fixtures derived. The `isError` tool produced no `PostToolUse` event | 0.00430497 |
+| L2 | Debug build of `deslag hook claude --minify-json` with the real user config dir; Bash `cat` of pretty JSON and one MCP text tool | 2.1.296 | claude-haiku-5-5 | Both calls reported a conflict with a `PostToolUse` hook in the user `settings.json` on stderr and left the output unchanged | not recorded |
+| L3 | As L2, with `CLAUDE_CONFIG_DIR` set to an empty directory for the hook process only | 2.1.296 | claude-haiku-5-5 | No stderr. The model quoted the minified Bash stdout `{"name":"deslag","n":[1,2]}` and the minified MCP text `{"a":1,"b":[1,2]}` | 0.00083752 |
+
+The JSON output of run L2 was not saved, so its cost is not recorded. Its cap was USD 0.20.
+
 ### Pending
 
 - Linux and Windows clients.
 - Accepted and rejected replacements for Read and other built-in tools.
-- MCP tool results, images and other non-text results.
+- MCP error results, resources, images and other non-text results.
 - Client behavior when the hook stops reading oversize input early (the adapter drains stdin, untested live).
-- Composition with other result-replacement hooks.
+- Composition with other result-replacement hooks in a live client.
 - `--continue` and proxy-mode resume and fork with a live client. Hook-mode resume and fork are recorded in [ADR 0006](decisions/0006-session-identity-and-replay.md).
 
 ## Plugin distribution

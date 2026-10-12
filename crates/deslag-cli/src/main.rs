@@ -1,7 +1,11 @@
 //! `deslag` command-line entry point.
 
+mod hook_conflicts;
+
+use std::ffi::OsString;
 use std::io::{self, Read, Write};
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::SystemTime;
 
@@ -31,7 +35,12 @@ fn main() -> ExitCode {
         .as_slice()
     {
         ["hook", "claude", flags @ ..] if matches!(flags, [] | ["--minify-json"]) => {
-            match claude_hook(io::stdin().lock(), !flags.is_empty()) {
+            match claude_hook(
+                io::stdin().lock(),
+                !flags.is_empty(),
+                hook_owns_compression,
+                |key| std::env::var_os(key),
+            ) {
                 // A failed write leaves the tool output unchanged, which is the safe default.
                 Ok(Some(output)) => drop(writeln!(io::stdout().lock(), "{output}")),
                 Ok(None) => {}
@@ -105,12 +114,23 @@ fn proxy(args: &[&str]) -> Result<(), String> {
 }
 
 /// Validates a Claude Code PostToolUse event. With `minify_json`, returns the hook
-/// output that replaces a Bash result whose stdout is minifiable JSON. `None`
-/// leaves the tool output unchanged.
+/// output that replaces minifiable JSON in a Bash stdout or MCP text block. `None`
+/// leaves the tool output unchanged. The hook keeps no per-result state: each call
+/// reads only its own event and the session owner, so parallel tools and subagents
+/// cannot affect each other.
 ///
 /// Errors are diagnostics only. The caller reports them on stderr and still exits 0,
-/// so the hook never blocks the tool.
-fn claude_hook(mut input: impl Read, minify_json: bool) -> Result<Option<Value>, String> {
+/// so the hook never blocks the tool. Another `PostToolUse` hook that may replace
+/// the same output is such an error, because the client keeps only the last write.
+///
+/// `owns_compression` is the session ownership gate. Every routed field passes
+/// through it, and it is checked only with `minify_json`.
+fn claude_hook(
+    mut input: impl Read,
+    minify_json: bool,
+    owns_compression: impl FnOnce() -> bool,
+    env: impl Fn(&str) -> Option<OsString>,
+) -> Result<Option<Value>, String> {
     let mut buf = Vec::new();
     input
         .by_ref()
@@ -138,21 +158,62 @@ fn claude_hook(mut input: impl Read, minify_json: bool) -> Result<Option<Value>,
     if event.get("tool_response").is_none_or(Value::is_null) {
         return Err("hook input has no tool_response".to_string());
     }
-    // Only Bash stdout is eligible. Read output stays byte-exact because Edit matches on it.
-    if !minify_json || tool_name != "Bash" || !hook_owns_compression() {
+    // With any owner other than the hook, no routed field is replaced.
+    if !minify_json || !owns_compression() {
         return Ok(None);
     }
+    // Only Bash stdout and MCP text blocks are eligible. Every other tool, including
+    // Read, stays byte-exact because Edit matches on Read output.
     let response = &event["tool_response"];
-    let Some(minified) = response
-        .get("stdout")
-        .and_then(Value::as_str)
-        .and_then(|s| deslag_core::compress(s, &FIRST_SLICE_JSON_MINIFY_CONTEXT).into_changed())
-    else {
+    let updated = if tool_name == "Bash" {
+        minify_bash(response)
+    } else if tool_name.starts_with("mcp__") {
+        minify_mcp(response)
+    } else {
+        None
+    };
+    let Some(output) = updated.and_then(|updated| replacement(&event, updated)) else {
         return Ok(None);
     };
+    // An empty variable counts as unset, so the lookup falls through to the next source.
+    let env = |key: &str| env(key).filter(|value| !value.is_empty());
+    let config_dir = env("CLAUDE_CONFIG_DIR")
+        .map(PathBuf::from)
+        .or_else(|| env("HOME").map(|home| PathBuf::from(home).join(".claude")));
+    let project_dir = env("CLAUDE_PROJECT_DIR")
+        .map(PathBuf::from)
+        .or_else(|| event["cwd"].as_str().map(PathBuf::from));
+    match hook_conflicts::find(tool_name, config_dir.as_deref(), project_dir.as_deref()) {
+        Some(conflict) => Err(conflict),
+        None => Ok(Some(output)),
+    }
+}
+
+fn minify(text: &str) -> Option<String> {
+    deslag_core::compress(text, &FIRST_SLICE_JSON_MINIFY_CONTEXT).into_changed()
+}
+
+/// Bash: only `stdout`, and never for image results.
+fn minify_bash(response: &Value) -> Option<Value> {
+    if response["isImage"] == true {
+        return None;
+    }
     let mut updated = response.clone();
-    updated["stdout"] = Value::String(minified);
-    Ok(replacement(&event, updated))
+    updated["stdout"] = minify(response.get("stdout")?.as_str()?)?.into();
+    Some(updated)
+}
+
+/// MCP: only the `text` of `"type": "text"` blocks in a content-block array.
+fn minify_mcp(response: &Value) -> Option<Value> {
+    let mut updated = response.as_array()?.clone();
+    let mut changed = false;
+    for block in updated.iter_mut().filter(|block| block["type"] == "text") {
+        if let Some(minified) = block["text"].as_str().and_then(minify) {
+            block["text"] = minified.into();
+            changed = true;
+        }
+    }
+    changed.then_some(Value::Array(updated))
 }
 
 /// The hook compresses only when the configured owner is the hook. It keeps no
@@ -211,6 +272,41 @@ mod tests {
         );
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
     }
+
+    fn temp_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("deslag-main-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Runs the hook with config and project dirs at `dir`, so real settings never apply.
+    fn hook_in(dir: &std::path::Path, input: &[u8], minify: bool) -> Result<Option<Value>, String> {
+        claude_hook(
+            input,
+            minify,
+            || true,
+            |key| {
+                matches!(key, "CLAUDE_CONFIG_DIR" | "CLAUDE_PROJECT_DIR")
+                    .then(|| dir.as_os_str().to_owned())
+            },
+        )
+    }
+
+    fn hook(input: &[u8], minify: bool) -> Result<Option<Value>, String> {
+        let missing = std::env::temp_dir().join(format!("deslag-main-{}-none", std::process::id()));
+        hook_in(&missing, input, minify)
+    }
+
+    fn minified(event: &Value) -> Option<Value> {
+        let bytes = serde_json::to_vec(event).unwrap();
+        hook(&bytes, true)
+            .unwrap()
+            .map(|output| output["hookSpecificOutput"]["updatedToolOutput"].clone())
+    }
+
+    const PRETTY: &str = "{\n  \"a\": [\n    1,\n    2\n  ]\n}";
+    const COMPACT: &str = r#"{"a":[1,2]}"#;
 
     #[test]
     fn valid_bash_replacement_is_accepted() {
@@ -276,7 +372,7 @@ mod tests {
     fn valid_events_pass() {
         for name in ["posttooluse-bash.json", "posttooluse-read.json"] {
             let bytes = serde_json::to_vec(&fixture(name)).unwrap();
-            assert_eq!(claude_hook(bytes.as_slice(), false), Ok(None));
+            assert_eq!(hook(bytes.as_slice(), false), Ok(None));
         }
     }
 
@@ -284,7 +380,7 @@ mod tests {
     fn oversize_input_is_rejected() {
         let bytes = vec![b' '; MAX_HOOK_INPUT_BYTES as usize + 1];
         assert!(
-            claude_hook(bytes.as_slice(), false)
+            hook(bytes.as_slice(), false)
                 .unwrap_err()
                 .contains("exceeds")
         );
@@ -294,7 +390,7 @@ mod tests {
     fn input_at_the_cap_is_read() {
         let bytes = vec![b' '; MAX_HOOK_INPUT_BYTES as usize];
         assert!(
-            claude_hook(bytes.as_slice(), false)
+            hook(bytes.as_slice(), false)
                 .unwrap_err()
                 .contains("malformed")
         );
@@ -309,7 +405,7 @@ mod tests {
             r#"{"hook_event_name":"PostToolUse","tool_name":"Bash"}"#,
             r#"{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":null}"#,
         ] {
-            assert!(claude_hook(input.as_bytes(), false).is_err(), "{input}");
+            assert!(hook(input.as_bytes(), false).is_err(), "{input}");
         }
     }
 
@@ -319,7 +415,220 @@ mod tests {
             r#"{"hook_event_name":"PostToolUse","tool_name":"mcp__x__y","tool_response":"x"}"#,
             r#"{"hook_event_name":"PostToolUse","tool_name":"mcp__x__y","tool_response":[{"type":"text","text":"x"}]}"#,
         ] {
-            assert_eq!(claude_hook(input.as_bytes(), true), Ok(None), "{input}");
+            assert_eq!(hook(input.as_bytes(), true), Ok(None), "{input}");
         }
+    }
+
+    #[test]
+    fn bash_routes_only_stdout() {
+        let mut event = fixture("posttooluse-bash.json");
+        event["tool_response"]["stdout"] = PRETTY.into();
+        event["tool_response"]["stderr"] = PRETTY.into();
+        event["tool_response"]["extra"] = PRETTY.into();
+        let mut expected = event["tool_response"].clone();
+        expected["stdout"] = COMPACT.into();
+        assert_eq!(minified(&event), Some(expected));
+    }
+
+    #[test]
+    fn untouched_numbers_are_emitted_byte_exact() {
+        let input = format!(
+            r#"{{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{{"stdout":{},"big":123456789012345678901234567890,"neg":-98765432109876543210,"dec":0.100000000000000000000000000001}}}}"#,
+            serde_json::to_string(PRETTY).unwrap()
+        );
+        let output =
+            serde_json::to_string(&hook(input.as_bytes(), true).unwrap().unwrap()).unwrap();
+        for number in [
+            r#""big":123456789012345678901234567890"#,
+            r#""neg":-98765432109876543210"#,
+            r#""dec":0.100000000000000000000000000001"#,
+        ] {
+            assert!(output.contains(number), "{number} in {output}");
+        }
+    }
+
+    #[test]
+    fn bash_image_result_is_skipped() {
+        let mut event = fixture("posttooluse-bash.json");
+        event["tool_response"]["stdout"] = PRETTY.into();
+        event["tool_response"]["isImage"] = true.into();
+        assert_eq!(minified(&event), None);
+    }
+
+    #[test]
+    fn subagent_bash_is_routed_like_main_agent() {
+        let mut event = fixture("posttooluse-subagent-bash.json");
+        event["tool_response"]["stdout"] = PRETTY.into();
+        let mut expected = event["tool_response"].clone();
+        expected["stdout"] = COMPACT.into();
+        assert_eq!(minified(&event), Some(expected));
+    }
+
+    #[test]
+    fn mcp_text_blocks_are_minified() {
+        let event = fixture("posttooluse-mcp-text.json");
+        assert_eq!(
+            minified(&event),
+            Some(json!([{"type": "text", "text": r#"{"a":1,"b":[1,2]}"#}]))
+        );
+    }
+
+    #[test]
+    fn mcp_routes_only_text_of_text_blocks() {
+        let mut event = fixture("posttooluse-mcp-mixed.json");
+        event["tool_response"][1]["text"] = PRETTY.into();
+        event["tool_response"][1]["annotations"] = json!({"note": PRETTY});
+        event["tool_response"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"type": "resource", "text": PRETTY}));
+        let mut expected = event["tool_response"].clone();
+        expected[1]["text"] = COMPACT.into();
+        assert_eq!(minified(&event), Some(expected));
+    }
+
+    #[test]
+    fn mcp_compact_text_is_left_alone() {
+        assert_eq!(minified(&fixture("posttooluse-mcp-mixed.json")), None);
+    }
+
+    #[test]
+    fn mcp_non_array_responses_pass() {
+        let mut event = fixture("posttooluse-mcp-text.json");
+        for response in [json!(PRETTY), json!({"type": "text", "text": PRETTY})] {
+            event["tool_response"] = response;
+            assert_eq!(minified(&event), None);
+        }
+    }
+
+    #[test]
+    fn other_tools_are_never_replaced() {
+        let mut event = fixture("posttooluse-read.json");
+        event["tool_response"]["file"]["content"] = PRETTY.into();
+        assert_eq!(minified(&event), None);
+        for tool in ["Read", "Edit", "Agent", "ToolSearch", "WebFetch", "bash"] {
+            event["tool_name"] = tool.into();
+            event["tool_response"] = json!({"stdout": PRETTY});
+            assert_eq!(minified(&event), None, "{tool}");
+            event["tool_response"] = json!([{"type": "text", "text": PRETTY}]);
+            assert_eq!(minified(&event), None, "{tool}");
+        }
+    }
+
+    #[test]
+    fn no_routed_field_is_replaced_unless_the_hook_owns_compression() {
+        let mut bash = fixture("posttooluse-bash.json");
+        bash["tool_response"]["stdout"] = PRETTY.into();
+        for event in [bash, fixture("posttooluse-mcp-text.json")] {
+            let bytes = serde_json::to_vec(&event).unwrap();
+            assert_eq!(
+                claude_hook(bytes.as_slice(), true, || false, |_| None),
+                Ok(None)
+            );
+            // Without the flag the gate is never consulted.
+            let gate = || panic!("owner read without --minify-json");
+            assert_eq!(
+                claude_hook(bytes.as_slice(), false, gate, |_| None),
+                Ok(None)
+            );
+        }
+    }
+
+    #[test]
+    fn conflicting_hook_blocks_the_replacement() {
+        let dir = temp_dir("conflict");
+        let settings = json!({"hooks": {"PostToolUse": [
+            {"matcher": "Bash", "hooks": [{"type": "command", "command": "jq ."}]}
+        ]}});
+        std::fs::write(dir.join("settings.json"), settings.to_string()).unwrap();
+        let mut event = fixture("posttooluse-bash.json");
+        event["tool_response"]["stdout"] = PRETTY.into();
+        let bytes = serde_json::to_vec(&event).unwrap();
+        let message = hook_in(&dir, &bytes, true).unwrap_err();
+        assert!(message.contains("settings.json"), "{message}");
+        assert!(message.contains("unchanged"), "{message}");
+        // No replacement, no scan: an unchanged result stays silent.
+        assert_eq!(
+            hook_in(
+                &dir,
+                &serde_json::to_vec(&fixture("posttooluse-bash.json")).unwrap(),
+                true
+            ),
+            Ok(None)
+        );
+    }
+
+    /// A pretty Bash event with `cwd` set, and a settings file with a matching hook.
+    fn conflict_setup(name: &str) -> (std::path::PathBuf, Vec<u8>) {
+        let dir = temp_dir(name);
+        let settings = json!({"hooks": {"PostToolUse": [
+            {"matcher": "Bash", "hooks": [{"type": "command", "command": "jq ."}]}
+        ]}});
+        std::fs::create_dir_all(dir.join(".claude")).unwrap();
+        std::fs::write(dir.join(".claude/settings.json"), settings.to_string()).unwrap();
+        let mut event = fixture("posttooluse-bash.json");
+        event["tool_response"]["stdout"] = PRETTY.into();
+        event["cwd"] = dir.to_str().unwrap().into();
+        (dir, serde_json::to_vec(&event).unwrap())
+    }
+
+    #[test]
+    fn home_and_cwd_fallbacks_are_scanned() {
+        let (home, _) = conflict_setup("home");
+        let (cwd, bytes) = conflict_setup("cwd");
+        let missing = temp_dir("fallback-none");
+        // No CLAUDE_CONFIG_DIR: user settings come from $HOME/.claude. The project dir
+        // points away from the event cwd, so only the HOME file can match.
+        let message = claude_hook(
+            bytes.as_slice(),
+            true,
+            || true,
+            |key| match key {
+                "HOME" => Some(home.as_os_str().to_owned()),
+                "CLAUDE_PROJECT_DIR" => Some(missing.as_os_str().to_owned()),
+                _ => None,
+            },
+        )
+        .unwrap_err();
+        assert!(message.contains(home.to_str().unwrap()), "{message}");
+        // No CLAUDE_PROJECT_DIR: the project settings come from the event cwd.
+        let message = claude_hook(
+            bytes.as_slice(),
+            true,
+            || true,
+            |key| (key == "CLAUDE_CONFIG_DIR").then(|| missing.as_os_str().to_owned()),
+        )
+        .unwrap_err();
+        assert!(message.contains(cwd.to_str().unwrap()), "{message}");
+    }
+
+    #[test]
+    fn empty_env_values_count_as_unset() {
+        let (home, bytes) = conflict_setup("empty-env");
+        let missing = temp_dir("empty-env-none");
+        // Empty CLAUDE_CONFIG_DIR falls through to HOME; empty CLAUDE_PROJECT_DIR to cwd.
+        for (empty, other) in [
+            ("CLAUDE_CONFIG_DIR", "CLAUDE_PROJECT_DIR"),
+            ("CLAUDE_PROJECT_DIR", "CLAUDE_CONFIG_DIR"),
+        ] {
+            let result = claude_hook(
+                bytes.as_slice(),
+                true,
+                || true,
+                |key| match key {
+                    "HOME" => Some(home.as_os_str().to_owned()),
+                    k if k == empty => Some(OsString::new()),
+                    k if k == other => Some(missing.as_os_str().to_owned()),
+                    _ => None,
+                },
+            );
+            assert!(result.is_err(), "{empty}");
+        }
+        // Empty everywhere and no cwd: nothing to scan, so the replacement goes out.
+        let mut event: Value = serde_json::from_slice(&bytes).unwrap();
+        event.as_object_mut().unwrap().remove("cwd");
+        let bytes = serde_json::to_vec(&event).unwrap();
+        let output = claude_hook(bytes.as_slice(), true, || true, |_| Some(OsString::new()));
+        assert!(matches!(output, Ok(Some(_))), "{output:?}");
     }
 }

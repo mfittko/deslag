@@ -1,50 +1,71 @@
 use std::io::Write;
-use std::path::PathBuf;
-use std::process::{Command, Output, Stdio};
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Output, Stdio};
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use deslag_proxy::session::{Owner, write_owner};
+use serde_json::{Value, json};
+
+/// Returns a fresh directory unique to this call, so parallel test threads never
+/// remove a directory another thread is using.
+fn temp_dir(name: &str) -> PathBuf {
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    let n = NEXT.fetch_add(1, Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("deslag-it-{}-{n}-{name}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
 
 /// A fresh state directory with `owner` written, if any.
 fn state(owner: Option<Owner>) -> PathBuf {
-    static N: AtomicU32 = AtomicU32::new(0);
-    let dir = std::env::temp_dir().join(format!(
-        "deslag-hook-{}-{}",
-        std::process::id(),
-        N.fetch_add(1, Ordering::Relaxed)
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = temp_dir("state");
     if let Some(owner) = owner {
         write_owner(&dir, owner).unwrap();
     }
     dir
 }
 
-/// The binary with every state-dir variable cleared, then `env` applied.
-fn run_env(args: &[&str], stdin: &[u8], env: &[(&str, &PathBuf)]) -> Output {
+/// A shared state directory whose owner is the hook.
+fn hook_state() -> &'static Path {
+    static DIR: OnceLock<PathBuf> = OnceLock::new();
+    DIR.get_or_init(|| state(Some(Owner::Hook)))
+}
+
+/// Spawns the hook with config and project dirs at `dir`, so the developer's real
+/// Claude Code settings never apply. Every state-dir variable is cleared, so the
+/// real owner file never applies either; then `env` is applied.
+fn spawn_in(dir: &Path, args: &[&str], env: &[(&str, &Path)]) -> Child {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_deslag"));
     for var in ["DESLAG_STATE_DIR", "XDG_STATE_HOME", "HOME"] {
         cmd.env_remove(var);
     }
-    let mut child = cmd
+    cmd.args(args)
+        .env("CLAUDE_CONFIG_DIR", dir)
+        .env("CLAUDE_PROJECT_DIR", dir)
         .envs(env.iter().copied())
-        .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .expect("spawn deslag");
+        .expect("spawn deslag")
+}
+
+fn run_in(dir: &Path, args: &[&str], stdin: &[u8], env: &[(&str, &Path)]) -> Output {
+    let mut child = spawn_in(dir, args, env);
     child.stdin.take().unwrap().write_all(stdin).unwrap();
     child.wait_with_output().unwrap()
 }
 
-/// Runs with a state directory whose owner is the hook.
+/// Runs with no Claude settings and the given state-dir variables.
+fn run_env(args: &[&str], stdin: &[u8], env: &[(&str, &Path)]) -> Output {
+    run_in(&temp_dir("empty"), args, stdin, env)
+}
+
+/// Runs with no Claude settings and a state directory whose owner is the hook.
 fn run(args: &[&str], stdin: &[u8]) -> Output {
-    static DIR: OnceLock<PathBuf> = OnceLock::new();
-    let dir = DIR.get_or_init(|| state(Some(Owner::Hook)));
-    run_env(args, stdin, &[("DESLAG_STATE_DIR", dir)])
+    run_env(args, stdin, &[("DESLAG_STATE_DIR", hook_state())])
 }
 
 fn fixture(name: &str) -> Vec<u8> {
@@ -167,14 +188,20 @@ fn without_flag_pretty_json_is_untouched() {
 #[test]
 fn minify_flag_replaces_only_when_the_hook_owns_compression() {
     let input = fixture("posttooluse-bash-json.json");
+    let mcp = fixture("posttooluse-mcp-text.json");
     let args = ["hook", "claude", "--minify-json"];
+    // The gate covers every routed field: Bash stdout and MCP text blocks alike.
     for owner in [Some(Owner::Proxy), Some(Owner::None), None] {
         let dir = state(owner);
-        let output = run_env(&args, &input, &[("DESLAG_STATE_DIR", &dir)]);
-        assert_eq!(output.status.code(), Some(0), "{owner:?}");
-        assert!(output.stdout.is_empty(), "{owner:?}");
+        for event in [&input, &mcp] {
+            let output = run_env(&args, event, &[("DESLAG_STATE_DIR", &dir)]);
+            assert_eq!(output.status.code(), Some(0), "{owner:?}");
+            assert!(output.stdout.is_empty(), "{owner:?}");
+            assert!(output.stderr.is_empty(), "{owner:?}");
+        }
         std::fs::remove_dir_all(dir).unwrap();
     }
+    assert!(!run(&args, &mcp).stdout.is_empty(), "mcp with hook owner");
     let unknown = state(None);
     std::fs::write(unknown.join("owner"), "hooks\n").unwrap();
     let output = run_env(&args, &input, &[("DESLAG_STATE_DIR", &unknown)]);
@@ -197,14 +224,140 @@ fn minify_flag_replaces_only_when_the_hook_owns_compression() {
     assert!(!run_env(&args, &input, &[("HOME", &home)]).stdout.is_empty());
 
     // Relative values are skipped, so the cwd never selects the owner file.
-    let relative = PathBuf::from("relative-state");
+    let relative = Path::new("relative-state");
     let env = [
-        ("DESLAG_STATE_DIR", &relative),
-        ("XDG_STATE_HOME", &relative),
+        ("DESLAG_STATE_DIR", relative),
+        ("XDG_STATE_HOME", relative),
         ("HOME", &home),
     ];
     assert!(!run_env(&args, &input, &env).stdout.is_empty());
     for dir in [unknown, xdg, home] {
         std::fs::remove_dir_all(dir).unwrap();
     }
+}
+
+fn replaced(updated: Value) -> Value {
+    json!({
+        "hookSpecificOutput": {
+            "hookEventName": "PostToolUse",
+            "updatedToolOutput": updated,
+        }
+    })
+}
+
+/// stdout holds either nothing or exactly one line with one JSON object.
+fn single_output(output: &Output) -> Option<Value> {
+    assert_eq!(output.status.code(), Some(0));
+    if output.stdout.is_empty() {
+        return None;
+    }
+    let text = std::str::from_utf8(&output.stdout).unwrap();
+    assert_eq!(text.matches('\n').count(), 1, "{text}");
+    assert!(text.ends_with('\n'), "{text}");
+    let value = json(&output.stdout);
+    assert!(value.is_object(), "{text}");
+    Some(value)
+}
+
+#[test]
+fn mcp_text_result_is_replaced() {
+    let input = fixture("posttooluse-mcp-text.json");
+    let output = run(&["hook", "claude", "--minify-json"], &input);
+    assert!(output.stderr.is_empty());
+    assert_eq!(
+        single_output(&output),
+        Some(replaced(
+            json!([{"type": "text", "text": r#"{"a":1,"b":[1,2]}"#}])
+        ))
+    );
+}
+
+#[test]
+fn subagent_result_is_replaced_like_main_agent() {
+    let mut event = json(&fixture("posttooluse-subagent-bash.json"));
+    event["tool_response"]["stdout"] = "{\n  \"sub\": true\n}".into();
+    let mut expected = event["tool_response"].clone();
+    expected["stdout"] = r#"{"sub":true}"#.into();
+    let output = run(
+        &["hook", "claude", "--minify-json"],
+        &serde_json::to_vec(&event).unwrap(),
+    );
+    assert!(output.stderr.is_empty());
+    assert_eq!(single_output(&output), Some(replaced(expected)));
+}
+
+#[test]
+fn parallel_invocations_do_not_contaminate_each_other() {
+    let dir = temp_dir("empty");
+    let bash = json(&fixture("posttooluse-bash.json"));
+    let subagent = json(&fixture("posttooluse-subagent-bash.json"));
+    let mcp = json(&fixture("posttooluse-mcp-text.json"));
+    let read = json(&fixture("posttooluse-read.json"));
+    let cases: Vec<(Vec<u8>, Option<Value>)> = (0..24)
+        .map(|i| {
+            let pretty = format!("{{\n  \"i\": {i}\n}}");
+            let compact = format!(r#"{{"i":{i}}}"#);
+            let mut event = match i % 4 {
+                0 => bash.clone(),
+                1 => subagent.clone(),
+                2 => mcp.clone(),
+                _ => read.clone(),
+            };
+            event["tool_use_id"] = format!("toolu_{i}").into();
+            let expected = match i % 4 {
+                0 | 1 => {
+                    event["tool_response"]["stdout"] = pretty.into();
+                    let mut updated = event["tool_response"].clone();
+                    updated["stdout"] = compact.into();
+                    Some(replaced(updated))
+                }
+                2 => {
+                    event["tool_response"][0]["text"] = pretty.into();
+                    Some(replaced(json!([{"type": "text", "text": compact}])))
+                }
+                _ => {
+                    event["tool_response"]["file"]["content"] = pretty.into();
+                    None
+                }
+            };
+            (serde_json::to_vec(&event).unwrap(), expected)
+        })
+        .collect();
+    let mut children: Vec<Child> = cases
+        .iter()
+        .map(|_| {
+            spawn_in(
+                &dir,
+                &["hook", "claude", "--minify-json"],
+                &[("DESLAG_STATE_DIR", hook_state())],
+            )
+        })
+        .collect();
+    for (child, (input, _)) in children.iter_mut().zip(&cases) {
+        child.stdin.take().unwrap().write_all(input).unwrap();
+    }
+    for (i, (child, (_, expected))) in children.into_iter().zip(&cases).enumerate() {
+        let output = child.wait_with_output().unwrap();
+        assert!(output.stderr.is_empty(), "case {i}");
+        assert_eq!(&single_output(&output), expected, "case {i}");
+    }
+}
+
+#[test]
+fn conflicting_hook_is_reported_and_output_left_unchanged() {
+    let dir = temp_dir("conflict");
+    let settings = json!({"hooks": {"PostToolUse": [
+        {"matcher": "Edit|Bash", "hooks": [{"type": "command", "command": "jq ."}]}
+    ]}});
+    std::fs::write(dir.join("settings.json"), settings.to_string()).unwrap();
+    let output = run_in(
+        &dir,
+        &["hook", "claude", "--minify-json"],
+        &fixture("posttooluse-bash-json.json"),
+        &[("DESLAG_STATE_DIR", hook_state())],
+    );
+    assert_eq!(single_output(&output), None);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(stderr.lines().count(), 1, "{stderr}");
+    assert!(stderr.contains("settings.json"), "{stderr}");
 }
