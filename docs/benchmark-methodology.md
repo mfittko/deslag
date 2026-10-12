@@ -45,7 +45,7 @@ Every run sends this user prompt, with `{payload}` replaced by the arm's payload
 Question: {question}
 ```
 
-The prompt does not explain table-v1, Markdown-KV, lines-v1 or lines-v2. A deployed hook does not explain them either.
+The prompt does not explain table-v1, table-v2, Markdown-KV, lines-v1 or lines-v2. A deployed hook does not explain them either.
 
 One evaluation run uses one model. The result lines record the model id and the client version. `claude -p` has no temperature setting. Tools are disabled (`--tools ""`). Each run is a single turn.
 
