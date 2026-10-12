@@ -108,6 +108,9 @@ fn load_manifest(path: &Path) -> Result<Vec<Task>, String> {
     let doc: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     let dir = path.parent().unwrap_or(Path::new("."));
     let tasks = doc["tasks"].as_array().ok_or("manifest: no tasks array")?;
+    if tasks.is_empty() {
+        return Err("manifest: empty tasks array".to_string());
+    }
     let mut ids = std::collections::HashSet::new();
     tasks
         .iter()

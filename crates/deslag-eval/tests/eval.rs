@@ -374,6 +374,11 @@ fn manifest_rejects_bad_tolerance_and_uncontrolled_drop_evidence() {
         assert_eq!(o.status.code(), Some(2), "{name}");
         assert!(String::from_utf8_lossy(&o.stderr).contains(msg), "{name}");
     }
+    let empty = dir.join("empty.json");
+    std::fs::write(&empty, r#"{"tasks": []}"#).unwrap();
+    let o = eval(&["variants", empty.to_str().unwrap()]);
+    assert_eq!(o.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&o.stderr).contains("empty tasks array"));
     let ok = dir.join("ok.json");
     std::fs::write(&ok, task(r#""arms": ["json-minify"], "tolerance": 0.5"#)).unwrap();
     assert!(eval(&["variants", ok.to_str().unwrap()]).status.success());
