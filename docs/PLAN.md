@@ -258,7 +258,7 @@ validation_outcome
 
 Count absence as unknown, not zero. Keep identifiers and timestamps that belong to the integration outside the pure transformation result. In observe mode, candidate savings are hypothetical; emitted content remains original.
 
-DF-010 finalized this contract in `deslag-core` (`compress`, `CompressionContext`, `CompressionReport`). `CompressionReport::to_json` writes the fields above as snake_case keys; `compression_duration` is whole nanoseconds and every absent value is `null`. The core owns the §11 limits `min_candidate_bytes`, `max_candidate_bytes` and `max_json_depth` (`Limits::default()` uses the §11 values) and the `json_minify` and `exact_line_runs` switches. `Limits::max_table_rows` (default 20000) and the opt-in `json_table` switch now exist with table-v1 (DF-012). DF-014 provides the local `EstimateCounter` (method `estimate`, tokenizer `deslag-estimate-v1`); table-v1 applies its token gain threshold (`TableOptions::min_token_savings`) when a counter is set; context-level token gain thresholds for the other transforms remain open. `BoundedExecutor` (DF-015) enforces the processing budget and the parallel job limit with fail-open rejection; adapters wire it later. The supported output category and the transform/format version selection in the context remain open after table-v1.
+DF-010 finalized this contract in `deslag-core` (`compress`, `CompressionContext`, `CompressionReport`). `CompressionReport::to_json` writes the fields above as snake_case keys; `compression_duration` is whole nanoseconds and every absent value is `null`. The core owns the §11 limits `min_candidate_bytes`, `max_candidate_bytes` and `max_json_depth` (`Limits::default()` uses the §11 values) and the `json_minify`, `exact_line_runs` and `line_templates` switches. `Limits::max_table_rows` (default 20000) and the opt-in `json_table` switch now exist with table-v1 (DF-012). DF-014 provides the local `EstimateCounter` (method `estimate`, tokenizer `deslag-estimate-v1`); table-v1 applies its token gain threshold (`TableOptions::min_token_savings`) when a counter is set; context-level token gain thresholds for the other transforms remain open. `BoundedExecutor` (DF-015) enforces the processing budget and the parallel job limit with fail-open rejection; adapters wire it later. The supported output category and the transform/format version selection in the context remain open after table-v1.
 
 ### 6.2 Pipeline
 
@@ -343,11 +343,13 @@ Compress runs of byte-identical consecutive lines in supported plain-text tool o
 
 Use an unambiguous versioned representation with escaping. Define it before enabling it. A structured run encoding is acceptable, but apply it only when wrapper overhead is outweighed by actual gain.
 
-Do not merge similar lines with different timestamps, IDs, paths, counts, or error messages. Do not reorder nonconsecutive repetitions. Do not suppress error lines or successful test output using relevance heuristics.
+In the exact-repetition codec (`lines-v1`), do not merge similar lines with different timestamps, IDs, paths, counts, or error messages. Do not reorder nonconsecutive repetitions. Do not suppress error lines or successful test output using relevance heuristics.
 
 A decoder must reconstruct the original text bytes exactly. Mixed LF/CRLF, empty lines, partial final lines, and strings resembling encoding markers need tests.
 
 DF-013 implements this as `lines-v1`, specified in [compression-formats.md](compression-formats.md).
+
+The line-template codec implements templates for consecutive lines that differ only in variable tokens as `lines-v2`, specified in [compression-formats.md](compression-formats.md). It is a separate opt-in transform and the only exception to the merge rule above. It merges lines that differ only in variable-class tokens. A variable-class token contains an ASCII digit, `/` or `\`, which covers most timestamps, IDs, counts and paths. A constant token that differs, such as a word in an error message, still ends a template, so those lines are never merged.
 
 ### 7.4 Transform composition and exactness
 
@@ -540,6 +542,7 @@ max_parallel_jobs = 4
 json_minify = true
 json_table = false
 exact_line_runs = false
+line_templates = false
 
 [proxy]
 listen = "127.0.0.1:8789"
@@ -556,7 +559,7 @@ export_timeout_ms = 2000
 shutdown_timeout_ms = 2000
 ```
 
-`json_table` and `exact_line_runs` are enabled explicitly only for approved profiles after evaluation. Their default can change in a later release with evidence and release notes.
+`json_table`, `exact_line_runs` and `line_templates` are enabled explicitly only for approved profiles after evaluation. Their default can change in a later release with evidence and release notes.
 
 The processing budget is cooperative, not a promise that cancelling an async waiter terminates blocking CPU work. Enforce byte/depth/work limits and bounded concurrency as well. Never spawn unlimited background work when a time budget expires.
 
