@@ -6,3 +6,4 @@
 ### Added
 
 - The proxy pins one decision per tool result in a local session manifest, replays it on every later request and returns `400` when the replay state cannot reproduce the history (#18)
+- With replay, a busy, expired or panicked proxy compression job no longer forwards the whole body unrewritten: the new tool result is recorded as `unchanged`, and a result pinned as json-minify is re-encoded outside the bounded executor, so history bytes never change (#18)

@@ -2,6 +2,7 @@
 
 mod hook_conflicts;
 
+use std::cell::RefCell;
 use std::ffi::OsString;
 use std::io::{self, Read, Write};
 use std::net::SocketAddr;
@@ -9,7 +10,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::SystemTime;
 
-use deslag_core::FIRST_SLICE_JSON_MINIFY_CONTEXT;
+use deslag_core::{BoundedExecutor, CompressionReport, FIRST_SLICE_JSON_MINIFY_CONTEXT, Rejected};
 use deslag_proxy::session::{self, Mode, Owner, Store};
 use deslag_proxy::{Upstream, serve};
 use deslag_telemetry as report;
@@ -36,11 +37,16 @@ fn main() -> ExitCode {
         .as_slice()
     {
         ["hook", "claude", flags @ ..] if matches!(flags, [] | ["--minify-json"]) => {
+            let exec = BoundedExecutor::default();
+            let env = |key: &str| std::env::var_os(key);
+            let (input, minify_json) = (io::stdin().lock(), !flags.is_empty());
             match claude_hook(
-                io::stdin().lock(),
-                !flags.is_empty(),
+                input,
+                minify_json,
                 hook_owns_compression,
-                |key| std::env::var_os(key),
+                env,
+                &exec,
+                minify,
             ) {
                 // A failed write leaves the tool output unchanged, which is the safe default.
                 Ok(Some(output)) => drop(writeln!(io::stdout().lock(), "{output}")),
@@ -121,7 +127,9 @@ fn proxy(args: &[&str]) -> Result<(), String> {
 /// cannot affect each other.
 ///
 /// Errors are diagnostics only. The caller reports them on stderr and still exits 0,
-/// so the hook never blocks the tool. Another `PostToolUse` hook that may replace
+/// so the hook never blocks the tool. A rejected or panicked compression job is
+/// such an error (`compression <reason>; tool output unchanged`), and it leaves
+/// every routed field unchanged. Another `PostToolUse` hook that may replace
 /// the same output is such an error, because the client keeps only the last write.
 ///
 /// `owns_compression` is the session ownership gate. Every routed field passes
@@ -131,6 +139,8 @@ fn claude_hook(
     minify_json: bool,
     owns_compression: impl FnOnce() -> bool,
     env: impl Fn(&str) -> Option<OsString>,
+    exec: &BoundedExecutor,
+    job: Job,
 ) -> Result<Option<Value>, String> {
     let mut buf = Vec::new();
     input
@@ -167,11 +177,32 @@ fn claude_hook(
     // Read, stays byte-exact because Edit matches on Read output.
     let response = &event["tool_response"];
     let tool = report::ToolCategory::from_tool_name(tool_name);
-    let updated = match tool {
-        report::ToolCategory::Bash => minify_bash(response, tool),
-        report::ToolCategory::Mcp => minify_mcp(response, tool),
-        report::ToolCategory::Other => None,
+    let socket = report::live_socket();
+    // Reports wait until every job returns, so an output with a rejected job
+    // reports nothing, and a job that outlives its budget never reports.
+    let reports = RefCell::new(Vec::new());
+    // Each text runs as its own bounded job. Any rejection leaves the whole output unchanged.
+    let run = |text: &str| {
+        let owned = text.to_owned();
+        let (changed, mut compressed) = exec.run(move || job(&owned))?;
+        if socket.is_some() {
+            report::add_estimates(&mut compressed, text, changed.as_deref().unwrap_or(text));
+            reports.borrow_mut().push(compressed);
+        }
+        Ok(changed)
     };
+    let updated = match tool {
+        report::ToolCategory::Bash => minify_bash(response, &run),
+        report::ToolCategory::Mcp => minify_mcp(response, &run),
+        report::ToolCategory::Other => Ok(None),
+    }
+    .map_err(|rejected| format!("compression {}; tool output unchanged", rejected.as_str()))?;
+    if let Some(socket) = &socket {
+        // ponytail: a hook process exits after one result, so a failed send is lost uncounted.
+        for compressed in reports.into_inner() {
+            report::send_report(socket, &compressed, report::Adapter::Hook, tool);
+        }
+    }
     let Some(output) = updated.and_then(|updated| replacement(&event, updated)) else {
         return Ok(None);
     };
@@ -189,40 +220,54 @@ fn claude_hook(
     }
 }
 
-/// Compresses `text` and reports the result to a running local service, if any.
-fn minify(text: &str, tool: report::ToolCategory) -> Option<String> {
-    // ponytail: a hook process exits after one result, so a failed send is lost uncounted.
-    report::compress_reported(
-        text,
-        &FIRST_SLICE_JSON_MINIFY_CONTEXT,
-        report::live_socket().as_deref(),
-        report::Adapter::Hook,
-        tool,
-    )
-    .into_changed()
+/// One finished job: the changed text, if any, and the compression report.
+type Compressed = (Option<String>, CompressionReport);
+
+/// Per-text compression job. Tests inject a slow one.
+type Job = fn(&str) -> Compressed;
+
+/// Runs one job for one text under the executor.
+type Run<'a> = dyn Fn(&str) -> Result<Option<String>, Rejected> + 'a;
+
+fn minify(text: &str) -> Compressed {
+    let result = deslag_core::compress(text, &FIRST_SLICE_JSON_MINIFY_CONTEXT);
+    let report = result.report.clone();
+    (result.into_changed(), report)
 }
 
 /// Bash: only `stdout`, and never for image results.
-fn minify_bash(response: &Value, tool: report::ToolCategory) -> Option<Value> {
+fn minify_bash(response: &Value, run: &Run) -> Result<Option<Value>, Rejected> {
     if response["isImage"] == true {
-        return None;
+        return Ok(None);
     }
+    let Some(stdout) = response.get("stdout").and_then(Value::as_str) else {
+        return Ok(None);
+    };
+    let Some(minified) = run(stdout)? else {
+        return Ok(None);
+    };
     let mut updated = response.clone();
-    updated["stdout"] = minify(response.get("stdout")?.as_str()?, tool)?.into();
-    Some(updated)
+    updated["stdout"] = minified.into();
+    Ok(Some(updated))
 }
 
 /// MCP: only the `text` of `"type": "text"` blocks in a content-block array.
-fn minify_mcp(response: &Value, tool: report::ToolCategory) -> Option<Value> {
-    let mut updated = response.as_array()?.clone();
+fn minify_mcp(response: &Value, run: &Run) -> Result<Option<Value>, Rejected> {
+    let Some(blocks) = response.as_array() else {
+        return Ok(None);
+    };
+    let mut updated = blocks.clone();
     let mut changed = false;
     for block in updated.iter_mut().filter(|block| block["type"] == "text") {
-        if let Some(minified) = block["text"].as_str().and_then(|text| minify(text, tool)) {
+        let Some(text) = block["text"].as_str() else {
+            continue;
+        };
+        if let Some(minified) = run(text)? {
             block["text"] = minified.into();
             changed = true;
         }
     }
-    changed.then_some(Value::Array(updated))
+    Ok(changed.then_some(Value::Array(updated)))
 }
 
 /// The hook compresses only when the configured owner is the hook. It keeps no
@@ -289,17 +334,27 @@ mod tests {
         dir
     }
 
+    /// A budget no debug build on a slow runner can miss, so tests that expect a
+    /// replacement never see a fail-open rejection.
+    fn generous() -> BoundedExecutor {
+        BoundedExecutor::new(4, std::time::Duration::from_secs(60)).unwrap()
+    }
+
+    /// [`claude_hook`] with the production job under [`generous`].
+    fn claude(
+        input: &[u8],
+        minify_json: bool,
+        env: impl Fn(&str) -> Option<OsString>,
+    ) -> Result<Option<Value>, String> {
+        claude_hook(input, minify_json, || true, env, &generous(), minify)
+    }
+
     /// Runs the hook with config and project dirs at `dir`, so real settings never apply.
     fn hook_in(dir: &std::path::Path, input: &[u8], minify: bool) -> Result<Option<Value>, String> {
-        claude_hook(
-            input,
-            minify,
-            || true,
-            |key| {
-                matches!(key, "CLAUDE_CONFIG_DIR" | "CLAUDE_PROJECT_DIR")
-                    .then(|| dir.as_os_str().to_owned())
-            },
-        )
+        claude(input, minify, |key| {
+            matches!(key, "CLAUDE_CONFIG_DIR" | "CLAUDE_PROJECT_DIR")
+                .then(|| dir.as_os_str().to_owned())
+        })
     }
 
     fn hook(input: &[u8], minify: bool) -> Result<Option<Value>, String> {
@@ -533,11 +588,17 @@ mod tests {
             // The owner gate runs before any settings lookup or conflict scan.
             let env =
                 |key: &str| -> Option<OsString> { panic!("env read before the owner gate: {key}") };
-            assert_eq!(claude_hook(bytes.as_slice(), true, || false, env), Ok(None));
+            // It also runs before any executor job: a job that ran would panic,
+            // and the hook would report `job_panicked` instead of `Ok(None)`.
+            fn never(_: &str) -> Compressed {
+                panic!("executor job ran before the owner gate")
+            }
+            let gated = claude_hook(bytes.as_slice(), true, || false, env, &generous(), never);
+            assert_eq!(gated, Ok(None));
             // Without the flag the gate is never consulted.
             let gate = || panic!("owner read without --minify-json");
             assert_eq!(
-                claude_hook(bytes.as_slice(), false, gate, |_| None),
+                claude_hook(bytes.as_slice(), false, gate, |_| None, &generous(), never),
                 Ok(None)
             );
         }
@@ -588,25 +649,17 @@ mod tests {
         let missing = temp_dir("fallback-none");
         // No CLAUDE_CONFIG_DIR: user settings come from $HOME/.claude. The project dir
         // points away from the event cwd, so only the HOME file can match.
-        let message = claude_hook(
-            bytes.as_slice(),
-            true,
-            || true,
-            |key| match key {
-                "HOME" => Some(home.as_os_str().to_owned()),
-                "CLAUDE_PROJECT_DIR" => Some(missing.as_os_str().to_owned()),
-                _ => None,
-            },
-        )
+        let message = claude(bytes.as_slice(), true, |key| match key {
+            "HOME" => Some(home.as_os_str().to_owned()),
+            "CLAUDE_PROJECT_DIR" => Some(missing.as_os_str().to_owned()),
+            _ => None,
+        })
         .unwrap_err();
         assert!(message.contains(home.to_str().unwrap()), "{message}");
         // No CLAUDE_PROJECT_DIR: the project settings come from the event cwd.
-        let message = claude_hook(
-            bytes.as_slice(),
-            true,
-            || true,
-            |key| (key == "CLAUDE_CONFIG_DIR").then(|| missing.as_os_str().to_owned()),
-        )
+        let message = claude(bytes.as_slice(), true, |key| {
+            (key == "CLAUDE_CONFIG_DIR").then(|| missing.as_os_str().to_owned())
+        })
         .unwrap_err();
         assert!(message.contains(cwd.to_str().unwrap()), "{message}");
     }
@@ -620,24 +673,123 @@ mod tests {
             ("CLAUDE_CONFIG_DIR", "CLAUDE_PROJECT_DIR"),
             ("CLAUDE_PROJECT_DIR", "CLAUDE_CONFIG_DIR"),
         ] {
-            let result = claude_hook(
-                bytes.as_slice(),
-                true,
-                || true,
-                |key| match key {
-                    "HOME" => Some(home.as_os_str().to_owned()),
-                    k if k == empty => Some(OsString::new()),
-                    k if k == other => Some(missing.as_os_str().to_owned()),
-                    _ => None,
-                },
-            );
+            let result = claude(bytes.as_slice(), true, |key| match key {
+                "HOME" => Some(home.as_os_str().to_owned()),
+                k if k == empty => Some(OsString::new()),
+                k if k == other => Some(missing.as_os_str().to_owned()),
+                _ => None,
+            });
             assert!(result.is_err(), "{empty}");
         }
         // Empty everywhere and no cwd: nothing to scan, so the replacement goes out.
         let mut event: Value = serde_json::from_slice(&bytes).unwrap();
         event.as_object_mut().unwrap().remove("cwd");
         let bytes = serde_json::to_vec(&event).unwrap();
-        let output = claude_hook(bytes.as_slice(), true, || true, |_| Some(OsString::new()));
+        let output = claude(bytes.as_slice(), true, |_| Some(OsString::new()));
+        assert!(matches!(output, Ok(Some(_))), "{output:?}");
+    }
+
+    /// Minifies, but far slower than any budget the tests below use for it.
+    fn slow_on_b(text: &str) -> Compressed {
+        if text.contains("\"b\"") {
+            std::thread::sleep(std::time::Duration::from_secs(10));
+        }
+        minify(text)
+    }
+
+    fn pretty_bash() -> Vec<u8> {
+        let mut event = fixture("posttooluse-bash.json");
+        event["tool_response"]["stdout"] = "{\n  \"b\": 1\n}".into();
+        serde_json::to_vec(&event).unwrap()
+    }
+
+    #[test]
+    fn expired_job_leaves_output_unchanged() {
+        let exec = BoundedExecutor::new(1, std::time::Duration::from_millis(1)).unwrap();
+        let result = claude_hook(
+            pretty_bash().as_slice(),
+            true,
+            || true,
+            |_| None,
+            &exec,
+            slow_on_b,
+        );
+        assert_eq!(
+            result,
+            Err("compression budget_exceeded; tool output unchanged".to_string())
+        );
+    }
+
+    #[test]
+    fn one_expired_mcp_block_leaves_every_block_unchanged() {
+        let mut event = fixture("posttooluse-mcp-text.json");
+        event["tool_response"] = json!([
+            {"type": "text", "text": PRETTY},
+            {"type": "text", "text": "{\n  \"b\": 1\n}"},
+        ]);
+        let bytes = serde_json::to_vec(&event).unwrap();
+        let exec = BoundedExecutor::new(1, std::time::Duration::from_millis(200)).unwrap();
+        let result = claude_hook(bytes.as_slice(), true, || true, |_| None, &exec, slow_on_b);
+        assert_eq!(
+            result,
+            Err("compression budget_exceeded; tool output unchanged".to_string())
+        );
+    }
+
+    #[test]
+    fn panicked_job_leaves_output_unchanged() {
+        fn panic_on_b(text: &str) -> Compressed {
+            assert!(!text.contains("\"b\""), "injected panic");
+            minify(text)
+        }
+        let result = claude_hook(
+            pretty_bash().as_slice(),
+            true,
+            || true,
+            |_| None,
+            &generous(),
+            panic_on_b,
+        );
+        assert_eq!(
+            result,
+            Err("compression job_panicked; tool output unchanged".to_string())
+        );
+    }
+
+    #[test]
+    fn busy_executor_leaves_output_unchanged() {
+        let exec = BoundedExecutor::new(1, std::time::Duration::from_secs(60)).unwrap();
+        let (release, wait) = std::sync::mpsc::channel::<()>();
+        let holder = {
+            let exec = exec.clone();
+            std::thread::spawn(move || exec.run(move || wait.recv()))
+        };
+        while exec.in_flight() == 0 {
+            std::thread::yield_now();
+        }
+        let result = claude_hook(
+            pretty_bash().as_slice(),
+            true,
+            || true,
+            |_| None,
+            &exec,
+            minify,
+        );
+        assert_eq!(
+            result,
+            Err("compression busy; tool output unchanged".to_string())
+        );
+        drop(release);
+        assert!(holder.join().unwrap().is_ok());
+        // With the permit free again, the same executor minifies.
+        let output = claude_hook(
+            pretty_bash().as_slice(),
+            true,
+            || true,
+            |_| Some("/nonexistent-deslag".into()),
+            &exec,
+            minify,
+        );
         assert!(matches!(output, Ok(Some(_))), "{output:?}");
     }
 }

@@ -30,3 +30,29 @@ fn json_table_output_does_not_depend_on_the_service() {
     assert_eq!(run(Some(&path)), plain);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn thresholds_without_a_counter_do_not_depend_on_the_service() {
+    let dir = PathBuf::from(format!("/tmp/dsl-gate-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("s.sock");
+    let receiver = UnixDatagram::bind(&path).unwrap();
+    let mut ctx = FIRST_SLICE_JSON_MINIFY_CONTEXT;
+    // No counter, so core skips the token gate. An injected counter would fail it.
+    ctx.limits.min_estimated_token_savings = u64::MAX;
+    let input = "{\n  \"a\": 1\n}";
+    let run = |socket| {
+        compress_reported(input, &ctx, socket, Adapter::Hook, ToolCategory::Bash)
+            .output
+            .into_owned()
+    };
+    assert_eq!(run(None), r#"{"a":1}"#);
+    assert_eq!(run(Some(&path)), r#"{"a":1}"#);
+    let mut buf = [0; 1024];
+    let n = receiver.recv(&mut buf).unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&buf[..n]).unwrap();
+    assert_eq!(v["outcome"], "changed");
+    assert!(v["tokens"]["candidate"].is_u64());
+    let _ = std::fs::remove_dir_all(&dir);
+}

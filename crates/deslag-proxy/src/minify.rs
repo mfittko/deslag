@@ -20,6 +20,13 @@
 //! that session that resends them fails with `400`; start a new session.
 //! Trailers are not forwarded upstream. `/v1/messages/count_tokens` is not
 //! rewritten, so its counts can overstate.
+//!
+//! Only a new tool result is decided under `Limits::executor`: each of its
+//! texts, a text item of a content array or the string content, runs as one
+//! job. When the executor rejects any job of that result (busy, budget exceeded
+//! or panicked), the result is recorded as `unchanged`. A result pinned as
+//! json-minify is re-encoded outside the executor, so a rejection never
+//! changes the bytes of already-sent history.
 
 use std::{
     collections::HashSet,
@@ -30,7 +37,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use deslag_core::{FIRST_SLICE_JSON_MINIFY_CONTEXT, compress};
+use deslag_core::{BoundedExecutor, CompressionReport, FIRST_SLICE_JSON_MINIFY_CONTEXT, compress};
 use deslag_telemetry as local;
 use http_body_util::BodyExt;
 use hyper::{
@@ -41,7 +48,10 @@ use hyper::{
 };
 use serde::de::{Deserialize, Deserializer, Error, MapAccess, Visitor};
 use serde_json::{Value, value::RawValue};
-use tokio::{sync::Semaphore, time::Duration};
+use tokio::{
+    sync::{Semaphore, SemaphorePermit},
+    time::Duration,
+};
 
 use crate::session::{Candidate, ReplayError, Store};
 
@@ -58,7 +68,9 @@ const MAX_INSPECT_BYTES: usize = 32 * 1024 * 1024;
 /// `Limits::body_read_timeout` gets `408` and releases the permit.
 /// The deadline covers only the buffered part, up to `MAX_INSPECT_BYTES`, and
 /// never the replay. The permit is held until the replay ends. For a larger
-/// body the permit is released and the rest streams without a deadline.
+/// body the permit is released and the rest streams without a deadline. The
+/// body parse, replay and rebuild have no time limit. The jobs of new results
+/// run in sequence, and the budget of `Limits::executor` bounds each job only.
 /// Make the permit count configurable via `Limits` if that ceiling is wrong.
 static INSPECT_PERMITS: Semaphore = Semaphore::const_new(4);
 
@@ -141,12 +153,15 @@ const SCOPE_HEADER: &str = "x-claude-code-session-id";
 /// Anything else streams through untouched. A failed buffered read is `400`.
 /// A buffered read that exceeds `read_timeout` after its permit is granted is
 /// `408`: the request is rejected, never forwarded unrewritten. The timeout
-/// covers only the body read, never the replay. Replay errors are `400`, a
-/// failed state commit is `500`; neither is forwarded.
+/// covers only the body read, never the replay. The replay holds the permit
+/// until it ends, also when the client disconnects mid-replay. Replay errors
+/// are `400`; a failed state commit or a panicked replay is `500`. Neither is
+/// forwarded.
 pub(crate) async fn prepare(
     req: Request<Incoming>,
     store: Option<&Store>,
     read_timeout: Duration,
+    exec: BoundedExecutor,
 ) -> Result<Request<ReqBody>, Reject> {
     // Only a scoped request is replayed, so a request without a session id
     // streams through and never takes an inspection permit.
@@ -172,7 +187,7 @@ pub(crate) async fn prepare(
         .expect("semaphore is never closed");
     // The deadline starts at the permit, so time spent queued does not count.
     // It covers only the body read, so a state stall is never reported as `408`.
-    let (mut parts, mut buf, trailers) =
+    let (mut parts, buf, trailers) =
         match tokio::time::timeout(read_timeout, buffer(parts, body)).await {
             Err(_) => {
                 return Err((
@@ -185,33 +200,48 @@ pub(crate) async fn prepare(
             Ok(Ok(Buffered::Overflow(req))) => return Ok(req),
             Ok(Ok(Buffered::Complete(parts, buf, trailers))) => (parts, buf, trailers),
         };
+    let mut buf = Bytes::from(buf);
     if let (Some(scope), None) = (scope_of(&parts.headers), &trailers) {
-        let scope = scope.to_owned();
-        // Manifest IO blocks, so the replay runs off the async workers. The
-        // blocking task owns the permit, so the buffer stays counted against
-        // `INSPECT_PERMITS` until the replay ends, even if this future is dropped.
-        let store = store.clone();
-        let (back, result) = tokio::task::spawn_blocking(move || {
-            let _permit = permit;
-            let result = rewrite(&buf, &store, &scope, local::live_socket().as_deref());
-            (buf, result)
-        })
-        .await
-        .map_err(|_| STATE_FAILED)?;
-        buf = back;
-        if let Some(rewritten) = result.map_err(reject)? {
-            buf = rewritten;
+        let input = buf.clone();
+        let (store, scope) = (store.clone(), scope.to_owned());
+        if let Some(rewritten) = rewrite_blocking(permit, input, store, scope, exec, minify).await?
+        {
+            buf = rewritten.into();
             parts
                 .headers
                 .insert(header::CONTENT_LENGTH, buf.len().into());
         }
     }
     let body = ReqBody {
-        prefix: Some(buf.into()),
+        prefix: Some(buf),
         rest: None,
         trailers,
     };
     Ok(Request::from_parts(parts, body))
+}
+
+/// Runs [`rewrite`] on the blocking pool, outside the read deadline, because
+/// manifest IO blocks. The permit moves into the blocking task, so the buffer
+/// stays counted against `INSPECT_PERMITS` until the replay ends, even when
+/// the caller is dropped (client disconnect). A replay error is `400`; a failed
+/// state commit or a panic is `500`. The telemetry socket lookup (one `stat`)
+/// and the report sends run here too.
+async fn rewrite_blocking(
+    permit: SemaphorePermit<'static>,
+    input: Bytes,
+    store: Store,
+    scope: String,
+    exec: BoundedExecutor,
+    job: Job,
+) -> Result<Option<Vec<u8>>, Reject> {
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        let socket = local::live_socket();
+        rewrite(&input, &store, &scope, &exec, job, socket.as_deref())
+    })
+    .await
+    .map_err(|_| STATE_FAILED)?
+    .map_err(reject)
 }
 
 /// The non-empty session id, or `None`.
@@ -293,7 +323,19 @@ fn reject(e: ReplayError) -> Reject {
     (StatusCode::BAD_REQUEST, "invalid_request_error", message)
 }
 
-/// Replays the session's decisions on the tool results and splices json-minify
+/// One finished job: the changed text, if any, and the compression report.
+type Compressed = (Option<String>, CompressionReport);
+
+/// Per-text compression job. Tests inject a slow or panicking one.
+type Job = fn(&str) -> Compressed;
+
+fn minify(text: &str) -> Compressed {
+    let result = compress(text, &FIRST_SLICE_JSON_MINIFY_CONTEXT);
+    let report = result.report.clone();
+    (result.into_changed(), report)
+}
+
+/// Replays the session's decisions on the tool results and splices `job`
 /// output where they encode. `Ok(None)` forwards the body unchanged. With
 /// `socket`, every spliced block is reported there. History resends repeat
 /// blocks, so the proxy counts submissions, not unique results.
@@ -301,6 +343,8 @@ fn rewrite(
     body: &[u8],
     store: &Store,
     scope: &str,
+    exec: &BoundedExecutor,
+    job: Job,
     socket: Option<&Path>,
 ) -> Result<Option<Vec<u8>>, ReplayError> {
     let Some((model, bash_ids, results)) = tool_results(body) else {
@@ -315,20 +359,32 @@ fn rewrite(
             texts: targets.iter().filter_map(|t| parse(t)).collect(),
         })
         .collect();
-    // Only a Bash result whose text json-minify changes is encoded.
+    // `decide` runs only for a new result. Only a Bash result whose text
+    // json-minify changes is encoded.
     let encode = store.replay(scope, model, &candidates, |c| {
-        bash_ids.contains(c.id) && c.texts.iter().any(|t| minify(t).is_some())
+        bash_ids.contains(c.id) && changes(&c.texts, exec, job)
     })?;
     let targets = results
         .iter()
         .zip(encode)
         .filter(|(_, encode)| *encode)
         .flat_map(|((_, _, _, targets), _)| targets.iter().copied());
-    Ok(splice(body, targets, socket))
+    Ok(splice(body, targets, job, socket))
 }
 
-fn minify(text: &str) -> Option<String> {
-    compress(text, &FIRST_SLICE_JSON_MINIFY_CONTEXT).into_changed()
+/// Whether `job` changes any of `texts`. Each text runs as one job of `exec`.
+/// Any rejected job (busy, budget exceeded or panicked) returns `false`, so the
+/// new result is recorded as `unchanged`.
+fn changes(texts: &[String], exec: &BoundedExecutor, job: Job) -> bool {
+    let mut changed = false;
+    for text in texts {
+        let text = text.clone();
+        match exec.run(move || job(&text).0.is_some()) {
+            Ok(c) => changed |= c,
+            Err(_) => return false,
+        }
+    }
+    changed
 }
 
 /// The complete tool-result content as compact JSON with sorted keys, so every
@@ -409,26 +465,30 @@ fn tool_results(body: &[u8]) -> Option<ToolResults<'_>> {
     Some((root.str("model").unwrap_or_default(), bash_ids, results))
 }
 
-/// Replaces each string target that json-minify changes. `None` when nothing changed.
+/// Replaces each string target that `job` changes. `None` when nothing changed.
+/// `job` runs directly, never under the executor: a pinned json-minify
+/// decision must re-encode to the same bytes on every resend, so it can never
+/// fail open.
 fn splice<'a>(
     body: &[u8],
     targets: impl Iterator<Item = &'a RawValue>,
+    job: Job,
     socket: Option<&Path>,
 ) -> Option<Vec<u8>> {
     // Targets are in document order, so spans are increasing and disjoint.
     let mut out = Vec::with_capacity(body.len());
     let mut pos = 0;
+    let mut reports = Vec::new();
     for raw in targets {
-        let Some(minified) = parse::<String>(raw).and_then(|s| {
-            local::compress_reported(
-                &s,
-                &FIRST_SLICE_JSON_MINIFY_CONTEXT,
-                socket,
-                local::Adapter::Proxy,
-                local::ToolCategory::Bash,
-            )
-            .into_changed()
-        }) else {
+        let Some(text) = parse::<String>(raw) else {
+            continue;
+        };
+        let (changed, mut compressed) = job(&text);
+        if socket.is_some() {
+            local::add_estimates(&mut compressed, &text, changed.as_deref().unwrap_or(&text));
+            reports.push(compressed);
+        }
+        let Some(minified) = changed else {
             continue;
         };
         let start = (raw.get().as_ptr() as usize).checked_sub(body.as_ptr() as usize)?;
@@ -438,6 +498,16 @@ fn splice<'a>(
         out.extend_from_slice(&body[pos..start]);
         out.extend_from_slice(serde_json::to_string(&minified).ok()?.as_bytes());
         pos = start + raw.get().len();
+    }
+    if let Some(socket) = socket {
+        for compressed in &reports {
+            local::send_report(
+                socket,
+                compressed,
+                local::Adapter::Proxy,
+                local::ToolCategory::Bash,
+            );
+        }
     }
     if pos == 0 {
         return None;
@@ -496,13 +566,78 @@ impl<'de> Deserialize<'de> for Obj<'de> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
+
+    use deslag_core::BoundedExecutor;
     use http_body_util::BodyExt;
     use hyper::HeaderMap;
 
-    use serde_json::value::RawValue;
+    use super::{ReqBody, minify, rewrite, rewrite_blocking};
+    use crate::session::{Mode, Owner, Store, write_owner};
 
-    use super::{ReqBody, rewrite, splice};
-    use crate::session::{Mode, Store};
+    /// A budget no debug build on a slow runner can miss.
+    fn generous() -> BoundedExecutor {
+        BoundedExecutor::new(4, Duration::from_secs(60)).unwrap()
+    }
+
+    /// Minifies, but far slower than any budget the tests below use for it.
+    fn slow_on_b(text: &str) -> super::Compressed {
+        if text.contains("\"b\"") {
+            std::thread::sleep(Duration::from_secs(10));
+        }
+        minify(text)
+    }
+
+    fn panic_on_b(text: &str) -> super::Compressed {
+        assert!(!text.contains("\"b\""), "injected panic");
+        minify(text)
+    }
+
+    /// Two Bash tool results; the second one holds key `b`.
+    const TWO_RESULTS: &str = r#"{"messages":[
+{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{}},{"type":"tool_use","id":"t2","name":"Bash","input":{}}]},
+{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"{\n  \"a\": 1\n}"},{"type":"tool_result","tool_use_id":"t2","content":"{\n  \"b\": 1\n}"}]}]}"#;
+
+    /// `TWO_RESULTS` with only the first result minified.
+    fn only_a_minified() -> String {
+        TWO_RESULTS.replace(r#""{\n  \"a\": 1\n}""#, r#""{\"a\":1}""#)
+    }
+
+    /// A proxy-owned store with an empty manifest for scope `s`.
+    fn fresh(name: &str) -> Store {
+        let dir = std::env::temp_dir().join(format!("deslag-minify-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        write_owner(&dir, Owner::Proxy).unwrap();
+        let store = Store {
+            dir,
+            mode: Mode::Safe,
+        };
+        let first = br#"{"messages":[{"role":"user","content":"hi"}]}"#;
+        assert!(matches!(
+            rewrite(first, &store, "s", &generous(), minify, None),
+            Ok(None)
+        ));
+        store
+    }
+
+    /// An executor whose only permit is held until the sender is dropped.
+    fn busy() -> (
+        BoundedExecutor,
+        std::sync::mpsc::Sender<()>,
+        std::thread::JoinHandle<bool>,
+    ) {
+        let exec = BoundedExecutor::new(1, Duration::from_secs(60)).unwrap();
+        let (release, wait) = std::sync::mpsc::channel::<()>();
+        let holder = {
+            let exec = exec.clone();
+            std::thread::spawn(move || exec.run(move || wait.recv()).is_ok())
+        };
+        while exec.in_flight() == 0 {
+            std::thread::yield_now();
+        }
+        (exec, release, holder)
+    }
 
     #[tokio::test]
     async fn buffered_body_replays_its_trailers() {
@@ -531,32 +666,175 @@ mod tests {
                 dir: std::env::temp_dir().join("deslag-no-such-state-dir"),
                 mode: Mode::Safe,
             };
-            assert!(matches!(rewrite(body, &store, "s", None), Ok(None)));
+            assert!(matches!(
+                rewrite(body, &store, "s", &generous(), minify, None),
+                Ok(None)
+            ));
         }
     }
 
     #[test]
-    fn splice_output_does_not_depend_on_the_service() {
+    fn rewrite_minifies_every_target() {
+        let store = fresh("every");
+        let expected = only_a_minified().replace(r#""{\n  \"b\": 1\n}""#, r#""{\"b\":1}""#);
+        let out = rewrite(
+            TWO_RESULTS.as_bytes(),
+            &store,
+            "s",
+            &generous(),
+            minify,
+            None,
+        );
+        assert_eq!(String::from_utf8(out.unwrap().unwrap()).unwrap(), expected);
+        let _ = std::fs::remove_dir_all(&store.dir);
+    }
+
+    #[test]
+    fn expired_job_records_its_result_unchanged() {
+        let store = fresh("expired");
+        let exec = BoundedExecutor::new(1, Duration::from_millis(200)).unwrap();
+        let out = rewrite(TWO_RESULTS.as_bytes(), &store, "s", &exec, slow_on_b, None);
+        assert_eq!(out.unwrap().unwrap(), only_a_minified().into_bytes());
+        // The resend replays `unchanged` for `t2`, even with a free executor.
+        let out = rewrite(
+            TWO_RESULTS.as_bytes(),
+            &store,
+            "s",
+            &generous(),
+            minify,
+            None,
+        );
+        assert_eq!(out.unwrap().unwrap(), only_a_minified().into_bytes());
+        let _ = std::fs::remove_dir_all(&store.dir);
+    }
+
+    #[test]
+    fn panicked_job_records_its_result_unchanged() {
+        let store = fresh("panicked");
+        let out = rewrite(
+            TWO_RESULTS.as_bytes(),
+            &store,
+            "s",
+            &generous(),
+            panic_on_b,
+            None,
+        );
+        assert_eq!(out.unwrap().unwrap(), only_a_minified().into_bytes());
+        let out = rewrite(
+            TWO_RESULTS.as_bytes(),
+            &store,
+            "s",
+            &generous(),
+            minify,
+            None,
+        );
+        assert_eq!(out.unwrap().unwrap(), only_a_minified().into_bytes());
+        let _ = std::fs::remove_dir_all(&store.dir);
+    }
+
+    #[test]
+    fn busy_executor_records_new_results_unchanged() {
+        let store = fresh("busy");
+        let (exec, release, holder) = busy();
+        let out = rewrite(TWO_RESULTS.as_bytes(), &store, "s", &exec, minify, None);
+        assert!(matches!(out, Ok(None)));
+        drop(release);
+        assert!(holder.join().unwrap());
+        // Pinned `unchanged` stays unchanged once the executor is free.
+        let out = rewrite(TWO_RESULTS.as_bytes(), &store, "s", &exec, minify, None);
+        assert!(matches!(out, Ok(None)));
+        let _ = std::fs::remove_dir_all(&store.dir);
+    }
+
+    #[test]
+    fn pinned_encoded_result_never_fails_open() {
+        let store = fresh("pinned");
+        let first = rewrite(
+            TWO_RESULTS.as_bytes(),
+            &store,
+            "s",
+            &generous(),
+            minify,
+            None,
+        );
+        let first = first.unwrap().expect("minified");
+        // A busy executor rejects every job, but replay re-encodes outside it.
+        let (exec, release, holder) = busy();
+        let out = rewrite(TWO_RESULTS.as_bytes(), &store, "s", &exec, minify, None);
+        assert_eq!(out.unwrap(), Some(first));
+        drop(release);
+        assert!(holder.join().unwrap());
+        let _ = std::fs::remove_dir_all(&store.dir);
+    }
+
+    #[tokio::test]
+    async fn dropped_rewrite_keeps_its_permit_until_the_rewrite_ends() {
+        static PERMITS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
+        static OPEN: AtomicBool = AtomicBool::new(false);
+        /// Blocks until the test opens the gate.
+        fn gated(text: &str) -> super::Compressed {
+            while !OPEN.load(Ordering::Acquire) {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            minify(text)
+        }
+        let store = fresh("dropped");
+        let permit = PERMITS.acquire().await.unwrap();
+        let input = bytes::Bytes::from_static(TWO_RESULTS.as_bytes());
+        // Polls the rewrite until it is spawned, then drops it like a disconnect.
+        let fut = rewrite_blocking(permit, input, store.clone(), "s".into(), generous(), gated);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), fut)
+                .await
+                .is_err()
+        );
+        assert_eq!(PERMITS.available_permits(), 0, "permit freed mid-rewrite");
+        OPEN.store(true, Ordering::Release);
+        tokio::time::timeout(Duration::from_secs(60), async {
+            while PERMITS.available_permits() == 0 {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("permit never released after the rewrite ended");
+        let _ = std::fs::remove_dir_all(&store.dir);
+    }
+
+    #[test]
+    fn rewrite_output_does_not_depend_on_the_service() {
         use std::os::unix::net::UnixDatagram;
-        let body = br#""[ 1 ]""#;
-        let target = || std::iter::once(serde_json::from_slice::<&RawValue>(body).unwrap());
-        let plain = splice(body, target(), None).expect("minified");
+        let store = fresh("service");
+        let body = br#"{"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Bash"}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"[ 1 ]"}]}]}"#;
+        let run = |socket: Option<&std::path::Path>| {
+            rewrite(body, &store, "s", &generous(), minify, socket).unwrap()
+        };
+        let plain = run(None).expect("minified");
         let dir = std::path::PathBuf::from(format!("/tmp/dsl-proxy-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("s.sock");
         // A stale socket file: the service is gone.
         drop(UnixDatagram::bind(&path).unwrap());
-        assert_eq!(splice(body, target(), Some(&path)).as_ref(), Some(&plain));
+        assert_eq!(run(Some(&path)).as_ref(), Some(&plain));
         std::fs::remove_file(&path).unwrap();
         let receiver = UnixDatagram::bind(&path).unwrap();
-        assert_eq!(splice(body, target(), Some(&path)).as_ref(), Some(&plain));
-        let mut buf = [0; 1024];
         receiver.set_nonblocking(true).unwrap();
+        assert_eq!(run(Some(&path)).as_ref(), Some(&plain));
+        let mut buf = [0; 1024];
         let n = receiver.recv(&mut buf).unwrap();
         let report: serde_json::Value = serde_json::from_slice(&buf[..n]).unwrap();
         assert_eq!(report["adapter"], "proxy");
         assert_eq!(report["outcome"], "changed");
+        assert!(receiver.recv(&mut buf).is_err(), "one block, one report");
+        // A result whose job panicked is recorded `unchanged` and not reported.
+        let other = fresh("service-panic");
+        let two = TWO_RESULTS.as_bytes();
+        let out = rewrite(two, &other, "s", &generous(), panic_on_b, Some(&path));
+        assert_eq!(out.unwrap().unwrap(), only_a_minified().into_bytes());
+        assert!(receiver.recv(&mut buf).is_ok(), "encoded block reported");
+        assert!(receiver.recv(&mut buf).is_err(), "unchanged block reported");
         let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&store.dir);
+        let _ = std::fs::remove_dir_all(&other.dir);
     }
 }
