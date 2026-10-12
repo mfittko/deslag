@@ -195,6 +195,15 @@ fn minify_flag_replaces_only_when_the_hook_owns_compression() {
     let home = state(None);
     write_owner(&home.join(".local/state/deslag"), Owner::Hook).unwrap();
     assert!(!run_env(&args, &input, &[("HOME", &home)]).stdout.is_empty());
+
+    // Relative values are skipped, so the cwd never selects the owner file.
+    let relative = PathBuf::from("relative-state");
+    let env = [
+        ("DESLAG_STATE_DIR", &relative),
+        ("XDG_STATE_HOME", &relative),
+        ("HOME", &home),
+    ];
+    assert!(!run_env(&args, &input, &env).stdout.is_empty());
     for dir in [unknown, xdg, home] {
         std::fs::remove_dir_all(dir).unwrap();
     }

@@ -8,6 +8,7 @@ use std::{
     time::{Duration, Instant, SystemTime},
 };
 
+use deslag_core::{JSON_MINIFY_ID as ID, JSON_MINIFY_VERSION as V};
 use deslag_proxy::session::{
     Candidate, Mode, Owner, RETENTION, ReplayError, Store, manifest_path, prune, read_owner,
     write_owner,
@@ -104,13 +105,11 @@ fn prune_removes_only_expired_session_files() {
 }
 
 #[test]
-fn commits_are_atomic_and_their_latency_is_measured() {
+fn commits_record_every_decision_and_their_latency_is_measured() {
     let dir = temp_dir();
     let store = store(&dir);
     store.replay("s", "m", &[], |_| true).unwrap();
     let path = manifest_path(&dir, "s");
-    // A leftover temp file from a crashed commit is never read and gets replaced.
-    fs::write(path.with_extension("tmp"), b"{ torn").unwrap();
 
     const N: usize = 200;
     let mut times = Vec::with_capacity(N);
@@ -133,7 +132,7 @@ fn commits_are_atomic_and_their_latency_is_measured() {
 
     let m = manifest(&dir, "s");
     assert_eq!(m["decisions"].as_object().unwrap().len(), N);
-    assert_eq!(m["decisions"]["toolu_0"]["encoded"]["version"], 1);
+    assert_eq!(m["decisions"]["toolu_0"]["encoded"]["version"], V);
     assert_eq!(m["decisions"]["toolu_1"]["unchanged"], true);
     let leftovers: Vec<_> = fs::read_dir(path.parent().unwrap())
         .unwrap()
@@ -150,6 +149,80 @@ fn commits_are_atomic_and_their_latency_is_measured() {
 }
 
 #[test]
+fn commits_leave_other_temp_files_alone() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let path = manifest_path(&dir, "s");
+    // Temp files of another process or an interrupted commit.
+    let foreign = [path.with_extension("tmp"), path.with_extension("1.0.tmp")];
+    for tmp in &foreign {
+        fs::write(tmp, b"{ torn").unwrap();
+    }
+    for i in 0..3 {
+        let id = format!("toolu_{i}");
+        store
+            .replay("s", "m", &[candidate(&id, "x")], |_| false)
+            .unwrap();
+    }
+    for tmp in &foreign {
+        assert_eq!(fs::read(tmp).unwrap(), b"{ torn", "{tmp:?}");
+    }
+    assert_eq!(
+        manifest(&dir, "s")["decisions"].as_object().unwrap().len(),
+        3
+    );
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn unreadable_manifest_is_an_io_error() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    fs::create_dir_all(manifest_path(&dir, "s")).unwrap();
+    for c in [vec![], vec![candidate("toolu_1", "x")]] {
+        let got = store.replay("s", "m", &c, |_| true);
+        assert!(matches!(got, Err(ReplayError::Io(_))), "{got:?}");
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn prune_skips_entries_that_are_not_files() {
+    let dir = temp_dir();
+    store(&dir).replay("s", "m", &[], |_| true).unwrap();
+    let not_a_file = dir.join("sessions/stray.json");
+    fs::create_dir(&not_a_file).unwrap();
+    let later = SystemTime::now() + RETENTION + Duration::from_secs(60);
+    assert_eq!(prune(&dir, RETENTION, later).unwrap(), 1);
+    assert!(!manifest_path(&dir, "s").exists());
+    assert!(not_a_file.is_dir());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn a_decision_that_is_not_an_object_is_corrupt() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let c = [candidate("toolu_1", "x")];
+    store.replay("s", "m", &c, |_| true).unwrap();
+    let base = manifest(&dir, "s");
+    let digest = base["decisions"]["toolu_1"]["digest"].clone();
+    for form in [json!(null), json!(true), digest.clone(), json!([digest])] {
+        let mut m = base.clone();
+        m["decisions"]["toolu_1"] = form.clone();
+        fs::write(manifest_path(&dir, "s"), m.to_string()).unwrap();
+        let got = store.replay("s", "m", &c, |_| unreachable!());
+        assert!(
+            matches!(&got, Err(ReplayError::CorruptDecision(id)) if id == "toolu_1"),
+            "{form}: {got:?}"
+        );
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn pinned_decision_forms_are_validated() {
     let dir = temp_dir();
     let store = store(&dir);
@@ -161,15 +234,15 @@ fn pinned_decision_forms_are_validated() {
     assert_eq!(digest.as_str().unwrap().len(), 64, "sha-256 hex");
 
     let ok = |encode: bool| Some(encode);
-    let cases: [(Value, Option<bool>, &str); 12] = [
+    let cases: [(Value, Option<bool>, &str); 13] = [
         (json!({"unchanged": true}), ok(false), ""),
         (
-            json!({"encoded": {"transform": "json-min", "version": 1}}),
+            json!({"encoded": {"transform": ID, "version": V}}),
             ok(true),
             "",
         ),
         (
-            json!({"encoded": {"transform": "json-min", "version": 2}}),
+            json!({"encoded": {"transform": ID, "version": V + 1}}),
             None,
             "retired",
         ),
@@ -178,31 +251,36 @@ fn pinned_decision_forms_are_validated() {
             None,
             "retired",
         ),
+        (
+            json!({"encoded": {"transform": "json-min", "version": V}}),
+            None,
+            "retired",
+        ),
         (json!({"encoded": {"version": 1}}), None, "corrupt"),
         (
-            json!({"encoded": {"transform": "json-min", "version": 1.0}}),
+            json!({"encoded": {"transform": ID, "version": 1.0}}),
             None,
             "corrupt",
         ),
         (
-            json!({"encoded": {"transform": "json-min", "version": "1"}}),
+            json!({"encoded": {"transform": ID, "version": "1"}}),
             None,
             "corrupt",
         ),
         (
-            json!({"encoded": {"transform": "json-min", "version": -1}}),
+            json!({"encoded": {"transform": ID, "version": -1}}),
             None,
             "corrupt",
         ),
         (json!({}), None, "corrupt"),
         (json!({"unchanged": false}), None, "corrupt"),
         (
-            json!({"unchanged": true, "encoded": {"transform": "json-min", "version": 1}}),
+            json!({"unchanged": true, "encoded": {"transform": ID, "version": V}}),
             None,
             "corrupt",
         ),
         (
-            json!({"unchanged": false, "encoded": {"transform": "json-min", "version": 1}}),
+            json!({"unchanged": false, "encoded": {"transform": ID, "version": V}}),
             None,
             "corrupt",
         ),

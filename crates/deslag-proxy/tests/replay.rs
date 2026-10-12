@@ -26,7 +26,7 @@ use tokio::{
 
 const SCOPE: &str = "session-a";
 
-/// Pretty JSON that json-min v1 shortens, and plain text it leaves alone.
+/// Pretty JSON that json-minify shortens, and plain text it leaves alone.
 const R1: &str = "{\n  \"rows\": [\n    1,\n    2\n  ]\n}\n";
 const R2: &str = "plain  text";
 const R3: &str = "{ \"ok\" : true }";
@@ -209,7 +209,10 @@ async fn resume_and_restart_keep_history_byte_stable() {
     assert_eq!(m["mode"], "safe");
     assert_eq!(m["decisions"]["toolu_2"]["unchanged"], true);
     let encoded = &m["decisions"]["toolu_1"]["encoded"];
-    assert_eq!(*encoded, json!({"transform": "json-min", "version": 1}));
+    assert_eq!(
+        *encoded,
+        json!({"transform": deslag_core::JSON_MINIFY_ID, "version": deslag_core::JSON_MINIFY_VERSION})
+    );
     let raw = fs::read_to_string(manifest_path(&dir, SCOPE)).unwrap();
     assert!(
         !raw.contains("rows") && !raw.contains(SCOPE),
@@ -330,14 +333,29 @@ async fn missing_or_corrupt_state_fails_explicitly() {
     fs::remove_file(&path).unwrap();
     assert_rejected(p.turn("m", &history).await, "deleted manifest");
 
-    // A failed commit is a server error; the request is not forwarded.
-    // A directory where the commit's temp file goes makes the write fail.
-    fs::create_dir(manifest_path(&dir, "session-w").with_extension("tmp")).unwrap();
+    // A manifest read error other than a missing file is a server error; the
+    // request is not forwarded. A directory at the manifest path fails the read.
+    fs::create_dir(manifest_path(&dir, "session-r")).unwrap();
     let (status, body) = p
-        .send(Some("session-w"), conversation("m", &[]))
+        .send(Some("session-r"), conversation("m", &[]))
         .await
         .unwrap_err();
     assert_eq!((status, &body["error"]["type"]), (500, &json!("api_error")));
+
+    // A failed commit is a server error too. A read-only sessions directory
+    // makes the temp file creation fail.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let sessions = path.parent().unwrap();
+        fs::set_permissions(sessions, fs::Permissions::from_mode(0o500)).unwrap();
+        let (status, body) = p
+            .send(Some("session-w"), conversation("m", &[]))
+            .await
+            .unwrap_err();
+        fs::set_permissions(sessions, fs::Permissions::from_mode(0o700)).unwrap();
+        assert_eq!((status, &body["error"]["type"]), (500, &json!("api_error")));
+    }
     fs::remove_dir_all(dir).unwrap();
 }
 

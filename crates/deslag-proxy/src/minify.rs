@@ -6,7 +6,7 @@
 //!
 //! Only requests with an `x-claude-code-session-id` header are rewritten, and
 //! only in sessions the proxy owns. Every tool result gets one decision,
-//! `unchanged` or json-min v1, pinned in the session manifest (see `session`)
+//! `unchanged` or json-minify, pinned in the session manifest (see `session`)
 //! before the request is forwarded. Resent history replays its pinned
 //! decision, so its bytes upstream stay the same across resend, restart,
 //! disable and model switch. Missing or inconsistent replay state rejects the
@@ -263,7 +263,7 @@ fn reject(e: ReplayError) -> Reject {
     (StatusCode::BAD_REQUEST, "invalid_request_error", message)
 }
 
-/// Replays the session's decisions on the tool results and splices json-min
+/// Replays the session's decisions on the tool results and splices json-minify
 /// output where they encode. `Ok(None)` forwards the body unchanged.
 fn rewrite(body: &[u8], store: &Store, scope: &str) -> Result<Option<Vec<u8>>, ReplayError> {
     let Some((model, bash_ids, results)) = tool_results(body) else {
@@ -277,7 +277,7 @@ fn rewrite(body: &[u8], store: &Store, scope: &str) -> Result<Option<Vec<u8>>, R
             texts: targets.iter().filter_map(|t| parse(t)).collect(),
         })
         .collect();
-    // Only a Bash result whose text json-min changes is encoded.
+    // Only a Bash result whose text json-minify changes is encoded.
     let encode = store.replay(scope, model, &candidates, |c| {
         bash_ids.contains(c.id) && c.texts.iter().any(|t| minify(t).is_some())
     })?;
@@ -349,7 +349,7 @@ fn tool_results(body: &[u8]) -> Option<ToolResults<'_>> {
     Some((root.str("model").unwrap_or_default(), bash_ids, results))
 }
 
-/// Replaces each string target that json-min changes. `None` when nothing changed.
+/// Replaces each string target that json-minify changes. `None` when nothing changed.
 fn splice<'a>(body: &[u8], targets: impl Iterator<Item = &'a RawValue>) -> Option<Vec<u8>> {
     // Targets are in document order, so spans are increasing and disjoint.
     let mut out = Vec::with_capacity(body.len());

@@ -15,10 +15,14 @@ use std::{
     fs,
     io::{self, Write},
     path::{Path, PathBuf},
-    sync::{Mutex, PoisonError},
+    sync::{
+        Mutex, PoisonError,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{Duration, SystemTime},
 };
 
+use deslag_core::{JSON_MINIFY_ID, JSON_MINIFY_VERSION};
 use ring::digest::{Context, SHA256, digest};
 use serde_json::{Value, json};
 
@@ -41,16 +45,18 @@ pub const RETENTION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
 const VERSION: u64 = 1;
 const POLICY_VERSION: u64 = 1;
-const TRANSFORM: &str = "json-min";
-const TRANSFORM_VERSION: u64 = 1;
+/// Pinned to deslag-core, so a core version bump retires old decisions.
+const TRANSFORM: &str = JSON_MINIFY_ID;
+const TRANSFORM_VERSION: u64 = JSON_MINIFY_VERSION as u64;
 
 /// `DESLAG_STATE_DIR`, else `$XDG_STATE_HOME/deslag`, else
-/// `$HOME/.local/state/deslag`. Empty values count as unset.
+/// `$HOME/.local/state/deslag`. Empty and relative values count as unset, so
+/// the result does not depend on the current directory.
 pub fn state_dir() -> Option<PathBuf> {
     let var = |k| {
         std::env::var_os(k)
-            .filter(|v| !v.is_empty())
             .map(PathBuf::from)
+            .filter(|p| p.is_absolute())
     };
     var("DESLAG_STATE_DIR")
         .or_else(|| var("XDG_STATE_HOME").map(|d| d.join("deslag")))
@@ -85,7 +91,8 @@ pub fn manifest_path(dir: &Path, scope: &str) -> PathBuf {
 }
 
 /// Removes session manifests and leftover temp files last modified before
-/// `now - retention`. Returns how many files were removed.
+/// `now - retention`. Returns how many files were removed. Entries that are
+/// not regular files or that vanish while pruning are skipped.
 pub fn prune(dir: &Path, retention: Duration, now: SystemTime) -> io::Result<usize> {
     let cutoff = now.checked_sub(retention).unwrap_or(SystemTime::UNIX_EPOCH);
     let entries = match fs::read_dir(dir.join("sessions")) {
@@ -94,10 +101,14 @@ pub fn prune(dir: &Path, retention: Duration, now: SystemTime) -> io::Result<usi
     };
     let mut removed = 0;
     for entry in entries {
-        let path = entry?.path();
+        let Ok(entry) = entry else { continue };
+        let path = entry.path();
         let ext = path.extension().and_then(|e| e.to_str());
-        if matches!(ext, Some("json" | "tmp")) && fs::metadata(&path)?.modified()? < cutoff {
-            fs::remove_file(&path)?;
+        let expired = matches!(ext, Some("json" | "tmp"))
+            && fs::symlink_metadata(&path)
+                .and_then(|m| Ok(m.is_file() && m.modified()? < cutoff))
+                .is_ok_and(|expired| expired);
+        if expired && fs::remove_file(&path).is_ok() {
             removed += 1;
         }
     }
@@ -106,7 +117,7 @@ pub fn prune(dir: &Path, retention: Duration, now: SystemTime) -> io::Result<usi
 
 #[derive(Debug)]
 pub enum ReplayError {
-    /// The request carries tool results but the session has no readable manifest.
+    /// The request carries tool results but the session has no parseable manifest.
     MissingManifest,
     /// The manifest format version is not one this binary reads.
     UnsupportedManifest,
@@ -119,7 +130,7 @@ pub enum ReplayError {
     /// A pinned decision is neither `unchanged: true` nor `encoded` with a
     /// transform id and an unsigned integer version.
     CorruptDecision(String),
-    /// A new decision could not be committed.
+    /// The manifest could not be read or a new decision could not be committed.
     Io(io::Error),
 }
 
@@ -146,11 +157,13 @@ pub struct Candidate<'a> {
 }
 
 /// ponytail: one process-wide lock around load-decide-commit. Use per-scope
-/// locks if concurrent sessions contend on it.
+/// locks if concurrent sessions contend on it. Two processes on one state dir
+/// never see a torn manifest, but one can overwrite the other's new
+/// decisions; use per-scope file locks if several proxies share a state dir.
 static LOCK: Mutex<()> = Mutex::new(());
 
 impl Store {
-    /// Returns, per candidate, whether json-min v1 applies. A known result
+    /// Returns, per candidate, whether the pinned JSON minifier applies. A known result
     /// gets its pinned decision. A new result in the newest message is
     /// decided by `decide` only while the configured owner is the proxy, and
     /// is otherwise `unchanged`. New decisions are committed before return.
@@ -186,10 +199,9 @@ impl Store {
                 write_manifest(&path, &fresh)?;
                 return Ok(pass);
             }
-            read => {
-                let parsed = read
-                    .ok()
-                    .and_then(|b| serde_json::from_slice::<Value>(&b).ok());
+            Err(e) => return Err(ReplayError::Io(e)),
+            Ok(bytes) => {
+                let parsed = serde_json::from_slice::<Value>(&bytes).ok();
                 match parsed.filter(|m| m["decisions"].is_object()) {
                     Some(m) => m,
                     None if has_results => return Err(ReplayError::MissingManifest),
@@ -215,6 +227,9 @@ impl Store {
         for c in candidates {
             let source = text_digest(&c.texts);
             let pinned = match decisions.get(c.id) {
+                Some(d) if !d.is_object() => {
+                    return Err(ReplayError::CorruptDecision(c.id.into()));
+                }
                 Some(d) if d["digest"] != source.as_str() => {
                     return Err(ReplayError::DigestMismatch(c.id.into()));
                 }
@@ -288,19 +303,26 @@ fn create_dir(dir: &Path) -> io::Result<()> {
 }
 
 /// Writes a sibling temp file, syncs it, renames it over `path` and syncs the
-/// directory, so a reader sees the old or the new content, never a mix.
+/// directory, so a reader sees the old or the new content, never a mix. The
+/// temp name is unique per process and call, so no commit touches another
+/// commit's temp file.
 fn commit(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let tmp = path.with_extension("tmp");
-    // A leftover from a crashed commit may carry other permissions.
-    let _ = fs::remove_file(&tmp);
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    let tmp = path.with_extension(format!("{}.{seq}.tmp", std::process::id()));
     let mut options = fs::OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
     let mut file = options.open(&tmp)?;
-    file.write_all(bytes)?;
-    file.sync_all()?;
-    fs::rename(&tmp, path)?;
+    let written = file
+        .write_all(bytes)
+        .and_then(|()| file.sync_all())
+        .and_then(|()| fs::rename(&tmp, path));
+    if written.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    written?;
     #[cfg(unix)]
     fs::File::open(path.parent().expect("state path has a parent"))?.sync_all()?;
     Ok(())
