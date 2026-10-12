@@ -176,6 +176,26 @@ fn commits_leave_other_temp_files_alone() {
 }
 
 #[test]
+fn a_crash_leftover_at_the_first_temp_name_does_not_fail_the_commit() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let path = manifest_path(&dir, "s");
+    // Left by a crashed proxy that had the same pid, for example pid 1.
+    let leftover = path.with_extension(format!("{}.0.tmp", std::process::id()));
+    fs::write(&leftover, b"{ torn").unwrap();
+    store
+        .replay("s", "m", &[candidate("toolu_0", "x")], |_| false)
+        .unwrap();
+    assert_eq!(fs::read(&leftover).unwrap(), b"{ torn");
+    assert_eq!(
+        manifest(&dir, "s")["decisions"]["toolu_0"]["unchanged"],
+        true
+    );
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn unreadable_manifest_is_an_io_error() {
     let dir = temp_dir();
     let store = store(&dir);

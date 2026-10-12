@@ -18,10 +18,7 @@ use std::{
     fs,
     io::{self, Write},
     path::{Path, PathBuf},
-    sync::{
-        Mutex, PoisonError,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::{Mutex, PoisonError},
     time::{Duration, SystemTime},
 };
 
@@ -317,17 +314,22 @@ fn create_dir(dir: &Path) -> io::Result<()> {
 
 /// Writes a sibling temp file, syncs it, renames it over `path` and syncs the
 /// directory, so a reader sees the old or the new content, never a mix. The
-/// temp name is unique per process and call, so no commit touches another
-/// commit's temp file.
+/// temp name is `<name>.<pid>.<n>.tmp` with the first `n` that does not exist
+/// yet, so a leftover of a crashed process with the same pid, or a concurrent
+/// commit, is skipped and never touched.
 fn commit(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    static SEQ: AtomicU64 = AtomicU64::new(0);
-    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
-    let tmp = path.with_extension(format!("{}.{seq}.tmp", std::process::id()));
     let mut options = fs::OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-    let mut file = options.open(&tmp)?;
+    let pid = std::process::id();
+    let (tmp, mut file) = (0u64..)
+        .map(|n| {
+            let tmp = path.with_extension(format!("{pid}.{n}.tmp"));
+            options.open(&tmp).map(|file| (tmp, file))
+        })
+        .find(|r| !matches!(r, Err(e) if e.kind() == io::ErrorKind::AlreadyExists))
+        .expect("an unbounded range always yields a name")?;
     let written = file
         .write_all(bytes)
         .and_then(|()| file.sync_all())
