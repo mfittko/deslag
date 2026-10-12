@@ -175,6 +175,23 @@ fn ineligible_wrappers() {
 }
 
 #[test]
+fn max_rows_applies_per_array() {
+    let opts = TableOptions {
+        max_rows: 5,
+        ..lenient()
+    };
+    let input = format!(r#"{{"big":{},"small":{}}}"#, rows(6), rows(5));
+    let encoded = v2::encode(&input, &opts).unwrap_or_else(|r| panic!("{r:?}"));
+    let skeleton = encoded.lines().next().unwrap();
+    assert_eq!(
+        skeleton,
+        format!(r#"table-v2 {{"big":{},"small":@0}}"#, rows(6))
+    );
+    assert_eq!(encoded.matches("\n@").count(), 1, "{encoded}");
+    assert_eq!(v2::decode(&encoded), Some(minified(&input)));
+}
+
+#[test]
 fn decoder_rejects_malformed_v2_text() {
     let block = "[2]{a:int}\n1\n2";
     let bad = [
