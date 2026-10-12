@@ -35,7 +35,9 @@ pub fn encode(input: &str, opts: &TableOptions) -> Result<String, Reason> {
             continue;
         };
         let hole = format!("@{holes}");
-        // The hole costs its label twice, a space and a line break.
+        // The hole costs its label twice, a space and a line break. Per-hole
+        // selection is this strict byte comparison only: no permille or token
+        // threshold. The gain check runs once on the whole text below.
         if 2 * hole.len() + 2 + block.len() >= array.len() {
             continue;
         }

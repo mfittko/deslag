@@ -334,7 +334,7 @@ Encoder output is canonical. The decoder also accepts some non-canonical texts t
 ### Encoder
 
 - A bare top-level array keeps its table-v1 encoding. `table::v2::encode` returns exactly `table::encode` output and reasons for input whose first non-whitespace byte is `[`. A bare array has no wrapper to keep, and table-v1 text stays stable for existing consumers.
-- For a top-level object, the encoder checks each member value that is an array, in member order. A member array becomes a hole when it is eligible as a table-v1 array (same rules as the table-v1 eligibility table, with `max_rows` per array) and its block, label line and hole are shorter than the array. Otherwise the array stays in the skeleton unchanged.
+- For a top-level object, the encoder checks each member value that is an array, in member order. A member array becomes a hole when it passes every row of the table-v1 eligibility table except the gain row, with `max_rows` per array, and when `2 * hole length + 2 + block length` is strictly less than the array's minified byte length. Otherwise the array stays in the skeleton unchanged.
 - Arrays below the top-level object's members stay in the skeleton.
 - The whole document must pass the JSON minifier first, so a duplicate or escaped key anywhere, or nesting deeper than `max_depth`, skips the whole input with `duplicate_key`, `escaped_key` or `depth_limit`.
 
@@ -346,7 +346,7 @@ Encoder output is canonical. The decoder also accepts some non-canonical texts t
 
 The gain check is the table-v1 gain check, applied to the whole table-v2 text against the minified document.
 
-Known limit: per-hole selection compares bytes only. The token gain check applies only to the whole table-v2 text.
+Known limit: per-hole selection uses only the strict byte comparison above. It applies no `min_savings_permille` threshold and no token check. The gain check applies only to the whole table-v2 text.
 
 ### Integration
 
