@@ -143,14 +143,15 @@ fn load_file(
     }
     let includes = match &doc["include"] {
         Value::Null => vec![],
-        v => serde_json::from_value(v.clone()).map_err(|e| format!("include: {e}"))?,
+        v => serde_json::from_value(v.clone())
+            .map_err(|e| format!("{}: include: {e}", path.display()))?,
     };
     let tasks = tasks
         .iter()
         .map(|t| {
             let s = |k: &str| t[k].as_str().map(str::to_string);
-            let id = s("id").ok_or("task without id")?;
-            let err = |m: &str| format!("task {id}: {m}");
+            let id = s("id").ok_or_else(|| format!("{}: task without id", path.display()))?;
+            let err = |m: &str| format!("{}: task {id}: {m}", path.display());
             if !ids.insert(id.clone()) {
                 return Err(err("duplicate id"));
             }

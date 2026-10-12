@@ -1,6 +1,6 @@
 # Paired task evaluation
 
-The method, the scoring rules and the non-inferiority criterion are predeclared in [benchmark-methodology.md](../benchmark-methodology.md). The corpus is `tests/evaluations/manifest.json`, which includes the generated corpus `tests/evaluations/generated/manifest.json` (seed 7700). It holds 219 synthetic tasks: the 21 pilot tasks (17 in the PLAN §14.4 categories, 2 incompressible controls, 2 evidence-drop controls) and 198 generated tasks (186 in the categories, 6 incompressible controls, 6 evidence-drop controls). It has 900 (task, arm) runs.
+The method, the scoring rules and the non-inferiority criterion are predeclared in [benchmark-methodology.md](../benchmark-methodology.md). The corpus is `tests/evaluations/manifest.json`, which includes the generated corpus `tests/evaluations/generated/manifest.json` (seed 7700). It holds 228 synthetic tasks: the 21 pilot tasks (17 in the PLAN §14.4 categories, 2 incompressible controls, 2 evidence-drop controls) and 207 generated tasks (195 in the categories, 6 incompressible controls, 6 evidence-drop controls). It has 935 (task, arm) runs.
 
 This file holds live run 1 (pilot corpus), the predeclared live run 2, a two-call live plumbing smoke check and the offline mock dry run (full corpus).
 
@@ -17,7 +17,7 @@ This file holds live run 1 (pilot corpus), the predeclared live run 2, a two-cal
 | Corpus size per arm (full corpus) | non-control pairs: json-minify 106, table-csv 105, table-mdkv 105, table-v2 105, lines-v1 106, lines-v2 105; changed non-control pairs (the transform changed the payload): json-minify 106, table-csv 104, table-mdkv 104, table-v2 105, lines-v1 104, lines-v2 105; 935 runs |
 | Live run 2 | predeclared in Live runs, not yet run |
 | Mock dry run | below, full corpus, plumbing evidence only |
-| Generated | live run 1 at commit 2627754 (v0.1.0-alpha.2), 2026-10-12; mock output reproduced on the full corpus at commit fff07ec |
+| Generated | live run 1 at commit 2627754 (v0.1.0-alpha.2), 2026-10-12; mock output reproduced on the full corpus at the head of the corpus change |
 
 ## Live runs
 
@@ -65,7 +65,7 @@ Estimate with the run-2 assumptions, from `cargo run -q -p deslag-eval --locked 
 | Field | Value |
 | --- | --- |
 | Runs (task, arm) | 935 |
-| Estimated input tokens (deslag-estimate-v1, incl. 1000 overhead per run) | 1590146 |
+| Estimated input tokens (deslag-estimate-v1, incl. 1000 overhead per run) | 1590271 |
 | Assumed output tokens per run | 128 |
 | Assumed prices, USD per Mtok | input 1 (x1.25 cache write), output 5 |
 | Estimated cost | USD 2.59 |
@@ -76,13 +76,13 @@ Estimate with the default assumptions, from the same command without the assumpt
 | Field | Value |
 | --- | --- |
 | Runs (task, arm) | 935 |
-| Estimated input tokens (deslag-estimate-v1, incl. 2000 overhead per run) | 2525146 |
+| Estimated input tokens (deslag-estimate-v1, incl. 2000 overhead per run) | 2525271 |
 | Assumed output tokens per run | 256 |
 | Assumed prices, USD per Mtok | input 3 (x1.25 cache write), output 15 |
 | Estimated cost | USD 13.06 |
 | Cap if every call stays within --per-run-usd (935 runs at 0.3) | USD 280.50 |
 
-The default estimate exceeds `--budget-usd 3.00`. The run-2 estimate of USD 2.59 fits under it. The runner still stops before any call that could exceed the budget.
+The default estimate exceeds `--budget-usd 3.00`. The run-2 estimate of USD 2.59 is below USD 2.70, the point at which the runner stops (the budget minus the per-run cap). The runner still stops before any call that could exceed the budget.
 
 After a run, add its report as a new section above the mock dry run, with the client version and the total spend, and update the Status table.
 
@@ -228,7 +228,7 @@ jq -rs '(map(select(.arm=="baseline"))|map({key:.task,value:.payload_tokens_est}
 
 ## Mock dry run
 
-The mock backend answers with the accepted answer when it occurs verbatim in the payload, else `NOT_FOUND`. It measures evidence presence only. Its results show that the harness pairs runs, scores them, detects evidence loss and keeps the incompressible controls unchanged. The run covers the full corpus (228 tasks, 935 runs). The output was reproduced at the corpus commit fff07ec. The mock reports no usage, so the Claude columns of the paired savings table show `n/a`. The verdicts below describe the mock only and are not model evidence.
+The mock backend answers with the accepted answer when it occurs verbatim in the payload, else `NOT_FOUND`. It measures evidence presence only. Its results show that the harness pairs runs, scores them, detects evidence loss and keeps the incompressible controls unchanged. The run covers the full corpus (228 tasks, 935 runs). The output was reproduced at the head of the corpus change. The mock reports no usage, so the Claude columns of the paired savings table show `n/a`. The verdicts below describe the mock only and are not model evidence.
 
 ```sh
 mkdir -p tmp/eval

@@ -15,7 +15,7 @@
       "category": "api_query",
       "id": "gen-json-000",
       "input": "inputs/gen-json-000.json",
-      "question": "Which user has the highest quota_gb? Answer with its login.",
+      "question": "Which user has the highest quota_gb value? Answer with its login.",
       "rule": "exact"
     },
     {
@@ -79,7 +79,7 @@
       "category": "aggregation",
       "id": "gen-json-004",
       "input": "inputs/gen-json-004.json",
-      "question": "What is the highest error_rate among services with tier bronze?",
+      "question": "What is the highest error_rate value among services with tier bronze?",
       "rule": "number"
     },
     {
@@ -175,7 +175,7 @@
       "category": "issue_triage",
       "id": "gen-json-010",
       "input": "inputs/gen-json-010.json",
-      "question": "Which issue has the highest comments? Answer with its title.",
+      "question": "Which issue has the highest comments value? Answer with its title.",
       "rule": "exact"
     },
     {
@@ -335,7 +335,7 @@
       "category": "failure_diagnosis",
       "id": "gen-json-020",
       "input": "inputs/gen-json-020.json",
-      "question": "Which CI job has the highest duration_s? Answer with its name.",
+      "question": "Which CI job has the highest duration_s value? Answer with its name.",
       "rule": "exact"
     },
     {
@@ -463,7 +463,7 @@
       "category": "api_query",
       "id": "gen-json-028",
       "input": "inputs/gen-json-028.json",
-      "question": "What is the highest quota_gb among users with role member?",
+      "question": "What is the highest quota_gb value among users with role member?",
       "rule": "number"
     },
     {
@@ -495,7 +495,7 @@
       "category": "failure_diagnosis",
       "id": "gen-json-030",
       "input": "inputs/gen-json-030.json",
-      "question": "Which CI job has the highest duration_s? Answer with its name.",
+      "question": "Which CI job has the highest duration_s value? Answer with its name.",
       "rule": "exact"
     },
     {
@@ -511,7 +511,7 @@
       "category": "issue_triage",
       "id": "gen-json-031",
       "input": "inputs/gen-json-031.json",
-      "question": "What is the highest comments among issues with state closed?",
+      "question": "What is the highest comments value among issues with state closed?",
       "rule": "number"
     },
     {
@@ -639,7 +639,7 @@
       "category": "aggregation",
       "id": "gen-json-039",
       "input": "inputs/gen-json-039.json",
-      "question": "What is the highest error_rate among services with tier bronze?",
+      "question": "What is the highest error_rate value among services with tier bronze?",
       "rule": "number"
     },
     {
@@ -703,7 +703,7 @@
       "category": "code_search",
       "id": "gen-json-043",
       "input": "inputs/gen-json-043.json",
-      "question": "What is the highest line among matches with kind fn?",
+      "question": "What is the highest line value among matches with kind fn?",
       "rule": "number"
     },
     {
@@ -751,7 +751,7 @@
       "category": "aggregation",
       "id": "gen-json-046",
       "input": "inputs/gen-json-046.json",
-      "question": "Which service has the highest error_rate? Answer with its service_name.",
+      "question": "Which service has the highest error_rate value? Answer with its service_name.",
       "rule": "exact"
     },
     {
@@ -943,7 +943,7 @@
       "category": "failure_diagnosis",
       "id": "gen-json-058",
       "input": "inputs/gen-json-058.json",
-      "question": "Which CI job has the highest duration_s? Answer with its name.",
+      "question": "Which CI job has the highest duration_s value? Answer with its name.",
       "rule": "exact"
     },
     {
@@ -975,7 +975,7 @@
       "category": "aggregation",
       "id": "gen-json-060",
       "input": "inputs/gen-json-060.json",
-      "question": "What is the highest error_rate among services with tier bronze?",
+      "question": "What is the highest error_rate value among services with tier bronze?",
       "rule": "number"
     },
     {
@@ -1007,7 +1007,7 @@
       "category": "failure_diagnosis",
       "id": "gen-json-062",
       "input": "inputs/gen-json-062.json",
-      "question": "Which CI job has the highest duration_s? Answer with its name.",
+      "question": "Which CI job has the highest duration_s value? Answer with its name.",
       "rule": "exact"
     },
     {
@@ -1023,7 +1023,7 @@
       "category": "api_query",
       "id": "gen-json-063",
       "input": "inputs/gen-json-063.json",
-      "question": "Which user has the highest quota_gb? Answer with its login.",
+      "question": "Which user has the highest quota_gb value? Answer with its login.",
       "rule": "exact"
     },
     {
@@ -1135,7 +1135,7 @@
       "category": "api_query",
       "id": "gen-json-070",
       "input": "inputs/gen-json-070.json",
-      "question": "What is the highest quota_gb among users with role member?",
+      "question": "What is the highest quota_gb value among users with role member?",
       "rule": "number"
     },
     {
@@ -1167,7 +1167,7 @@
       "category": "failure_diagnosis",
       "id": "gen-json-072",
       "input": "inputs/gen-json-072.json",
-      "question": "Which CI job has the highest duration_s? Answer with its name.",
+      "question": "Which CI job has the highest duration_s value? Answer with its name.",
       "rule": "exact"
     },
     {
@@ -1215,7 +1215,7 @@
       "category": "exact_id",
       "id": "gen-json-075",
       "input": "inputs/gen-json-075.json",
-      "question": "Which order has the highest amount_cents? Answer with its customer.",
+      "question": "Which order has the highest amount_cents value? Answer with its customer.",
       "rule": "exact"
     },
     {
@@ -1231,7 +1231,7 @@
       "category": "aggregation",
       "id": "gen-json-076",
       "input": "inputs/gen-json-076.json",
-      "question": "What is the highest error_rate among services with tier bronze?",
+      "question": "What is the highest error_rate value among services with tier bronze?",
       "rule": "number"
     },
     {
@@ -1247,7 +1247,7 @@
       "category": "api_query",
       "id": "gen-json-077",
       "input": "inputs/gen-json-077.json",
-      "question": "What is the highest quota_gb among users with role member?",
+      "question": "What is the highest quota_gb value among users with role member?",
       "rule": "number"
     },
     {
@@ -1311,7 +1311,7 @@
       "category": "aggregation",
       "id": "gen-json-081",
       "input": "inputs/gen-json-081.json",
-      "question": "Which service has the highest error_rate? Answer with its service_name.",
+      "question": "Which service has the highest error_rate value? Answer with its service_name.",
       "rule": "exact"
     },
     {
@@ -1391,7 +1391,7 @@
       "category": "failure_diagnosis",
       "id": "gen-json-086",
       "input": "inputs/gen-json-086.json",
-      "question": "What is the highest duration_s among CI jobs with conclusion success?",
+      "question": "What is the highest duration_s value among CI jobs with conclusion success?",
       "rule": "number"
     },
     {
@@ -1407,7 +1407,7 @@
       "category": "issue_triage",
       "id": "gen-json-087",
       "input": "inputs/gen-json-087.json",
-      "question": "What is the highest comments among issues with state closed?",
+      "question": "What is the highest comments value among issues with state closed?",
       "rule": "number"
     },
     {
@@ -1423,7 +1423,7 @@
       "category": "aggregation",
       "id": "gen-json-088",
       "input": "inputs/gen-json-088.json",
-      "question": "Which service has the highest error_rate? Answer with its service_name.",
+      "question": "Which service has the highest error_rate value? Answer with its service_name.",
       "rule": "exact"
     },
     {
@@ -1439,7 +1439,7 @@
       "category": "exact_id",
       "id": "gen-json-089",
       "input": "inputs/gen-json-089.json",
-      "question": "Which order has the highest amount_cents? Answer with its customer.",
+      "question": "Which order has the highest amount_cents value? Answer with its customer.",
       "rule": "exact"
     },
     {
@@ -1487,7 +1487,7 @@
       "category": "code_search",
       "id": "gen-json-092",
       "input": "inputs/gen-json-092.json",
-      "question": "Which match has the highest line? Answer with its symbol.",
+      "question": "Which match has the highest line value? Answer with its symbol.",
       "rule": "exact"
     },
     {

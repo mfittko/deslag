@@ -407,7 +407,7 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
         4 => {
             special[0].num = top(rng, 3);
             (
-                format!("Which {noun} has the highest {numk}? Answer with its {name}."),
+                format!("Which {noun} has the highest {numk} value? Answer with its {name}."),
                 special[0].name.clone(),
                 Query::Json {
                     conds: vec![],
@@ -447,7 +447,7 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
             special[1].num = top(rng, 3);
             (
                 format!(
-                    "What is the highest {numk} among {plural} with {status} {}?",
+                    "What is the highest {numk} value among {plural} with {status} {}?",
                     s.status[0]
                 ),
                 special[1].num.clone(),
