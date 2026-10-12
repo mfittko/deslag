@@ -442,11 +442,12 @@ for f in a.tar.gz b.tar.gz SHA256SUMS; do echo "built $f" >"$r/dist/$f"; done
 echo "Notes." >"$r/release-notes.md"
 export FAKE_RELEASES=$tmp/releases FAKE_GH_LOG=$tmp/gh.log
 mkdir -p "$FAKE_RELEASES"
-# run_release <version>: the publish job, release-state.sh then publish.sh.
+# run_release <version>: the publish job, release-state.sh then publish.sh,
+# both given the one asset list.
 run_release() {
-  local action
-  action=$(PATH="$tmp/pubbin:$PATH" "$here/release-state.sh" "v$1" dist/*.tar.gz dist/SHA256SUMS)
-  PATH="$tmp/pubbin:$PATH" "$here/publish.sh" "$1" "$action"
+  local action assets=(dist/*.tar.gz dist/SHA256SUMS)
+  action=$(PATH="$tmp/pubbin:$PATH" "$here/release-state.sh" "v$1" "${assets[@]}")
+  PATH="$tmp/pubbin:$PATH" "$here/publish.sh" "$1" "$action" "${assets[@]}"
 }
 assets_of() { (cd "$FAKE_RELEASES/$1" && echo *); }
 snapshot() { (cd "$FAKE_RELEASES" && find . -type f -exec cksum {} + | sort); }
@@ -481,7 +482,7 @@ expect_fail "publish re-run on a partial release fails" "partial \(missing: b.ta
 expect_eq "publish re-run on a partial release calls no write" 0 "$(writes)"
 expect_eq "publish re-run on a partial release keeps the published asset" "$before" "$(snapshot)"
 : >"$FAKE_GH_LOG"
-expect_fail "publish upload never replaces an asset" "already exists: a.tar.gz" "$r" env PATH="$tmp/pubbin:$PATH" "$here/publish.sh" 3.0.0 upload
+expect_fail "publish upload never replaces an asset" "already exists: a.tar.gz" "$r" env PATH="$tmp/pubbin:$PATH" "$here/publish.sh" 3.0.0 upload dist/a.tar.gz dist/b.tar.gz dist/SHA256SUMS
 expect_eq "publish upload keeps the published asset" "$before" "$(snapshot)"
 
 : >"$FAKE_GH_LOG"; before=$(snapshot)
@@ -491,9 +492,10 @@ expect_eq "publish creates no release after a gh lookup error" "$before" "$(snap
 FAKE_WRITE_ERR='HTTP 500: Internal Server Error' expect_fail "publish fails when gh release create fails" "HTTP 500" "$r" run_release 4.0.0
 expect_eq "publish leaves no release after a failed create" "$before" "$(snapshot)"
 : >"$FAKE_GH_LOG"
-expect_fail "publish rejects an unknown action" "unknown action" "$r" env PATH="$tmp/pubbin:$PATH" "$here/publish.sh" 4.0.0 replace
+expect_fail "publish rejects an unknown action" "unknown action" "$r" env PATH="$tmp/pubbin:$PATH" "$here/publish.sh" 4.0.0 replace dist/a.tar.gz
 expect_eq "publish calls no gh on an unknown action" "" "$(cat "$FAKE_GH_LOG")"
-expect_fail "publish fails without archives" "no archives" "$tmp" env PATH="$tmp/pubbin:$PATH" "$here/publish.sh" 4.0.0 create
+expect_fail "publish fails without assets" "no assets given" "$r" env PATH="$tmp/pubbin:$PATH" "$here/publish.sh" 4.0.0 create
+expect_fail "publish fails without archives" "asset not found: dist/\*.tar.gz" "$tmp" env PATH="$tmp/pubbin:$PATH" "$here/publish.sh" 4.0.0 create "dist/*.tar.gz" dist/SHA256SUMS
 expect_eq "publish calls no gh without archives" "" "$(cat "$FAKE_GH_LOG")"
 
 if [ "$failures" -ne 0 ]; then echo "$failures test(s) failed" >&2; exit 1; fi

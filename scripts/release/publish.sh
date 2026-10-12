@@ -1,20 +1,25 @@
 #!/usr/bin/env bash
-# Usage: publish.sh <version> <action>
-# Publishes dist/*.tar.gz and dist/SHA256SUMS as the GitHub Release v<version>.
-# <action> is the output of release-state.sh for the same assets. `create`
+# Usage: publish.sh <version> <action> <asset>...
+# Publishes the assets as the GitHub Release v<version>. <action> is the
+# output of release-state.sh for the same asset list. `create`
 # creates the release with release-notes.md as its notes, marked as a
 # prerelease when the version has a `-` suffix. `upload` uploads every asset
 # into the existing release. It never passes --clobber, so it never replaces
 # an asset. `skip` changes nothing. A gh error fails the script.
 set -euo pipefail
-version=${1:?usage: publish.sh <version> <action>}
-action=${2:?usage: publish.sh <version> <action>}
+version=${1:?usage: publish.sh <version> <action> <asset>...}
+action=${2:?usage: publish.sh <version> <action> <asset>...}
+shift 2
 tag=v$version
-assets=(dist/*.tar.gz dist/SHA256SUMS)
-if [ ! -f "${assets[0]}" ]; then
-  echo "error: no archives in dist/" >&2
+assets=("$@")
+if [ ${#assets[@]} -eq 0 ]; then
+  echo "error: no assets given" >&2
   exit 1
 fi
+# An unmatched glob such as dist/*.tar.gz arrives as a literal path.
+for f in "${assets[@]}"; do
+  [ -f "$f" ] || { echo "error: asset not found: $f" >&2; exit 1; }
+done
 case $action in
   skip)
     echo "release $tag already has every asset; nothing to publish" >&2

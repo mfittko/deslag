@@ -46,7 +46,7 @@ toolchain.
 | `package.sh <version> <target>` | Pack the `deslag` binary, both license files and `README.md` into a `deslag-<version>-<target>/` directory in `dist/deslag-<version>-<target>.tar.gz`. |
 | `checksums.sh <dir>` | Write `<dir>/SHA256SUMS` for every archive in `<dir>`. |
 | `release-state.sh <tag> <asset>...` | Print `create`, `upload` or `skip` for a release; fail on a partial release or a lookup error. |
-| `publish.sh <version> <action>` | Create the release, upload into it or skip it, as `release-state.sh` decided. It never replaces an asset. |
+| `publish.sh <version> <action> <asset>...` | Create the release with the assets, upload them into it or skip it, as `release-state.sh` decided for the same asset list. It never replaces an asset. |
 
 ## 1. Collect changelog fragments
 

@@ -140,6 +140,10 @@ jobs:
       contents: write
       id-token: write
       attestations: write
+    # The one asset list. The state check and the publish step both expand
+    # it unquoted, so the skip/upload decision covers the published set.
+    env:
+      ASSETS: dist/*.tar.gz dist/SHA256SUMS
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -168,7 +172,8 @@ jobs:
           GH_REPO: ${{ github.repository }}
           VERSION: ${{ needs.verify.outputs.version }}
         run: |
-          action=$(scripts/release/release-state.sh "v$VERSION" dist/*.tar.gz dist/SHA256SUMS)
+          # shellcheck disable=SC2086 # split and glob-expand $ASSETS
+          action=$(scripts/release/release-state.sh "v$VERSION" $ASSETS)
           echo "action=$action" >>"$GITHUB_OUTPUT"
       # Fails on a private repository whose plan has no attestations, before
       # the release exists.
@@ -184,4 +189,6 @@ jobs:
           GH_REPO: ${{ github.repository }}
           VERSION: ${{ needs.verify.outputs.version }}
           ACTION: ${{ steps.state.outputs.action }}
-        run: scripts/release/publish.sh "$VERSION" "$ACTION"
+        run: |
+          # shellcheck disable=SC2086 # split and glob-expand $ASSETS
+          scripts/release/publish.sh "$VERSION" "$ACTION" $ASSETS
