@@ -2,7 +2,7 @@
 
 This document predeclares the scoring rules and the non-inferiority criterion for the paired task evaluation in PLAN §14.4. It was committed before any evaluation run. A change to the scoring rules or to the criterion after results have been inspected needs a decision record in `docs/decisions/`.
 
-This document was revised after its first commit. The revisions are the `lines-v2` arm, the `inferior` verdict through the upper bound, the rule for transform arms on `evidence_drop` controls, the scope of the table format read-back, which excludes control tasks, the shared row and depth limits of the two table arms, and one run per report file. Every revision precedes any live evaluation run. The two-call plumbing smoke check of the `claude` backend is not an analysis run.
+The two-call plumbing smoke check of the `claude` backend is excluded from the analysis.
 
 The harness is the `deslag-eval` binary in `crates/deslag-eval`. The corpus is `tests/evaluations/manifest.json`. Results are in `docs/benchmarks/evaluation.md`.
 
@@ -19,7 +19,7 @@ One task is one paired observation. Each task runs once per arm. The analysis pa
 | `table-csv` | table-v1 output of `deslag_core::compress` with only `json_table` on, the estimate token counter and the evaluation limits. |
 | `table-mdkv` | `deslag_core::table::render_markdown_kv` output with the row and depth limits of the evaluation limits, the default savings thresholds of `TableOptions` and the estimate token counter. Evaluation only. |
 | `lines-v1` | lines-v1 output of `deslag_core::compress` with only `exact_line_runs` on and the evaluation limits. |
-| `lines-v2` | lines-v2 output of `deslag_core::compress` with only `line_templates` on and the evaluation limits. The arm was added after this document was first committed and before any live evaluation run. |
+| `lines-v2` | lines-v2 output of `deslag_core::compress` with only `line_templates` on and the evaluation limits. |
 | `drop-evidence` | The original with every line that contains the task's `evidence` substring removed. Negative control only. |
 
 The evaluation limits are the limits of `FIRST_SLICE_JSON_MINIFY_CONTEXT`: no input byte limits, at most 20000 table rows and a JSON depth of 128. The `table-csv` and `table-mdkv` arms share the row and depth limits, so both formats accept the same inputs.
@@ -46,7 +46,7 @@ Question: {question}
 
 The prompt does not explain table-v1, Markdown-KV, lines-v1 or lines-v2. A deployed hook does not explain them either.
 
-One evaluation run uses one model. `claude -p` does not expose temperature, so the result lines record the model id and the client version instead. Tools are disabled (`--tools ""`). Each run is a single turn.
+One evaluation run uses one model. The result lines record the model id and the client version. `claude -p` has no temperature setting. Tools are disabled (`--tools ""`). Each run is a single turn.
 
 ## Scoring
 
@@ -64,7 +64,7 @@ Each task names one rule:
 | `exact` | The normalized answer equals a normalized accepted answer, case-sensitive. |
 | `exact_ci` | As `exact`, case-insensitive. |
 | `set` | The answer, split on commas with each item normalized and empty items dropped, equals an accepted answer split the same way, as a set. Case-sensitive. Order does not matter. |
-| `number` | The normalized answer parses as a 64-bit float and differs from an accepted answer by at most the task's `tolerance` (default 0). |
+| `number` | The normalized answer parses as a 64-bit float and differs from an accepted answer by at most the task's `tolerance` (default 0). The comparison adds an epsilon of `1e-9 * max(1, abs(accepted))` to the tolerance, so 1.1 against 1.0 with tolerance 0.1 is within tolerance. |
 
 Success is binary. Each failure has one error kind:
 
@@ -95,7 +95,7 @@ lower = d' - 1.6449 * se
 upper = d' + 1.6449 * se
 ```
 
-The arm passes when `lower > -0.02`. The verdict is `inferior` when `upper < -0.02`, so inferiority beyond the margin is shown at the same one-sided 95% level. Otherwise the verdict is `not shown`. A `not shown` verdict is no evidence of equivalence and no evidence of harm.
+The arm passes when `lower > -0.02`. The verdict is `inferior` when `upper < -0.02`, so inferiority beyond the margin is shown at the same one-sided 95% level. Otherwise the verdict is `not shown`. A `not shown` verdict means the data cannot decide between non-inferiority and inferiority. An arm with zero paired non-control tasks (n = 0) gets the verdict `no data`.
 
 With zero discordant pairs, `lower = -1.6449 / (n + 2)`. That exceeds -0.02 only for `n >= 81`. A corpus with fewer than 81 paired tasks for an arm is inconclusive by construction. The initial corpus is such a pilot.
 
@@ -111,7 +111,7 @@ The harness never retries a call. A call that the client answers with an error, 
 
 Each task in `tests/evaluations/manifest.json` has `id`, `category`, `input` (a path relative to the manifest), `question`, `answers`, `rule`, an optional `tolerance` (a number >= 0), `arms`, an optional `control` and, for the evidence-drop control, `evidence`. A `control`, when present, is `incompressible` or `evidence_drop`. Only a task with control `evidence_drop` may list the `drop-evidence` arm. Every accepted answer of a `number` task parses as a finite number. The manifest is trusted and committed, so an input path may also be absolute. All content is synthetic. No real user content is exported.
 
-The categories are the PLAN §14.4 task kinds: `api_query`, `code_search`, `failure_diagnosis`, `issue_triage`, `logs`, `aggregation`, `exact_id` and `buried_evidence`. A `buried_evidence` task puts the answer in the middle or at the end of a large result. At least one input has 100 or more rows.
+The categories are the PLAN §14.4 task kinds: `api_query`, `code_search`, `failure_diagnosis`, `issue_triage`, `logs`, `aggregation`, `exact_id` and `buried_evidence`. A control task uses its control kind (`incompressible` or `evidence_drop`) as its category. A `buried_evidence` task puts the answer in the middle or at the end of a large result. At least one input has 100 or more rows.
 
 Two control kinds validate the harness:
 

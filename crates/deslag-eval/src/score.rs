@@ -84,7 +84,8 @@ pub fn score(answer: &str, accepted: &[String], rule: Rule, tolerance: f64) -> E
             Rule::ExactCi => a.to_lowercase() == x.to_lowercase(),
             Rule::Set => items(&a) == items(&x),
             Rule::Number => match (a.parse::<f64>(), x.parse::<f64>()) {
-                (Ok(p), Ok(q)) => (p - q).abs() <= tolerance,
+                // Epsilon absorbs binary rounding at a decimal tolerance boundary.
+                (Ok(p), Ok(q)) => (p - q).abs() <= tolerance + 1e-9 * q.abs().max(1.0),
                 _ => false,
             },
         }
@@ -98,8 +99,13 @@ pub fn score(answer: &str, accepted: &[String], rule: Rule, tolerance: f64) -> E
 
 /// Agresti-Min adjusted difference (arm minus baseline) and its standard error
 /// over `n` pairs. `b` counts pairs where only the baseline succeeded, `c`
-/// pairs where only the arm succeeded.
+/// pairs where only the arm succeeded. Panics when `b + c > n`, an impossible
+/// paired table.
 fn adjusted(n: u32, b: u32, c: u32) -> (f64, f64) {
+    assert!(
+        u64::from(b) + u64::from(c) <= u64::from(n),
+        "discordant pairs b + c exceed n"
+    );
     let n2 = f64::from(n) + 2.0;
     let (b, c) = (f64::from(b) + 0.5, f64::from(c) + 0.5);
     let var = ((b + c) - (c - b).powi(2) / n2) / (n2 * n2);
@@ -119,10 +125,12 @@ pub fn upper_bound(n: u32, b: u32, c: u32) -> f64 {
     d + Z * se
 }
 
-/// `inferior` means the upper bound is below the margin, so inferiority is
-/// shown at the same level as a pass.
+/// `passes`, `inferior`, `not shown`, or `no data` when `n == 0`. `inferior`
+/// means the upper bound is below the margin, so inferiority is shown at the
+/// same level as a pass. Panics when `b + c > n`.
 pub fn verdict(n: u32, b: u32, c: u32) -> &'static str {
     if n == 0 {
+        assert!(b == 0 && c == 0, "discordant pairs b + c exceed n");
         "no data"
     } else if lower_bound(n, b, c) > -MARGIN {
         "passes"
@@ -148,5 +156,14 @@ pub fn shuffle<T>(items: &mut [T], seed: u64) {
     for i in (1..items.len()).rev() {
         let j = (splitmix64(&mut state) % (i as u64 + 1)) as usize;
         items.swap(i, j);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn splitmix64_matches_reference() {
+        let mut state = 0;
+        assert_eq!(super::splitmix64(&mut state), 0xE220_A839_7B1D_CDAF);
     }
 }
