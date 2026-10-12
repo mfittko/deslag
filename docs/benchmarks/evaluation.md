@@ -10,9 +10,9 @@ No live model results exist yet. This file holds the pending live run, a two-cal
 | --- | --- |
 | Live model results | none, pending (see Pending live runs) |
 | Mock dry run | below, plumbing evidence only |
-| Corpus size per arm | 5 to 11 non-control pairs; the criterion needs at least 81, so every verdict is `not shown` by construction |
+| Corpus size per arm | 4 to 11 non-control pairs; the criterion needs at least 81, so every verdict is `not shown` by construction |
 | table-v1 CSV vs Markdown-KV | no model comparison yet; CSV cannot become a default before one exists |
-| Generated | 2026-10-12T00:25:55Z, commit 298604e85550fc3f01e0596283d3f13d6a4baf69 |
+| Generated | 2026-10-12T00:29:22Z, commit d600cb1b15208199b48c1c1366e85345ea0c0e15 |
 
 ## Pending live runs
 
@@ -32,12 +32,12 @@ Estimated cost from `deslag-eval estimate --manifest tests/evaluations/manifest.
 
 | Field | Value |
 | --- | --- |
-| Runs (task, arm) | 66 |
-| Estimated input tokens (deslag-estimate-v1, incl. 2000 overhead per run) | 254246 |
+| Runs (task, arm) | 73 |
+| Estimated input tokens (deslag-estimate-v1, incl. 2000 overhead per run) | 277840 |
 | Assumed output tokens per run | 256 |
 | Assumed prices, USD per Mtok | input 3 (x1.25 cache write), output 15 |
-| Estimated cost | USD 1.21 |
-| Hard cap (66 runs at --per-run-usd 0.3) | USD 19.80 |
+| Estimated cost | USD 1.32 |
+| Hard cap (73 runs at --per-run-usd 0.3) | USD 21.90 |
 
 After the run, add its report as a new section above the mock dry run, with the client version and the total spend, and update the Status table.
 
@@ -65,7 +65,7 @@ cargo run -q -p deslag-eval --locked -- report tmp/eval/mock-seed16.jsonl
 | model | n/a |
 | client version | deslag-eval 0.1.0-alpha.1 |
 | seed | 16 |
-| result lines | 66 |
+| result lines | 73 |
 | runs without a baseline partner | 0 |
 | reported cost, USD | n/a |
 
@@ -77,6 +77,7 @@ Non-control tasks. Agresti-Min lower one-sided 95% bound; an arm passes when the
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | json-minify | 11 | 0 | 0 | 0 | 11/11 (100.0%) | 11/11 (100.0%) | +0.0 | -12.7 | not shown |
 | lines-v1 | 5 | 2 | 0 | 0 | 5/5 (100.0%) | 5/5 (100.0%) | +0.0 | -23.5 | not shown |
+| lines-v2 | 4 | 0 | 0 | 0 | 4/4 (100.0%) | 4/4 (100.0%) | +0.0 | -27.4 | not shown |
 | table-csv | 10 | 0 | 0 | 0 | 10/10 (100.0%) | 10/10 (100.0%) | +0.0 | -13.7 | not shown |
 | table-mdkv | 10 | 0 | 0 | 0 | 10/10 (100.0%) | 10/10 (100.0%) | +0.0 | -13.7 | not shown |
 
@@ -92,6 +93,7 @@ Non-control tasks. Agresti-Min lower one-sided 95% bound; an arm passes when the
 | api_query | table-mdkv | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
 | buried_evidence | json-minify | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
 | buried_evidence | lines-v1 | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
+| buried_evidence | lines-v2 | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
 | buried_evidence | table-csv | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
 | buried_evidence | table-mdkv | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
 | code_search | json-minify | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
@@ -103,12 +105,14 @@ Non-control tasks. Agresti-Min lower one-sided 95% bound; an arm passes when the
 | exact_id | table-mdkv | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
 | failure_diagnosis | json-minify | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
 | failure_diagnosis | lines-v1 | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
+| failure_diagnosis | lines-v2 | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
 | failure_diagnosis | table-csv | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
 | failure_diagnosis | table-mdkv | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
 | issue_triage | json-minify | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
 | issue_triage | table-csv | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
 | issue_triage | table-mdkv | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
 | logs | lines-v1 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
+| logs | lines-v2 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
 
 ### Table format read-back
 
@@ -124,8 +128,10 @@ Non-control tasks that ran both table arms in the same seed. Control tasks are e
 | Control | Arm | Pairs | Baseline success | Arm success | Unchanged | Discordant | Result |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | evidence_drop | drop-evidence | 2 | 2/2 (100.0%) | 0/2 (0.0%) | 0 | 2 | evidence loss detected |
+| evidence_drop | lines-v2 | 1 | 1/1 (100.0%) | 1/1 (100.0%) | 0 | 0 | evidence kept |
 | incompressible | json-minify | 2 | 2/2 (100.0%) | 2/2 (100.0%) | 2 | 0 | all variants unchanged |
 | incompressible | lines-v1 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | 2 | 0 | all variants unchanged |
+| incompressible | lines-v2 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | 2 | 0 | all variants unchanged |
 | incompressible | table-csv | 2 | 2/2 (100.0%) | 2/2 (100.0%) | 2 | 0 | all variants unchanged |
 | incompressible | table-mdkv | 2 | 2/2 (100.0%) | 2/2 (100.0%) | 2 | 0 | all variants unchanged |
 
@@ -140,6 +146,7 @@ All tasks, controls included. Payload tokens are estimates (deslag-estimate-v1).
 | table-csv | 12 | 12/12 (100.0%) | 0 | 0 | 0 | 14247 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
 | table-mdkv | 12 | 12/12 (100.0%) | 0 | 0 | 0 | 22387 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
 | lines-v1 | 7 | 7/7 (100.0%) | 0 | 0 | 0 | 11834 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| lines-v2 | 7 | 7/7 (100.0%) | 0 | 0 | 0 | 9079 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
 | drop-evidence | 2 | 0/2 (0.0%) | 0 | 2 | 0 | 1136 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
 
 ## Payload sizes
@@ -162,6 +169,7 @@ From `deslag-eval variants tests/evaluations/manifest.json`. Bytes and estimated
 | code-const-line | lines-v1 | 3077 | 858 | no |
 | fail-test-name | baseline | 3710 | 991 | no |
 | fail-test-name | lines-v1 | 2349 | 712 | yes |
+| fail-test-name | lines-v2 | 1839 | 589 | yes |
 | fail-ci-job | baseline | 5028 | 1752 | no |
 | fail-ci-job | json-minify | 3766 | 1237 | yes |
 | fail-ci-job | table-csv | 1867 | 703 | yes |
@@ -176,8 +184,10 @@ From `deslag-eval variants tests/evaluations/manifest.json`. Bytes and estimated
 | triage-assignee-set | table-mdkv | 4579 | 1678 | yes |
 | logs-503-request | baseline | 6013 | 2320 | no |
 | logs-503-request | lines-v1 | 4724 | 1924 | yes |
+| logs-503-request | lines-v2 | 2837 | 1435 | yes |
 | logs-403-ip | baseline | 8907 | 4672 | no |
 | logs-403-ip | lines-v1 | 8907 | 4672 | no |
+| logs-403-ip | lines-v2 | 6375 | 3307 | yes |
 | agg-max-errors | baseline | 6195 | 2237 | no |
 | agg-max-errors | json-minify | 4393 | 1513 | yes |
 | agg-max-errors | table-csv | 1576 | 701 | yes |
@@ -200,17 +210,21 @@ From `deslag-eval variants tests/evaluations/manifest.json`. Bytes and estimated
 | buried-key-delete | table-mdkv | 14009 | 6155 | yes |
 | buried-artifact-sha | baseline | 8028 | 3604 | no |
 | buried-artifact-sha | lines-v1 | 7734 | 3559 | yes |
+| buried-artifact-sha | lines-v2 | 5720 | 3124 | yes |
 | control-prose | baseline | 423 | 92 | no |
 | control-prose | json-minify | 423 | 92 | no |
 | control-prose | table-csv | 423 | 92 | no |
 | control-prose | table-mdkv | 423 | 92 | no |
 | control-prose | lines-v1 | 423 | 92 | no |
+| control-prose | lines-v2 | 423 | 92 | no |
 | control-minimal-json | baseline | 57 | 17 | no |
 | control-minimal-json | json-minify | 57 | 17 | no |
 | control-minimal-json | table-csv | 57 | 17 | no |
 | control-minimal-json | table-mdkv | 57 | 17 | no |
 | control-minimal-json | lines-v1 | 57 | 17 | no |
+| control-minimal-json | lines-v2 | 57 | 17 | no |
 | control-drop-revoker | baseline | 1563 | 588 | no |
 | control-drop-revoker | drop-evidence | 1531 | 577 | yes |
 | control-drop-alert | baseline | 1275 | 587 | no |
 | control-drop-alert | drop-evidence | 1205 | 559 | yes |
+| control-drop-alert | lines-v2 | 875 | 515 | yes |
