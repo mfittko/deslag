@@ -116,7 +116,7 @@ The categories are the PLAN §14.4 task kinds: `api_query`, `code_search`, `fail
 Two control kinds validate the harness:
 
 - `incompressible`: inputs that every listed transform declines. Every arm equals baseline. Any paired difference measures run-to-run noise of the model.
-- `evidence_drop`: the `drop-evidence` arm removes the answer-carrying line. It must score below baseline. This shows that the harness detects evidence loss. A transform arm on an `evidence_drop` task must keep the evidence. The report shows `evidence kept` when no pair has a successful baseline and a failed arm and at least one baseline succeeded. It shows `baseline failed` when no baseline succeeded. Otherwise it shows `a transform lost evidence`.
+- `evidence_drop`: the `drop-evidence` arm removes the answer-carrying line. It must score below baseline. This shows that the harness detects evidence loss. For the `drop-evidence` arm, the report shows `baseline failed` when no baseline succeeded, `evidence loss detected` when the arm succeeded on fewer pairs than baseline, and `evidence loss not detected` otherwise. A transform arm on an `evidence_drop` task must keep the evidence. The report shows `evidence kept` when no pair has a successful baseline and a failed arm and at least one baseline succeeded. It shows `baseline failed` when no baseline succeeded. Otherwise it shows `a transform lost evidence`.
 
 ## Backends
 
@@ -135,7 +135,7 @@ The run order is a seeded shuffle (splitmix64, Fisher-Yates) over all (task, arm
 - Before each call, the runner stops when the spent amount plus the per-run cap would exceed `--budget-usd`. A call that reports no cost counts as the full per-run cap.
 - The client checks `--max-budget-usd` only after a turn, so one call can exceed its cap. The total can then exceed `--budget-usd` by that excess. The runner stops with exit 2 after any call whose reported cost exceeds `--per-run-usd`. The partial results file is kept.
 - `run` refuses an existing `--out` path with exit 2, so a rerun never overwrites results.
-- `deslag-eval estimate` prints, before any money is spent, an estimated cost of a full live run under stated assumptions (estimated tokens, assumed prices and assumed output tokens) and a hard cap of runs times `--per-run-usd`. The hard cap is the only bound in its output. It refuses a negative or non-finite price and a `--per-run-usd` that is not above 0.
+- `deslag-eval estimate` prints, before any money is spent, an estimated cost of a full live run under stated assumptions (estimated tokens, assumed prices and assumed output tokens) and runs times `--per-run-usd`. That product is a cap only if every call stays within `--per-run-usd`. It refuses a negative or non-finite price and a `--per-run-usd` that is not above 0.
 - CI runs only `cargo test`, which uses the mock backend. CI never sets `DESLAG_EVAL_LIVE`.
 
 ## Table format read-back

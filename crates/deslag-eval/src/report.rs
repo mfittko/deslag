@@ -226,6 +226,7 @@ pub fn render(text: &str) -> Result<String, String> {
             "evidence_drop" if transform && p.b == 0 && p.base_ok > 0 => "evidence kept",
             "evidence_drop" if transform && p.base_ok == 0 => "baseline failed",
             "evidence_drop" if transform => "a transform lost evidence",
+            "evidence_drop" if p.base_ok == 0 => "baseline failed",
             "evidence_drop" if p.arm_ok < p.base_ok => "evidence loss detected",
             "evidence_drop" => "evidence loss not detected",
             _ => "unknown control",

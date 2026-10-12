@@ -136,6 +136,11 @@ fn load_manifest(path: &Path) -> Result<Vec<Task>, String> {
             if let Some(a) = arms.iter().find(|a| !ARMS.contains(&a.as_str())) {
                 return Err(err(&format!("unknown arm {a}")));
             }
+            if let Some(a) =
+                (1..arms.len()).find_map(|i| arms[..i].contains(&arms[i]).then_some(&arms[i]))
+            {
+                return Err(err(&format!("duplicate arm {a}")));
+            }
             let evidence = s("evidence");
             let control = s("control");
             if let Some(c) = control.as_deref()
@@ -459,8 +464,8 @@ fn usd_valid(per_run: f64, others: &[f64]) -> bool {
 }
 
 /// Estimated cost of a full live run under stated assumptions (estimated
-/// prompt tokens, assumed prices and output tokens), plus the hard cap of
-/// runs times `--per-run-usd`, the only bound in the output.
+/// prompt tokens, assumed prices and output tokens), plus runs times
+/// `--per-run-usd`, a cap only if every call stays within `--per-run-usd`.
 fn estimate(args: &[String]) -> Result<(), String> {
     let f = flags(
         args,
@@ -495,7 +500,7 @@ fn estimate(args: &[String]) -> Result<(), String> {
 | Assumed output tokens per run | {out_tokens} |
 | Assumed prices, USD per Mtok | input {in_price} (x1.25 cache write), output {out_price} |
 | Estimated cost | USD {cost:.2} |
-| Hard cap ({n} runs at --per-run-usd {per_run}) | USD {cap:.2} |"
+| Cap if every call stays within --per-run-usd ({n} runs at {per_run}) | USD {cap:.2} |"
     );
     Ok(())
 }

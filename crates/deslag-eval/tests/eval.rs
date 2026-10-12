@@ -193,17 +193,23 @@ fn report_renders_format_comparison_and_controls() {
     );
     assert!(md.contains("| incompressible | lines-v2 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | 2 | 0 | all variants unchanged |"), "{md}");
     assert!(!md.contains("a transform changed a control input"), "{md}");
-    // A transform arm on evidence_drop reports a failed baseline or lost evidence.
+    // Edit one arm's evidence_drop results and check one control row.
     let (_, lines) = mock_run("16", "mock-report-fail.jsonl");
-    for (fail_arm, result) in [
-        ("baseline", "baseline failed"),
-        ("lines-v2", "a transform lost evidence"),
+    let (v2, drop) = (
+        "| evidence_drop | lines-v2 | 1 |",
+        "| evidence_drop | drop-evidence | 2 |",
+    );
+    for (edit_arm, success, row, result) in [
+        ("baseline", false, v2, "baseline failed"),
+        ("baseline", false, drop, "baseline failed"),
+        ("lines-v2", false, v2, "a transform lost evidence"),
+        ("drop-evidence", true, drop, "evidence loss not detected"),
     ] {
         let mut text = String::new();
         for mut l in lines.clone() {
-            if l["control"] == "evidence_drop" && l["arm"] == fail_arm {
-                l["success"] = false.into();
-                l["error_kind"] = "wrong".into();
+            if l["control"] == "evidence_drop" && l["arm"] == edit_arm {
+                l["success"] = success.into();
+                l["error_kind"] = if success { "none" } else { "wrong" }.into();
             }
             text += &format!("{l}\n");
         }
@@ -211,7 +217,6 @@ fn report_renders_format_comparison_and_controls() {
         std::fs::write(&path, text).unwrap();
         let o = eval(&["report", path.to_str().unwrap()]);
         let md = String::from_utf8(o.stdout).unwrap();
-        let row = "| evidence_drop | lines-v2 | 1 |";
         let line = md.lines().find(|l| l.starts_with(row)).unwrap_or("");
         assert!(line.ends_with(&format!("| {result} |")), "{md}");
     }
@@ -339,7 +344,8 @@ fn estimate_prints_a_cost() {
     assert!(o.status.success());
     let md = String::from_utf8(o.stdout).unwrap();
     assert!(
-        md.contains("| Estimated cost | USD ") && md.contains("| Hard cap (73 runs"),
+        md.contains("| Estimated cost | USD ")
+            && md.contains("| Cap if every call stays within --per-run-usd (73 runs"),
         "{md}"
     );
 }
@@ -470,6 +476,16 @@ fn manifest_rejects_bad_tolerance_and_uncontrolled_drop_evidence() {
             r#""arms": ["drop-evidence"], "evidence": "trunk""#,
             "control evidence_drop",
         ),
+        (
+            "dup-arm",
+            r#""arms": ["json-minify", "json-minify"]"#,
+            "duplicate arm json-minify",
+        ),
+        (
+            "dup-arm-later",
+            r#""arms": ["table-csv", "lines-v1", "table-csv"]"#,
+            "duplicate arm table-csv",
+        ),
     ] {
         let path = dir.join(format!("{name}.json"));
         std::fs::write(&path, task(extra)).unwrap();
@@ -485,6 +501,8 @@ fn manifest_rejects_bad_tolerance_and_uncontrolled_drop_evidence() {
     for (name, extra) in [
         ("ok", r#""arms": ["json-minify"], "tolerance": 0.5"#),
         ("no-control", r#""arms": ["json-minify"]"#),
+        ("two-arms", r#""arms": ["json-minify", "table-csv"]"#),
+        ("no-arms", r#""arms": []"#),
         (
             "incompressible",
             r#""arms": ["json-minify"], "control": "incompressible""#,
@@ -543,6 +561,15 @@ fn fake_live_run(mode: &str, out_exists: bool) -> (Output, Vec<Value>, PathBuf) 
         &script,
         r#"#!/bin/sh
 if [ "$1" = "--version" ]; then echo "9.9.9 (fake)"; exit 0; fi
+# Fail unless the cost cap and isolation args are present.
+budget=; tools=; mcp=; prev=
+for a in "$@"; do
+  [ "$prev" = --max-budget-usd ] && [ "$a" = 0.3 ] && budget=1
+  [ "$prev" = --tools ] && [ -z "$a" ] && tools=1
+  [ "$a" = --strict-mcp-config ] && mcp=1
+  prev=$a
+done
+[ "$budget$tools$mcp" = 111 ] || exit 1
 cat >/dev/null
 case "$FAKE_CLAUDE_MODE" in
   ok) echo '{"type":"result","is_error":false,"result":"trunk-2026","usage":{"input_tokens":3,"output_tokens":2},"num_turns":1}' ;;

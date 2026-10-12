@@ -28,7 +28,7 @@ DESLAG_EVAL_LIVE=1 cargo run -q -p deslag-eval --locked -- run \
 cargo run -q -p deslag-eval --locked -- report tmp/eval/live-claude-haiku-5-5-seed16.jsonl
 ```
 
-Estimated cost from `deslag-eval estimate --manifest tests/evaluations/manifest.json` (default assumptions). The estimate rests on estimated tokens, assumed output tokens and conservative assumed prices that may exceed the published price of the model. The hard cap of runs times `--per-run-usd` is the only bound in the output. Before each call, the runner stops when the spent amount plus the per-run cap of USD 0.30 would exceed `--budget-usd 3.00`. Each call passes `--max-budget-usd 0.30`, but the client checks it only after a turn. One call can therefore exceed its cap, and the total can exceed USD 3.00 by that excess. The runner stops with exit 2 after any call that reports more than USD 0.30 and keeps the partial results file. `run` refuses an existing `--out` path.
+Estimated cost from `deslag-eval estimate --manifest tests/evaluations/manifest.json` (default assumptions). The estimate rests on estimated tokens, assumed output tokens and conservative assumed prices that may exceed the published price of the model. Runs times `--per-run-usd` is a cap only if every call stays within `--per-run-usd`. Before each call, the runner stops when the spent amount plus the per-run cap of USD 0.30 would exceed `--budget-usd 3.00`. Each call passes `--max-budget-usd 0.30`, but the client checks it only after a turn. One call can therefore exceed its cap, and the total can exceed USD 3.00 by that excess. The runner stops with exit 2 after any call that reports more than USD 0.30 and keeps the partial results file. `run` refuses an existing `--out` path.
 
 | Field | Value |
 | --- | --- |
@@ -37,7 +37,7 @@ Estimated cost from `deslag-eval estimate --manifest tests/evaluations/manifest.
 | Assumed output tokens per run | 256 |
 | Assumed prices, USD per Mtok | input 3 (x1.25 cache write), output 15 |
 | Estimated cost | USD 1.32 |
-| Hard cap (73 runs at --per-run-usd 0.3) | USD 21.90 |
+| Cap if every call stays within --per-run-usd (73 runs at 0.3) | USD 21.90 |
 
 After the run, add its report as a new section above the mock dry run, with the client version and the total spend, and update the Status table.
 
