@@ -10,7 +10,7 @@ use crate::lines::{
 /// Stable transform identity for the line-template codec.
 pub const LINE_TEMPLATES_ID: &str = "line-templates";
 /// Bumped whenever [`encode_templates`] output can change for some input.
-pub const LINE_TEMPLATES_VERSION: u32 = 1;
+pub const LINE_TEMPLATES_VERSION: u32 = 2;
 /// Version of the `lines-v2` container.
 pub const LINES_V2_FORMAT_VERSION: u32 = 2;
 
@@ -26,18 +26,6 @@ pub fn encode_templates(input: &str) -> Option<String> {
     let units: Vec<&str> = input.split_inclusive('\n').collect();
     let mut out = String::from(HEADER_V2);
     let mut i = 0;
-    // ponytail: a group attempt runs at unit i when i >= no_group_before.
-    // failed_end is the end of the span of the most recent failed multi-line
-    // group. When a multi-line group fails at i and i is inside that span, no
-    // group starts before the end of either span, and failed_end is cleared.
-    // Otherwise the failed group's end becomes failed_end. A failed one-line
-    // attempt, a run directive and a written group change neither value. So an
-    // outlier base does not block the lines below it. Each unit lies in at most
-    // two failed spans before suppression covers it, and a one-line attempt
-    // checks one following row, so encoding is linear. A shorter group inside a
-    // suppressed span could still pay; it is left literal.
-    let mut no_group_before = 0;
-    let mut failed_end: Option<usize> = None;
     while i < units.len() {
         let unit = units[i];
         let count = units[i..].iter().take_while(|&&u| u == unit).count();
@@ -49,23 +37,10 @@ pub fn encode_templates(input: &str) -> Option<String> {
             i += count;
             continue;
         }
-        if i >= no_group_before {
-            let (len, group) = template_group(&units[i..]);
-            if let Some(group) = group {
-                out.push_str(&group);
-                i += len;
-                continue;
-            }
-            if len >= 2 {
-                let end = i + len;
-                match failed_end {
-                    Some(e0) if i < e0 => {
-                        no_group_before = e0.max(end);
-                        failed_end = None;
-                    }
-                    _ => failed_end = Some(end),
-                }
-            }
+        if let Some((len, group)) = template_group(&units[i..]) {
+            out.push_str(&group);
+            i += len;
+            continue;
         }
         push_unit(&mut out, unit);
         i += 1;
@@ -73,40 +48,91 @@ pub fn encode_templates(input: &str) -> Option<String> {
     Some(out)
 }
 
-/// Grows a group greedily from `units[0]`. Returns the group length and its
-/// encoding, which is `None` when the group does not pay.
-fn template_group(units: &[&str]) -> (usize, Option<String>) {
-    let Some(base) = units[0].strip_suffix('\n') else {
-        return (1, None);
-    };
-    let base = split(base);
-    let rows: Vec<Vec<&str>> = units[1..]
-        .iter()
-        .map_while(|u| u.strip_suffix('\n').map(split))
-        .take_while(|row| fits(&base, row))
-        .collect();
-    let len = rows.len() + 1;
+// ponytail: a group attempt scans at most WINDOW rows before it must commit, so
+// encoding is O(WINDOW * input). A shorter group past the window that would pay
+// more is not found; raise WINDOW or segment optimally (DP) if that matters.
+const WINDOW: usize = 16;
+
+/// Grows a group from `units[0]` and returns the length and encoding of the
+/// prefix that saves the most bytes, or `None` when no prefix pays. Rows join
+/// while they fit the base and do not start a paying run. Past `WINDOW` rows, a
+/// row joins only when the current end is the best end and the row adds no
+/// variable index.
+fn template_group(units: &[&str]) -> Option<(usize, String)> {
+    let base = split(units[0].strip_suffix('\n')?);
+    let mut variable = vec![false; base.len()];
+    let mut bytes = vec![0; base.len()];
+    let mut escapes = vec![0; base.len()];
+    let (mut rows, mut literal, mut best) = (Vec::new(), 0, None);
+    for (j, &unit) in units.iter().enumerate().skip(1) {
+        let Some(row) = unit.strip_suffix('\n').map(split) else {
+            break;
+        };
+        if !fits(&base, &row) || starts_paying_run(&units[j - 1..]) {
+            break;
+        }
+        let grows = (1..base.len())
+            .step_by(2)
+            .any(|k| !variable[k] && row[k] != base[k]);
+        if rows.len() >= WINDOW && (grows || best.map(|(n, _)| n) != Some(rows.len())) {
+            break;
+        }
+        for k in (1..base.len()).step_by(2) {
+            variable[k] |= row[k] != base[k];
+            bytes[k] += row[k].len();
+            escapes[k] += usize::from(row[k].starts_with(PREFIX));
+        }
+        literal += unit_cost(unit);
+        rows.push(row);
+        let n = rows.len();
+        let positions = (1..base.len()).step_by(2).filter(|&k| variable[k]);
+        let (mut m, mut cost) = (0, TEMPLATE.len() + digits(n + 1) + 1);
+        for k in positions.clone() {
+            m += 1;
+            cost += digits(k / 2) + 1 + bytes[k];
+        }
+        if let Some(first) = positions.clone().next() {
+            cost += n * m + escapes[first] * ESCAPE.len();
+            if cost < literal && best.is_none_or(|(_, saving)| literal - cost >= saving) {
+                best = Some((n, literal - cost));
+            }
+        }
+    }
+    let (n, _) = best?;
+    let rows = &rows[..n];
     let positions: Vec<usize> = (1..base.len())
         .step_by(2)
         .filter(|&k| rows.iter().any(|row| row[k] != base[k]))
         .collect();
-    if positions.is_empty() {
-        return (len, None);
-    }
     let list: Vec<String> = positions.iter().map(|k| (k / 2).to_string()).collect();
-    let mut body = format!("{TEMPLATE}{len} {}\n", list.join(","));
-    for row in &rows {
+    let mut body = format!("{TEMPLATE}{} {}\n", n + 1, list.join(","));
+    for row in rows {
         let values: Vec<&str> = positions.iter().map(|&k| row[k]).collect();
         push_unit(&mut body, &(values.join(" ") + "\n"));
     }
-    let literal: usize = units[1..len].iter().map(|u| unit_cost(u)).sum();
+    let literal: usize = units[1..=n].iter().map(|u| unit_cost(u)).sum();
     if body.len() >= literal {
-        return (len, None);
+        return None;
     }
     let mut out = String::new();
     push_unit(&mut out, units[0]);
     out.push_str(&body);
-    (len, Some(out))
+    Some((n + 1, out))
+}
+
+/// True when `units[1]` starts a run of identical units whose run directive
+/// pays. Each run is counted once, at its first unit.
+fn starts_paying_run(units: &[&str]) -> bool {
+    let unit = units[1];
+    if units[0] == unit {
+        return false;
+    }
+    let count = units[1..].iter().take_while(|&&u| u == unit).count();
+    count >= 2 && run_directive(unit, count).is_some()
+}
+
+fn digits(n: usize) -> usize {
+    n.checked_ilog10().map_or(1, |d| d as usize + 1)
 }
 
 /// Splits line content into alternating gaps and tokens:

@@ -83,7 +83,7 @@ The encoded text is the header line followed by the body.
 Exact codec for runs of consecutive lines that share a template, such as log
 lines that differ only in timestamps, IDs, counts or paths. `lines-v2` is
 `lines-v1` plus the template directive. The decoder reconstructs the original
-bytes exactly. Transform identity: `line-templates`, transform version 1,
+bytes exactly. Transform identity: `line-templates`, transform version 2,
 report `format_version` 2.
 
 ### Units and tokens
@@ -139,24 +139,23 @@ At each unit, in input order:
 
 1. Count the identical consecutive copies. When there are at least 2 and the
    `lines-v1` run rule pays, write the unit and a run directive.
-2. Otherwise grow a group greedily from this unit as the base. A following
-   unit joins when it ends with `\n`, has the same gaps byte for byte and the
-   same token count as the base, and each of its tokens equals the base token
-   or both tokens are variable-class. A constant token that differs ends the
-   group. So lines that differ in a constant token (a token with no ASCII
-   digit, `/` or `\`) never share a template.
-3. The variable indices are the indices where any row differs from the base.
-   The group is written only when the directive and the rows are shorter than
-   the rows' literal bytes, escapes included. Otherwise the base is written
-   literally. The encoder keeps two values: `no_group_before` and
-   `failed_end`. A group attempt runs at unit i only when i is at least
-   `no_group_before`. `failed_end` is the end of the span of the most recent
-   failed group with two or more lines. When such a group fails at unit i and
-   i is before `failed_end`, `no_group_before` becomes the larger of the two
-   span ends and `failed_end` is cleared. Otherwise `failed_end` becomes the
-   end of the failed group's span. A failed one-line attempt (no row fits the
-   base), a run directive and a written group change neither value. Run
-   directives still apply to all units.
+2. Otherwise grow a group from this unit as the base. A following unit joins
+   when it ends with `\n`, has the same gaps byte for byte and the same token
+   count as the base, and each of its tokens equals the base token or both
+   tokens are variable-class. A constant token that differs ends the group.
+   So lines that differ in a constant token (a token with no ASCII digit, `/`
+   or `\`) never share a template. A unit that starts a run of identical
+   units for which the `lines-v1` run rule pays also ends the group.
+3. The variable indices of a group are the indices where any row differs from
+   the base. Each group prefix of two or more lines saves the rows' literal
+   bytes, escapes included, minus the bytes of the directive and the rows.
+   The encoder tracks the prefix with the largest positive saving; on a tie
+   the longer prefix wins. After 16 rows, the group grows only while the
+   current end is that best prefix and the next row adds no variable index.
+   So an outlier row ends the group, and each group attempt that does not
+   commit scans at most 16 rows. Encoding stays linear in the input size.
+4. When some prefix pays, write the best prefix as a group and continue after
+   it. Otherwise write the base literally and continue at the next unit.
 
 - Line order never changes and no line is dropped.
 - A partial final unit is always literal.
