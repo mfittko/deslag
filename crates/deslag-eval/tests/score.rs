@@ -65,6 +65,9 @@ fn number_tolerance_holds_at_decimal_boundaries() {
     assert_eq!(n("0.30000000000000004", "0.3", 0.0), ErrorKind::None);
     assert_eq!(n("1000000001", "1000000000", 0.0), ErrorKind::Wrong);
     assert_eq!(n("18343", "18342", 0.0), ErrorKind::Wrong);
+    for bad in ["inf", "-inf", "infinity", "1e309", "NaN"] {
+        assert_eq!(n(bad, "5", 0.0), ErrorKind::Wrong, "{bad}");
+    }
 }
 
 #[test]

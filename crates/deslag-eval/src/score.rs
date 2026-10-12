@@ -88,7 +88,8 @@ pub fn score(answer: &str, accepted: &[String], rule: Rule, tolerance: f64) -> E
             Rule::Number => match (a.parse::<f64>(), x.parse::<f64>()) {
                 // Epsilon absorbs binary rounding at a decimal tolerance boundary.
                 // A few ulps, so tolerance 0 never widens into a whole unit.
-                (Ok(p), Ok(q)) => {
+                // A non-finite value never matches: an infinite epsilon would accept anything.
+                (Ok(p), Ok(q)) if p.is_finite() && q.is_finite() => {
                     (p - q).abs() <= tolerance + 4.0 * f64::EPSILON * p.abs().max(q.abs()).max(1.0)
                 }
                 _ => false,
