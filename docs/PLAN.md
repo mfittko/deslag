@@ -297,7 +297,7 @@ Implementation rules:
 - Preserve string contents and escapes, numeric lexemes, object member order, and array order.
 - Skip ambiguous or unsupported inputs, including duplicate keys for the initial implementation.
 - Preserve negative zero, exponent notation, large integers, escaped Unicode, and whitespace inside strings.
-- Do not interpret strings containing JSON as another recursive transformation target.
+- Do not interpret strings containing JSON as another recursive transformation target. One exception applies: behind the opt-in `json_table` switch, table-v2 may encode a string cell whose text is minified JSON as a sub-table. That encoding is lossless, restores the original string lexeme byte for byte, is validated by decoding, and has a bounded nesting depth (see table-v2 Sub-tables in [compression-formats.md](compression-formats.md)).
 - Do not apply when a tool category or explicit policy requires exact original bytes.
 
 Acceptance tests: semantic round-trip checks plus lexical-value checks; invalid/truncated JSON passes through unchanged; byte-sensitive categories are bypassed; no token-saving claim is made solely from removed whitespace.
@@ -353,7 +353,7 @@ The line-template codec implements templates for consecutive lines that differ o
 
 ### 7.4 Transform composition and exactness
 
-Make each approved transform idempotent for its supported representation, and test the complete pipeline for repeated application. Do not recursively compress strings inside an encoded wrapper.
+Make each approved transform idempotent for its supported representation, and test the complete pipeline for repeated application. Do not recursively compress strings inside an encoded wrapper. The only exception is the table-v2 sub-table encoding from §7.1: lossless, decode-validated, depth-bounded and enabled only by `json_table`.
 
 Distinguish three guarantees in documentation:
 
