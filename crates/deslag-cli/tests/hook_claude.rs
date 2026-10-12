@@ -112,6 +112,24 @@ fn oversize_input_is_drained_and_fails_open() {
     assert_eq!(stderr.lines().count(), 1, "{stderr}");
 }
 
+/// The spawned hook runs every job under the 10 ms default budget. Parallel tests
+/// contend for the CPU, so a job can miss it. That case fails open: no stdout and
+/// one budget diagnostic. Returns true for that case. Otherwise asserts empty
+/// stderr. Exact replacements are asserted in-process in `main.rs` under a
+/// generous budget, so these tests never depend on wall-clock time.
+fn budget_missed(output: &Output) -> bool {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if output.stdout.is_empty() && !stderr.is_empty() {
+        assert_eq!(
+            stderr,
+            "deslag: compression budget_exceeded; tool output unchanged\n"
+        );
+        return true;
+    }
+    assert!(stderr.is_empty(), "{stderr}");
+    false
+}
+
 fn json(bytes: &[u8]) -> serde_json::Value {
     serde_json::from_slice(bytes).unwrap()
 }
@@ -121,7 +139,9 @@ fn minify_flag_replaces_pretty_json_bash_stdout() {
     let input = fixture("posttooluse-bash-json.json");
     let output = run(&["hook", "claude", "--minify-json"], &input);
     assert_eq!(output.status.code(), Some(0));
-    assert!(output.stderr.is_empty());
+    if budget_missed(&output) {
+        return;
+    }
     assert_eq!(output.stdout.iter().filter(|&&b| b == b'\n').count(), 1);
 
     let mut expected = json(&input)["tool_response"].clone();
@@ -137,7 +157,9 @@ fn minify_flag_replaces_pretty_json_bash_stdout() {
     );
 
     let again = run(&["hook", "claude", "--minify-json"], &input);
-    assert_eq!(again.stdout, output.stdout);
+    if !budget_missed(&again) {
+        assert_eq!(again.stdout, output.stdout);
+    }
 }
 
 #[test]
@@ -151,7 +173,8 @@ fn minify_flag_leaves_ineligible_results_alone() {
         let output = run(&["hook", "claude", "--minify-json"], &input);
         assert_eq!(output.status.code(), Some(0));
         assert!(output.stdout.is_empty());
-        assert!(output.stderr.is_empty());
+        // The Bash stdout still runs one job, which can miss the budget.
+        budget_missed(&output);
     }
 }
 
@@ -235,7 +258,9 @@ fn single_output(output: &Output) -> Option<Value> {
 fn mcp_text_result_is_replaced() {
     let input = fixture("posttooluse-mcp-text.json");
     let output = run(&["hook", "claude", "--minify-json"], &input);
-    assert!(output.stderr.is_empty());
+    if budget_missed(&output) {
+        return;
+    }
     assert_eq!(
         single_output(&output),
         Some(replaced(
@@ -254,7 +279,9 @@ fn subagent_result_is_replaced_like_main_agent() {
         &["hook", "claude", "--minify-json"],
         &serde_json::to_vec(&event).unwrap(),
     );
-    assert!(output.stderr.is_empty());
+    if budget_missed(&output) {
+        return;
+    }
     assert_eq!(single_output(&output), Some(replaced(expected)));
 }
 
@@ -302,10 +329,16 @@ fn parallel_invocations_do_not_contaminate_each_other() {
     for (child, (input, _)) in children.iter_mut().zip(&cases) {
         child.stdin.take().unwrap().write_all(input).unwrap();
     }
+    // 24 processes contend for the CPU, so any job can miss the 10 ms default
+    // budget and fail open. Every replacement must still be exactly its own
+    // case's, never another case's content.
     for (i, (child, (_, expected))) in children.into_iter().zip(&cases).enumerate() {
         let output = child.wait_with_output().unwrap();
-        assert!(output.stderr.is_empty(), "case {i}");
-        assert_eq!(&single_output(&output), expected, "case {i}");
+        let actual = single_output(&output);
+        if budget_missed(&output) {
+            continue;
+        }
+        assert_eq!(&actual, expected, "case {i}");
     }
 }
 
@@ -324,5 +357,9 @@ fn conflicting_hook_is_reported_and_output_left_unchanged() {
     assert_eq!(single_output(&output), None);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(stderr.lines().count(), 1, "{stderr}");
+    // Compression runs before conflict detection, so a budget miss replaces the conflict diagnostic.
+    if stderr == "deslag: compression budget_exceeded; tool output unchanged\n" {
+        return;
+    }
     assert!(stderr.contains("settings.json"), "{stderr}");
 }

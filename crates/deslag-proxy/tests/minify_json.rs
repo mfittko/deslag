@@ -1,9 +1,10 @@
 //! Opt-in JSON minification of Bash tool results, against a local mock upstream.
 
-use std::{convert::Infallible, net::SocketAddr};
+use std::{convert::Infallible, net::SocketAddr, time::Duration};
 
 use bytes::Bytes;
-use deslag_proxy::{Upstream, serve};
+use deslag_core::BoundedExecutor;
+use deslag_proxy::{Limits, Upstream, serve_with};
 use http_body_util::{BodyExt, Full, channel::Channel};
 use hyper::{
     HeaderMap, Request, Response, body::Incoming, server::conn::http1, service::service_fn,
@@ -118,7 +119,20 @@ async fn mock() -> (SocketAddr, mpsc::UnboundedReceiver<Seen>) {
     (addr, rx)
 }
 
+/// A budget no debug build on a slow runner can miss, so tests that expect a
+/// rewrite never see a fail-open rejection.
 async fn proxy(minify: bool) -> (SocketAddr, mpsc::UnboundedReceiver<Seen>) {
+    proxy_with(
+        minify,
+        BoundedExecutor::new(4, Duration::from_secs(60)).unwrap(),
+    )
+    .await
+}
+
+async fn proxy_with(
+    minify: bool,
+    executor: BoundedExecutor,
+) -> (SocketAddr, mpsc::UnboundedReceiver<Seen>) {
     let (upstream, seen) = mock().await;
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -126,10 +140,14 @@ async fn proxy(minify: bool) -> (SocketAddr, mpsc::UnboundedReceiver<Seen>) {
     if minify {
         upstream = upstream.with_json_minification();
     }
+    let limits = Limits {
+        executor,
+        ..Limits::default()
+    };
     // No service lives here, so no test reports to a real state dir. SAFETY:
     // only std reads the environment here, and std serializes that access.
     unsafe { std::env::set_var("DESLAG_STATE_DIR", "/nonexistent/deslag-test") };
-    tokio::spawn(serve(listener, upstream));
+    tokio::spawn(serve_with(listener, upstream, limits));
     (addr, seen)
 }
 
@@ -333,4 +351,24 @@ async fn request_with_trailers_is_not_rewritten() {
     let resp = tx.send_request(req.body(body).unwrap()).await.unwrap();
     assert_eq!(resp.status(), 200);
     assert_eq!(seen.recv().await.unwrap().body, input);
+}
+
+#[tokio::test]
+async fn busy_executor_forwards_the_original_body() {
+    let (input, expected) = render(TURN_1);
+    let exec = BoundedExecutor::new(1, Duration::from_secs(60)).unwrap();
+    let mut p = proxy_with(true, exec.clone()).await;
+    // Clones share one permit pool, so this job holds the proxy's only permit.
+    let (release, wait) = std::sync::mpsc::channel::<()>();
+    let holder = {
+        let exec = exec.clone();
+        std::thread::spawn(move || exec.run(move || wait.recv()))
+    };
+    while exec.in_flight() == 0 {
+        std::thread::yield_now();
+    }
+    assert_eq!(relay(&mut p, messages(), input.clone()).await.body, input);
+    drop(release);
+    assert!(holder.join().unwrap().is_ok());
+    assert_eq!(relay(&mut p, messages(), input).await.body, expected);
 }

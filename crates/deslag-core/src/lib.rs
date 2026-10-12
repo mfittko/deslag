@@ -111,7 +111,8 @@ pub enum Reason {
     /// An escaped key could hide a duplicate. An escaped key in any object
     /// skips the whole document.
     EscapedKey,
-    /// The candidate is not shorter than the input.
+    /// The candidate is not shorter than the input, or, with a token counter,
+    /// saves fewer tokens than the context thresholds require.
     InsufficientGain,
     InvalidCandidate,
 }
@@ -162,6 +163,13 @@ pub struct Limits {
     /// Applies per encoded array: an array with more rows is never encoded by
     /// the table encoder (table-v1 or table-v2).
     pub max_table_rows: usize,
+    /// A candidate must save at least this many tokens. Applies to every
+    /// transform, only when the context has a token counter.
+    pub min_estimated_token_savings: u64,
+    /// A candidate must save at least this share of the original tokens, in
+    /// permille: the policy ratio `min_estimated_savings_ratio = 0.10` is 100.
+    /// Applies to every transform, only when the context has a token counter.
+    pub min_estimated_savings_permille: u64,
 }
 
 /// Hard upper bound on [`Limits::max_json_depth`].
@@ -175,6 +183,8 @@ impl Default for Limits {
             max_candidate_bytes: 2_097_152,
             max_json_depth: 64,
             max_table_rows: 20_000,
+            min_estimated_token_savings: 64,
+            min_estimated_savings_permille: 100,
         }
     }
 }
@@ -257,6 +267,8 @@ pub const FIRST_SLICE_JSON_MINIFY_CONTEXT: CompressionContext<'static> = Compres
         max_candidate_bytes: usize::MAX,
         max_json_depth: 128,
         max_table_rows: 20_000,
+        min_estimated_token_savings: 0,
+        min_estimated_savings_permille: 0,
     },
     token_counter: None,
 };
@@ -534,6 +546,19 @@ fn emit<'a>(
     }
     if candidate.len() >= input.len() {
         return Err(Reason::InsufficientGain);
+    }
+    if let (Some(original), Some(cand)) = (report.original_tokens, report.candidate_tokens) {
+        let limits = &ctx.limits;
+        // A token regression fails even with both thresholds at zero.
+        let enough = original.count.checked_sub(cand.count).is_some_and(|saved| {
+            saved >= limits.min_estimated_token_savings
+                && u128::from(saved) * 1000
+                    >= u128::from(limits.min_estimated_savings_permille)
+                        * u128::from(original.count)
+        });
+        if !enough {
+            return Err(Reason::InsufficientGain);
+        }
     }
     if ctx.mode == Mode::Observe {
         report.outcome = Outcome::WouldChange;

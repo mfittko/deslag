@@ -13,7 +13,8 @@ use std::{
 };
 
 use deslag_core::{
-    CompressionContext, CompressionReport, CompressionResult, EstimateCounter, Reason, compress,
+    CompressionContext, CompressionReport, CompressionResult, EstimateCounter, Outcome, Reason,
+    TokenCounter, compress,
 };
 use serde_json::json;
 
@@ -139,9 +140,8 @@ pub fn send(socket: &Path, message: &[u8]) -> bool {
 static DROPPED: AtomicU64 = AtomicU64::new(0);
 
 /// Runs [`compress`](deslag_core::compress) and, with `socket`, reports the result there. The output
-/// never depends on `socket`. With a socket, token estimates are added to the
-/// report only when `json_table` is off, because the table encoder gates on
-/// the counter.
+/// never depends on `socket`: the context is used as is, and the sent report
+/// gets [`add_estimates`].
 pub fn compress_reported<'a>(
     input: &'a str,
     ctx: &CompressionContext,
@@ -149,19 +149,44 @@ pub fn compress_reported<'a>(
     adapter: Adapter,
     tool: ToolCategory,
 ) -> CompressionResult<'a> {
-    let Some(socket) = socket else {
-        return compress(input, ctx);
-    };
-    let mut ctx = *ctx;
-    if !ctx.json_table {
-        ctx.token_counter = ctx.token_counter.or(Some(&EstimateCounter));
+    let result = compress(input, ctx);
+    if let Some(socket) = socket {
+        let mut report = result.report.clone();
+        add_estimates(&mut report, input, &result.output);
+        send_report(socket, &report, adapter, tool);
     }
-    let result = compress(input, &ctx);
+    result
+}
+
+/// Adds estimated token counts to a report that has none. Every transform
+/// gates on the context's token counter, so adapters count after
+/// [`compress`](deslag_core::compress) instead of adding a counter to the
+/// context. `emitted` is the text the adapter keeps. The candidate count is
+/// set only for `changed`, where the candidate is `emitted`.
+pub fn add_estimates(report: &mut CompressionReport, input: &str, emitted: &str) {
+    if report.original_tokens.is_some() {
+        return;
+    }
+    let emitted = EstimateCounter.count(emitted);
+    report.original_tokens = Some(EstimateCounter.count(input));
+    report.emitted_tokens = Some(emitted);
+    if report.outcome == Outcome::Changed {
+        report.candidate_tokens = Some(emitted);
+    }
+}
+
+/// Encodes and sends one report to `socket` without blocking. A failed send is
+/// counted and carried in the next report's `dropped` field.
+pub fn send_report(
+    socket: &Path,
+    report: &CompressionReport,
+    adapter: Adapter,
+    tool: ToolCategory,
+) {
     // Swap, not load: concurrent senders never carry the same drops twice.
     let dropped = DROPPED.swap(0, Ordering::Relaxed);
-    let message = encode(&result.report, adapter, tool, dropped);
+    let message = encode(report, adapter, tool, dropped);
     if !send(socket, message.as_bytes()) {
         DROPPED.fetch_add(dropped + 1, Ordering::Relaxed);
     }
-    result
 }
