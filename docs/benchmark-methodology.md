@@ -4,7 +4,7 @@ This document predeclares the scoring rules and the non-inferiority criterion fo
 
 The two-call plumbing smoke check of the `claude` backend is excluded from the analysis.
 
-The harness is the `deslag-eval` binary in `crates/deslag-eval`. The corpus is `tests/evaluations/manifest.json`. Results are in `docs/benchmarks/evaluation.md`. The `deslag-eval` binary with its `estimate` and `run --out` commands, the `mock` and `claude` backends, the report and its exit-2 behavior, and `docs/benchmarks/evaluation.md` land with stacked PR #60.
+The harness is the `deslag-eval` binary in `crates/deslag-eval`. The corpus is `tests/evaluations/manifest.json`. Results are in `docs/benchmarks/evaluation.md`.
 
 ## Unit of analysis
 
