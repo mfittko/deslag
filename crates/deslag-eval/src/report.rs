@@ -14,6 +14,9 @@ use crate::{ARMS, score};
 /// then `wall_ms`, the harness wall clock around each backend call.
 const REPORTED: &str = "input_tokens output_tokens cache_read_tokens cache_creation_tokens cost_usd duration_ms turns wall_ms";
 
+/// Fields every result line must carry as strings.
+const REQUIRED: [&str; 4] = ["task", "category", "arm", "error_kind"];
+
 macro_rules! cells {
     ($($x:expr),* $(,)?) => { vec![$($x.to_string()),*] };
 }
@@ -47,12 +50,10 @@ impl Paired {
     fn cells(&self) -> Vec<String> {
         let (n, b, c) = (self.n, self.b, self.c);
         let pp = |x: f64| format!("{:+.1}", x * 100.0);
-        let d = pp((f64::from(c) - f64::from(b)) / f64::from(n));
-        let (base, arm) = (rate(self.base_ok, n), rate(self.arm_ok, n));
         cells![
-            base,
-            arm,
-            d,
+            rate(self.base_ok, n),
+            rate(self.arm_ok, n),
+            pp((f64::from(c) - f64::from(b)) / f64::from(n)),
             pp(score::lower_bound(n, b, c)),
             score::verdict(n, b, c)
         ]
@@ -60,10 +61,10 @@ impl Paired {
 }
 
 fn rate(k: u32, n: u32) -> String {
-    if n == 0 {
-        return "n/a".into();
+    match n {
+        0 => "n/a".into(),
+        _ => format!("{k}/{n} ({:.1}%)", f64::from(k) * 100.0 / f64::from(n)),
     }
-    format!("{k}/{n} ({:.1}%)", f64::from(k) * 100.0 / f64::from(n))
 }
 
 /// Appends a section with one table. `head` separates columns with `|`. A
@@ -104,10 +105,7 @@ pub fn render(text: &str) -> Result<String, String> {
         .enumerate()
         .map(|(i, l)| {
             let v: Value = serde_json::from_str(l).map_err(|e| format!("line {}: {e}", i + 1))?;
-            match ["task", "category", "arm", "error_kind"]
-                .iter()
-                .find(|k| !v[**k].is_string())
-            {
+            match REQUIRED.iter().find(|k| !v[**k].is_string()) {
                 Some(k) => Err(format!("line {}: no {k}", i + 1)),
                 None => Ok(v),
             }
@@ -115,12 +113,7 @@ pub fn render(text: &str) -> Result<String, String> {
         .collect::<Result<Vec<Value>, String>>()?;
     let first = rows.first().ok_or("no result lines")?;
     // Runs pair within one seed, so concatenated seeds stay apart.
-    let key = |r: &Value| {
-        (
-            r["seed"].to_string(),
-            r["task"].as_str().unwrap_or("").to_string(),
-        )
-    };
+    let key = |r: &Value| (r["seed"].to_string(), r["task"].to_string());
     let base: HashMap<(String, String), &Value> = rows
         .iter()
         .filter(|r| r["arm"] == "baseline")
@@ -183,17 +176,13 @@ pub fn render(text: &str) -> Result<String, String> {
 
     // Non-control tasks that ran both table formats in the same seed, so both
     // rows score the same inputs.
-    let has =
-        |k: &(String, String), arm: &str| rows.iter().any(|r| key(r) == *k && r["arm"] == arm);
+    let has = |r: &Value, arm: &str| rows.iter().any(|x| key(x) == key(r) && x["arm"] == arm);
     let formats = [("table-v1 CSV", "table-csv"), ("Markdown-KV", "table-mdkv")];
-    let both = |r: &&Value| {
-        r["control"].is_null() && has(&key(r), "table-csv") && has(&key(r), "table-mdkv")
-    };
+    let both = |r: &Value| r["control"].is_null() && has(r, "table-csv") && has(r, "table-mdkv");
     let format_rows = formats.iter().map(|(label, arm)| {
         let rs: Vec<&Value> = rows
             .iter()
-            .filter(|r| r["arm"] == *arm)
-            .filter(both)
+            .filter(|r| r["arm"] == *arm && both(r))
             .collect();
         [cells![label, arm, rs.len()], kinds(&rs)].concat()
     });
@@ -207,14 +196,13 @@ pub fn render(text: &str) -> Result<String, String> {
         let Some(control) = scope.strip_prefix("control:") else {
             continue;
         };
+        let transform = *arm != "drop-evidence";
         let result = match control {
             "incompressible" if p.unchanged == p.n => "all variants unchanged",
             "incompressible" => "a transform changed a control input",
-            "evidence_drop" if *arm != "drop-evidence" && p.b == 0 && p.base_ok > 0 => {
-                "evidence kept"
-            }
-            "evidence_drop" if *arm != "drop-evidence" && p.base_ok == 0 => "baseline failed",
-            "evidence_drop" if *arm != "drop-evidence" => "a transform lost evidence",
+            "evidence_drop" if transform && p.b == 0 && p.base_ok > 0 => "evidence kept",
+            "evidence_drop" if transform && p.base_ok == 0 => "baseline failed",
+            "evidence_drop" if transform => "a transform lost evidence",
             "evidence_drop" if p.arm_ok < p.base_ok => "evidence loss detected",
             "evidence_drop" => "evidence loss not detected",
             _ => "unknown control",
@@ -233,8 +221,7 @@ pub fn render(text: &str) -> Result<String, String> {
             .filter_map(|r| r["payload_tokens_est"].as_u64())
             .sum();
         let usage = REPORTED.split(' ').map(|k| reported(&rs, k)).collect();
-        let head = cells![arm, rs.len()];
-        (!rs.is_empty()).then(|| [head, kinds(&rs), cells![est], usage].concat())
+        (!rs.is_empty()).then(|| [cells![arm, rs.len()], kinds(&rs), cells![est], usage].concat())
     });
     let note = "All tasks, controls included. Payload tokens are estimates (deslag-estimate-v1). The columns from Input tokens to Turns are backend-reported sums; n/a means not reported. Wall ms is the summed harness wall clock of the backend calls.\n\n";
     let head = "Arm|Runs|Success|Wrong|Abstain|Backend error|Payload tokens (estimate)|Input tokens|Output tokens|Cache read|Cache creation|Cost USD|Duration ms|Turns|Wall ms";

@@ -5,7 +5,7 @@
 use std::{
     collections::HashMap,
     fs,
-    io::Write,
+    io::{self, Write},
     path::{Path, PathBuf},
     process::{Command, ExitCode, Stdio},
     time::{Instant, SystemTime, UNIX_EPOCH},
@@ -53,8 +53,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
         Some("variants") if args.len() == 2 => variants(Path::new(&args[1])),
-        Some("report") if args.len() == 2 => fs::read_to_string(&args[1])
-            .map_err(|e| format!("{}: {e}", args[1]))
+        Some("report") if args.len() == 2 => read(Path::new(&args[1]))
             .and_then(|text| report::render(&text))
             .map(|md| print!("{md}")),
         Some("run") => run(&args[1..]),
@@ -103,8 +102,12 @@ fn parsed<T: std::str::FromStr>(
     }
 }
 
+fn read(path: &Path) -> Result<String, String> {
+    fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))
+}
+
 fn load_manifest(path: &Path) -> Result<Vec<Task>, String> {
-    let text = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let text = read(path)?;
     let doc: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     let dir = path.parent().unwrap_or(Path::new("."));
     let tasks = doc["tasks"].as_array().ok_or("manifest: no tasks array")?;
@@ -153,8 +156,7 @@ fn load_manifest(path: &Path) -> Result<Vec<Task>, String> {
             // ponytail: the manifest is trusted and committed, so an input may be absolute or leave its directory.
             let input_path = dir.join(s("input").ok_or_else(|| err("no input"))?);
             Ok(Task {
-                input: fs::read_to_string(&input_path)
-                    .map_err(|e| err(&format!("{}: {e}", input_path.display())))?,
+                input: read(&input_path).map_err(|e| err(&e))?,
                 category: s("category").ok_or_else(|| err("no category"))?,
                 control,
                 question: s("question").ok_or_else(|| err("no question"))?,
@@ -196,15 +198,12 @@ fn variant(arm: &str, task: &Task) -> Option<String> {
         ),
         "lines-v1" => compress(input, &only(false, true, false)).into_changed(),
         "lines-v2" => compress(input, &only(false, false, true)).into_changed(),
-        "drop-evidence" => {
-            let ev = task.evidence.as_deref()?;
-            Some(
-                input
-                    .split_inclusive('\n')
-                    .filter(|l| !l.contains(ev))
-                    .collect(),
-            )
-        }
+        "drop-evidence" => task.evidence.as_deref().map(|ev| {
+            input
+                .split_inclusive('\n')
+                .filter(|l| !l.contains(ev))
+                .collect()
+        }),
         _ => None,
     };
     out.filter(|o| o != input)
@@ -238,12 +237,12 @@ fn variants(manifest: &Path) -> Result<(), String> {
     for (task, arm) in pairs(&tasks) {
         let v = variant(arm, task);
         let payload = v.as_deref().unwrap_or(&task.input);
-        let changed = if v.is_some() { "yes" } else { "no" };
         println!(
-            "| {} | {arm} | {} | {} | {changed} |",
+            "| {} | {arm} | {} | {} | {} |",
             task.id,
             payload.len(),
-            tokens(payload)
+            tokens(payload),
+            if v.is_some() { "yes" } else { "no" }
         );
     }
     Ok(())
@@ -262,16 +261,11 @@ fn ask_mock(task: &Task, payload: &str) -> Value {
 
 /// One `claude -p` call in `dir`, which holds only a project settings file.
 fn ask_claude(dir: &Path, model: &str, per_run: f64, prompt: &str) -> Result<Value, String> {
-    let budget = per_run.to_string();
     let mut child = Command::new("claude")
         .args("-p --output-format json --setting-sources project --strict-mcp-config".split(' '))
         .args(["--no-session-persistence", "--tools", "", "--model", model])
-        .args([
-            "--max-budget-usd",
-            &budget,
-            "--system-prompt",
-            SYSTEM_PROMPT,
-        ])
+        .args(["--max-budget-usd", &per_run.to_string()])
+        .args(["--system-prompt", SYSTEM_PROMPT])
         .current_dir(dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -363,9 +357,7 @@ fn run(args: &[String]) -> Result<(), String> {
         .create_new(true)
         .open(&out_path)
         .map_err(|e| match e.kind() {
-            std::io::ErrorKind::AlreadyExists => {
-                format!("{out_path} exists; pass a new --out path")
-            }
+            io::ErrorKind::AlreadyExists => format!("{out_path} exists; pass a new --out path"),
             _ => format!("{out_path}: {e}"),
         })?;
     let dir = if live { Some(live_dir()?) } else { None };
@@ -447,19 +439,16 @@ fn estimate(args: &[String]) -> Result<(), String> {
     let n = runs.len() as u64;
     // Every input token is priced as a cache write (1.25x), the costliest input kind.
     let cost = (input as f64 * in_price * 1.25 + (n * out_tokens) as f64 * out_price) / 1e6;
-    println!("| Field | Value |\n| --- | --- |");
-    println!("| Runs (task, arm) | {n} |");
+    let cap = n as f64 * per_run;
     println!(
-        "| Estimated input tokens (deslag-estimate-v1, incl. {overhead} overhead per run) | {input} |"
-    );
-    println!("| Assumed output tokens per run | {out_tokens} |");
-    println!(
-        "| Assumed prices, USD per Mtok | input {in_price} (x1.25 cache write), output {out_price} |"
-    );
-    println!("| Estimated cost | USD {cost:.2} |");
-    println!(
-        "| Hard cap ({n} runs at --per-run-usd {per_run}) | USD {:.2} |",
-        n as f64 * per_run
+        "| Field | Value |
+| --- | --- |
+| Runs (task, arm) | {n} |
+| Estimated input tokens (deslag-estimate-v1, incl. {overhead} overhead per run) | {input} |
+| Assumed output tokens per run | {out_tokens} |
+| Assumed prices, USD per Mtok | input {in_price} (x1.25 cache write), output {out_price} |
+| Estimated cost | USD {cost:.2} |
+| Hard cap ({n} runs at --per-run-usd {per_run}) | USD {cap:.2} |"
     );
     Ok(())
 }
