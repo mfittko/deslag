@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Usage: check-versions.sh [<tag-or-version>]
 # Prints the release version. Fails when the workspace Cargo.toml version and
-# the Claude plugin manifest version differ, or when the optional argument
+# the Claude plugin manifest version differ, when fuzz/Cargo.lock pins another
+# deslag-core version, or when the optional argument
 # (v-prefixed or bare) differs from them. Fails on a version that is no SemVer
 # X.Y.Z or X.Y.Z-pre; build metadata (`+...`) is refused.
 set -euo pipefail
@@ -25,6 +26,20 @@ if [ "$cargo_version" != "$plugin_version" ]; then
 fi
 if ! [[ $cargo_version =~ $semver ]]; then
   echo "error: '$cargo_version' is not a SemVer version (X.Y.Z or X.Y.Z-pre, no build metadata)" >&2
+  exit 1
+fi
+# The fuzz crate is its own workspace with its own lock file.
+if [ ! -f fuzz/Cargo.lock ]; then
+  echo "error: fuzz/Cargo.lock is missing" >&2
+  exit 1
+fi
+fuzz_version=$(awk '
+  /^\[\[package\]\]/ { in_core = 0 }
+  $0 == "name = \"deslag-core\"" { in_core = 1 }
+  in_core && /^version = / { sub(/^version = "/, ""); sub(/"$/, ""); print; exit }
+' fuzz/Cargo.lock)
+if [ "$fuzz_version" != "$cargo_version" ]; then
+  echo "error: fuzz/Cargo.lock pins deslag-core ${fuzz_version:-<missing>}, not $cargo_version; run cargo update --workspace --offline --manifest-path fuzz/Cargo.toml" >&2
   exit 1
 fi
 if [ $# -ge 1 ] && [ "${1#v}" != "$cargo_version" ]; then

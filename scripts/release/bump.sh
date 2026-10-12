@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
 # Usage: bump.sh <version>
 # Sets the workspace Cargo.toml and Claude plugin versions, refreshes
-# Cargo.lock, folds changes/*.md fragments into `## Unreleased`, stamps that
-# section as `## <version> - <UTC date>` under a fresh empty `## Unreleased`,
-# and stages exactly those files. It never commits, tags or pushes.
-# The checks run before the first write. Until Cargo.lock is refreshed, any
-# failure restores the original files, so a refusal, or a failure up to and
-# including `cargo update`, changes no file. A later failure (git add, rm,
-# git rm) can leave the rewritten files in the tree.
+# Cargo.lock and fuzz/Cargo.lock, folds changes/*.md fragments into
+# `## Unreleased`, stamps that section as `## <version> - <UTC date>` under a
+# fresh empty `## Unreleased`, and stages exactly those files. It never
+# commits, tags or pushes.
+# The checks run before the first write. Until both lock files are refreshed,
+# any failure restores the original files, so a refusal, or a failure up to
+# and including the `cargo update` runs, changes no file. A later failure
+# (git add, rm, git rm) can leave the rewritten files in the tree.
 set -euo pipefail
 # Fragment order (the glob) and character classes must not depend on the locale.
 export LC_ALL=C
 version=${1:?usage: bump.sh <version>}
 plugin=plugins/claude/.claude-plugin/plugin.json
-files=(CHANGELOG.md Cargo.toml "$plugin" Cargo.lock)
+files=(CHANGELOG.md Cargo.toml "$plugin" Cargo.lock fuzz/Cargo.lock)
 # shellcheck source=scripts/release/lib.sh
 . "$(dirname "$0")/lib.sh"
 
@@ -33,7 +34,7 @@ done
 
 work=$(mktemp -d)
 restore=0
-trap 'if [ "$restore" = 1 ]; then for f in "${files[@]}"; do command cp -f "$work/orig/${f##*/}" "$f"; done; fi; command rm -rf "$work"' EXIT
+trap 'if [ "$restore" = 1 ]; then for f in "${files[@]}"; do command cp -f "$work/orig/${f//\//_}" "$f"; done; fi; command rm -rf "$work"' EXIT
 
 # Entries keep their order: existing Unreleased entries first, then fragments
 # in file-name order. Entries before any `### ` line belong to Changed.
@@ -65,12 +66,16 @@ awk -v ver="$version" '
 jq --arg v "$version" '.version = $v' "$plugin" >"$work/plugin.json"
 
 mkdir "$work/orig"
-for f in "${files[@]}"; do command cp -f "$f" "$work/orig/${f##*/}"; done
+for f in "${files[@]}"; do command cp -f "$f" "$work/orig/${f//\//_}"; done
 restore=1
 command mv -f "$work/CHANGELOG.md" CHANGELOG.md
 command mv -f "$work/Cargo.toml" Cargo.toml
 command mv -f "$work/plugin.json" "$plugin"
 cargo update --workspace --offline --quiet
+if ! cargo update --workspace --offline --quiet --manifest-path fuzz/Cargo.toml; then
+  echo "hint: fetch the fuzz crates once with: cargo fetch --manifest-path fuzz/Cargo.toml" >&2
+  exit 1
+fi
 restore=0
 
 git add -- "${files[@]}"
