@@ -1,0 +1,13 @@
+[package]
+name = "deslag-telemetry"
+description = "Report sender for the optional deslag local stats service."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+deslag-core = { path = "../deslag-core" }
+serde_json = "=1.0.152"

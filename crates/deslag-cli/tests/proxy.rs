@@ -8,6 +8,8 @@ use std::time::Duration;
 fn deslag(args: &[&str]) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_deslag"));
     cmd.args(args)
+        // No service lives here, so no test reports to a real state dir.
+        .env("DESLAG_STATE_DIR", "/nonexistent/deslag-test")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
