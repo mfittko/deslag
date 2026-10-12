@@ -11,7 +11,7 @@ RUSTC_BOOTSTRAP=1 cargo fuzz run json_minify -s none -- -max_total_time=60
 
 On nightly, `cargo fuzz run <target> -s none` works without `RUSTC_BOOTSTRAP`.
 
-Targets: `json_minify`, `json_table`, `exact_line_runs`, `compress`.
+Targets: `json_minify`, `json_table`, `exact_line_runs`, `line_templates`, `compress`.
 Recorded runs are in `docs/benchmarks/fuzz.md`.
 
 ## Adding a transform

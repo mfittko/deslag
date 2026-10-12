@@ -42,3 +42,10 @@ path = "fuzz_targets/compress.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "line_templates"
+path = "fuzz_targets/line_templates.rs"
+test = false
+doc = false
+bench = false

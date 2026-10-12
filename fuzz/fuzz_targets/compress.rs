@@ -7,7 +7,8 @@ mod common;
 
 use deslag_core::{
     CompressionContext, EXACT_LINE_RUNS_ID, FIRST_SLICE_JSON_MINIFY_CONTEXT, JSON_MINIFY_ID,
-    JSON_TABLE_ID, Limits, Mode, Outcome, ValidationOutcome, compress, decode_lines, table,
+    JSON_TABLE_ID, LINE_TEMPLATES_ID, Limits, Mode, Outcome, ValidationOutcome, compress,
+    decode_lines, table,
 };
 use libfuzzer_sys::fuzz_target;
 
@@ -20,6 +21,7 @@ fuzz_target!(|data: &[u8]| {
             mode,
             json_table: true,
             exact_line_runs: true,
+            line_templates: true,
             limits: Limits {
                 min_candidate_bytes: 0,
                 ..Limits::default()
@@ -38,7 +40,7 @@ fuzz_target!(|data: &[u8]| {
                     JSON_TABLE_ID => {
                         assert_eq!(table::decode(out).as_deref(), Some(reference.as_str()))
                     }
-                    EXACT_LINE_RUNS_ID => {
+                    EXACT_LINE_RUNS_ID | LINE_TEMPLATES_ID => {
                         assert_eq!(decode_lines(out, input.len()).as_deref(), Ok(input))
                     }
                     JSON_MINIFY_ID => assert_eq!(out, reference),
