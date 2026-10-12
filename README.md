@@ -36,7 +36,16 @@ With `--minify-json`, two more constants in `crates/deslag-proxy/src/minify.rs` 
 | Limit | Default | Effect |
 | --- | --- | --- |
 | `MAX_INSPECT_BYTES` | 32 MiB | A larger body is forwarded unrewritten: the buffered prefix, then the rest as it arrives. |
-| `INSPECT_PERMITS` | 4 | At most 4 requests buffer and rewrite at once. Further eligible requests wait for a permit. `BODY_READ_TIMEOUT` bounds how long a permit holder can keep it. |
+| `INSPECT_PERMITS` | 4 | At most 4 requests buffer and rewrite at once. Further eligible requests wait for a permit. `BODY_READ_TIMEOUT` bounds the read. The permit stays held through the rewrite after the read, also when the client disconnects. The rewrite parses and rebuilds the body without a time limit and runs one job per text in sequence. The executor budget below bounds each job, not the whole hold. |
+
+Compression in the proxy and in `deslag hook claude --minify-json` runs under `BoundedExecutor::default()`. The proxy takes it from `Limits::executor`. Each text is one job. In the hook a text is the Bash stdout or one MCP text block. In the proxy a text is one text item of a Bash `tool_result` content array, or its string content:
+
+| Limit | Default | Effect |
+| --- | --- | --- |
+| `max_parallel_jobs` | 4 | A job that finds every slot taken is rejected as `busy`. |
+| `processing_budget` | 10 ms | A job that runs longer is rejected as `budget_exceeded`. |
+
+A rejected or panicked job fails open. The proxy forwards the original body unrewritten. The hook leaves the tool output unchanged and writes `deslag: compression <busy|budget_exceeded|job_panicked>; tool output unchanged` to stderr. A panicked job also prints the default Rust panic message to stderr before that line.
 
 No limit applies to a response body after the upstream has answered, so long streams are never cut. Other request bodies stream and are not time-bounded: a client that never finishes its body keeps its slot. Zero or out-of-range limit values are rejected at startup.
 

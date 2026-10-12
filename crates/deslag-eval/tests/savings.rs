@@ -116,3 +116,18 @@ fn report_pairs_savings_per_arm() {
     }
     assert!(!section.contains("| drop-evidence |"), "{section}");
 }
+
+#[test]
+fn report_drops_a_pair_with_a_negative_arm_estimate() {
+    let u = [Some(10), Some(0), Some(0)];
+    let text = result("n1", "baseline", Value::Null, 40, u)
+        + &result("n1", "table-csv", Value::Null, 0, u)
+            .replace("\"payload_tokens_est\":0", "\"payload_tokens_est\":-3");
+    let path = fresh_dir("savings-negative").join("results.jsonl");
+    std::fs::write(&path, text).unwrap();
+    let o = eval(&["report", path.to_str().unwrap()]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let md = String::from_utf8(o.stdout).unwrap();
+    let row = "| table-csv | 0 | n/a | n/a | 0 | n/a | n/a | n/a | n/a | n/a |";
+    assert!(md.contains(row), "{md}");
+}

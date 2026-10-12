@@ -49,6 +49,8 @@ fn ctx(mode: Mode) -> CompressionContext<'static> {
         line_templates: false,
         limits: Limits {
             min_candidate_bytes: 0,
+            min_estimated_token_savings: 0,
+            min_estimated_savings_permille: 0,
             ..Limits::default()
         },
         token_counter: None,
@@ -76,6 +78,8 @@ fn defaults_match_plan() {
     assert_eq!(limits.min_candidate_bytes, 2048);
     assert_eq!(limits.max_candidate_bytes, 2_097_152);
     assert_eq!(limits.max_json_depth, 64);
+    assert_eq!(limits.min_estimated_token_savings, 64);
+    assert_eq!(limits.min_estimated_savings_permille, 100);
 }
 
 #[test]
