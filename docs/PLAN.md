@@ -349,7 +349,7 @@ A decoder must reconstruct the original text bytes exactly. Mixed LF/CRLF, empty
 
 DF-013 implements this as `lines-v1`, specified in [compression-formats.md](compression-formats.md).
 
-The line-template codec implements templates for consecutive lines that differ only in variable tokens as `lines-v2`, specified in [compression-formats.md](compression-formats.md). It is a separate opt-in transform and the only exception to the merge rule above. It merges lines that differ only in variable-class tokens (timestamps, IDs, counts, paths). A constant token that differs, such as an error message, still ends a template, so those lines are never merged.
+The line-template codec implements templates for consecutive lines that differ only in variable tokens as `lines-v2`, specified in [compression-formats.md](compression-formats.md). It is a separate opt-in transform and the only exception to the merge rule above. It merges lines that differ only in variable-class tokens. A variable-class token contains an ASCII digit, `/` or `\`, which covers most timestamps, IDs, counts and paths. A constant token that differs, such as a word in an error message, still ends a template, so those lines are never merged.
 
 ### 7.4 Transform composition and exactness
 
