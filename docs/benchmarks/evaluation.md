@@ -17,7 +17,7 @@ This file holds live run 1 (pilot corpus), the predeclared live run 2, a two-cal
 | Corpus size per arm (full corpus) | non-control pairs: json-minify 102, table-csv 101, table-mdkv 101, table-v2 101, lines-v1 101, lines-v2 100; 900 runs |
 | Live run 2 | predeclared in Live runs, not yet run |
 | Mock dry run | below, full corpus, plumbing evidence only |
-| Generated | live run 1 at commit 2627754 (v0.1.0-alpha.2), 2026-10-12; mock output reproduced at commit 862e33f58f9275db22b25ac5e3107cc69b226097 (full corpus, with the docs of this change on top) |
+| Generated | live run 1 at commit 2627754 (v0.1.0-alpha.2), 2026-10-12; mock output reproduced on the full corpus at commit ff0df15 |
 
 ## Live runs
 
