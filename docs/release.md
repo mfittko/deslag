@@ -66,6 +66,10 @@ The script sets both version surfaces, refreshes `Cargo.lock` and
 `fuzz/Cargo.lock` offline, folds every fragment into `## Unreleased`, stamps
 that section as `## 0.1.0-alpha.1 - <UTC date>` and adds a new empty
 `## Unreleased` above it.
+The lock refresh runs offline, so the local cargo cache must hold the
+fuzz-only crates. Run `cargo fetch --manifest-path fuzz/Cargo.toml` once
+before the first bump on a machine. Without them the fuzz lock refresh fails,
+and `bump.sh` prints that command as a hint and restores the original files.
 It stages exactly those files and the fragment deletions. It never commits,
 tags or pushes. It refuses an invalid SemVer version, a version that
 `CHANGELOG.md` already has, a fragment or `## Unreleased` line that breaks the

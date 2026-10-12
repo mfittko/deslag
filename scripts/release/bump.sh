@@ -72,7 +72,10 @@ command mv -f "$work/CHANGELOG.md" CHANGELOG.md
 command mv -f "$work/Cargo.toml" Cargo.toml
 command mv -f "$work/plugin.json" "$plugin"
 cargo update --workspace --offline --quiet
-cargo update --workspace --offline --quiet --manifest-path fuzz/Cargo.toml
+if ! cargo update --workspace --offline --quiet --manifest-path fuzz/Cargo.toml; then
+  echo "hint: fetch the fuzz crates once with: cargo fetch --manifest-path fuzz/Cargo.toml" >&2
+  exit 1
+fi
 restore=0
 
 git add -- "${files[@]}"

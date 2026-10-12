@@ -302,6 +302,7 @@ EOF
 chmod +x "$tmp/fakecargo-fuzz/cargo"
 expect_fail "bump fails when the fuzz lock update fails" "simulated fuzz failure" "$r" env PATH="$tmp/fakecargo-fuzz:$PATH" "$here/bump.sh" 0.2.0
 expect_eq "bump restores both lock files when the fuzz lock update fails" "" "$(git -C "$r" status --porcelain)"
+expect_fail "bump names the fuzz fetch prerequisite when the fuzz lock update fails" "cargo fetch --manifest-path fuzz/Cargo.toml" "$r" env PATH="$tmp/fakecargo-fuzz:$PATH" "$here/bump.sh" 0.2.0
 
 # --- extract-notes.sh --------------------------------------------------------
 r=$tmp/notes; mkdir -p "$r"
