@@ -194,6 +194,28 @@ fn report_renders_format_comparison_and_controls() {
     );
     assert!(md.contains("| incompressible | lines-v2 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | 2 | 0 | all variants unchanged |"), "{md}");
     assert!(!md.contains("a transform changed a control input"), "{md}");
+    // A transform arm on evidence_drop reports a failed baseline or lost evidence.
+    let (_, lines) = mock_run("16", "mock-report-fail.jsonl");
+    for (fail_arm, result) in [
+        ("baseline", "baseline failed"),
+        ("lines-v2", "a transform lost evidence"),
+    ] {
+        let mut text = String::new();
+        for mut l in lines.clone() {
+            if l["control"] == "evidence_drop" && l["arm"] == fail_arm {
+                l["success"] = false.into();
+                l["error_kind"] = "wrong".into();
+            }
+            text += &format!("{l}\n");
+        }
+        let path = Path::new(env!("CARGO_TARGET_TMPDIR")).join("mock-report-fail-edit.jsonl");
+        std::fs::write(&path, text).unwrap();
+        let o = eval(&["report", path.to_str().unwrap()]);
+        let md = String::from_utf8(o.stdout).unwrap();
+        let row = "| evidence_drop | lines-v2 | 1 |";
+        let line = md.lines().find(|l| l.starts_with(row)).unwrap_or("");
+        assert!(line.ends_with(&format!("| {result} |")), "{md}");
+    }
     // The pilot is below 81 pairs per arm, so no arm can pass.
     assert!(
         md.contains("| table-csv | 10 | 0 |")
