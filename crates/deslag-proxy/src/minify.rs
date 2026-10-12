@@ -124,7 +124,7 @@ const READ_FAILED: &str = "deslag: request body read failed";
 const STATE_FAILED: Reject = (
     StatusCode::INTERNAL_SERVER_ERROR,
     "api_error",
-    "deslag: session state write failed",
+    "deslag: session state read or write failed",
 );
 const SCOPE_HEADER: &str = "x-claude-code-session-id";
 

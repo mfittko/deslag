@@ -117,7 +117,7 @@ pub fn prune(dir: &Path, retention: Duration, now: SystemTime) -> io::Result<usi
 
 #[derive(Debug)]
 pub enum ReplayError {
-    /// The request carries tool results but the session has no parseable manifest.
+    /// The request carries tool results but the session has no valid manifest.
     MissingManifest,
     /// The manifest format version is not one this binary reads.
     UnsupportedManifest,
@@ -167,7 +167,8 @@ impl Store {
     /// gets its pinned decision. A new result in the newest message is
     /// decided by `decide` only while the configured owner is the proxy, and
     /// is otherwise `unchanged`. New decisions are committed before return.
-    /// A request in a session the proxy does not own passes through.
+    /// A session without a manifest passes through while the owner is not the
+    /// proxy; once the owner is the proxy, its requests with tool results fail.
     pub fn replay(
         &self,
         scope: &str,
@@ -217,9 +218,13 @@ impl Store {
                 Ok(pass)
             };
         }
-        // Owner and mode are pinned per session.
-        if manifest["owner"] != "proxy" || manifest["mode"] != "safe" {
-            return Ok(pass);
+        // Owner and mode are pinned per session. Only the proxy writes a
+        // manifest, so any other owner or mode, or a missing one, is corrupt.
+        match (manifest["owner"].as_str(), manifest["mode"].as_str()) {
+            (Some("proxy"), Some("safe")) => {}
+            (Some("proxy"), Some("off")) => return Ok(pass),
+            _ if has_results => return Err(ReplayError::MissingManifest),
+            _ => return Ok(pass),
         }
         let decisions = &mut manifest["decisions"];
         let mut encode = Vec::with_capacity(candidates.len());

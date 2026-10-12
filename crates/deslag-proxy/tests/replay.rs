@@ -305,6 +305,11 @@ async fn missing_or_corrupt_state_fails_explicitly() {
         *m.pointer_mut(pointer).unwrap() = value;
         m.to_string().into_bytes()
     };
+    let without = |key: &str| {
+        let mut m = good.clone();
+        m.as_object_mut().unwrap().remove(key).unwrap();
+        m.to_string().into_bytes()
+    };
     for (case, bytes) in [
         ("unparseable", b"{ not json".to_vec()),
         ("no decisions", br#"{"version":1}"#.to_vec()),
@@ -322,6 +327,12 @@ async fn missing_or_corrupt_state_fails_explicitly() {
             "digest mismatch",
             with("/decisions/toolu_1/digest", json!("00")),
         ),
+        ("owner missing", without("owner")),
+        ("mode missing", without("mode")),
+        ("owner not a string", with("/owner", json!(1))),
+        ("owner unknown", with("/owner", json!("hook"))),
+        ("mode not a string", with("/mode", json!(true))),
+        ("mode unknown", with("/mode", json!("aggressive"))),
     ] {
         fs::write(&path, &bytes).unwrap();
         assert_rejected(p.turn("m", &history).await, case);
@@ -342,20 +353,16 @@ async fn missing_or_corrupt_state_fails_explicitly() {
         .unwrap_err();
     assert_eq!((status, &body["error"]["type"]), (500, &json!("api_error")));
 
-    // A failed commit is a server error too. A read-only sessions directory
-    // makes the temp file creation fail.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let sessions = path.parent().unwrap();
-        fs::set_permissions(sessions, fs::Permissions::from_mode(0o500)).unwrap();
-        let (status, body) = p
-            .send(Some("session-w"), conversation("m", &[]))
-            .await
-            .unwrap_err();
-        fs::set_permissions(sessions, fs::Permissions::from_mode(0o700)).unwrap();
-        assert_eq!((status, &body["error"]["type"]), (500, &json!("api_error")));
-    }
+    // A failed commit is a server error too. A regular file at the sessions
+    // path makes the directory creation fail for any uid, root included.
+    let sessions = path.parent().unwrap();
+    fs::remove_dir_all(sessions).unwrap();
+    fs::write(sessions, b"").unwrap();
+    let (status, body) = p
+        .send(Some("session-w"), conversation("m", &[]))
+        .await
+        .unwrap_err();
+    assert_eq!((status, &body["error"]["type"]), (500, &json!("api_error")));
     fs::remove_dir_all(dir).unwrap();
 }
 
