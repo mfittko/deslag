@@ -12,7 +12,7 @@ No live model results exist yet. This file holds the pending live run, a two-cal
 | Mock dry run | below, plumbing evidence only |
 | Corpus size per arm | 4 to 11 non-control pairs; the criterion needs at least 81, so every verdict is `not shown` by construction |
 | table-v1 CSV vs Markdown-KV | no model comparison yet; CSV cannot become a default before one exists |
-| Generated | 2026-10-12T00:59:28Z, commit 87b78e3d6e3eb67654ab7aa0624e346d003a12cb |
+| Generated | 2026-10-12T01:12:13Z, commit efaff80f0843acea3df93db427f5c11a89568ee4 |
 
 ## Pending live runs
 
