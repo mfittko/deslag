@@ -48,6 +48,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "deslag-eval"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "deslag-core",
+ "serde_json",
+]
+
+[[package]]
 name = "deslag-proxy"
 version = "0.1.0-alpha.1"
 dependencies = [
