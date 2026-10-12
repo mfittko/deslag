@@ -3,6 +3,7 @@
 //! Request and response bodies stream through unchanged as hyper bodies; nothing
 //! is buffered, parsed or logged. The one exception is opt-in JSON minification,
 //! which buffers and patches `POST /v1/messages` request bodies (see `minify`).
+//! [`session`] holds the compression owner and the per-session replay manifests.
 //! The upstream authority comes only from configuration, never from the request
 //! target, `Host` header or credentials.
 
@@ -25,6 +26,7 @@ use hyper_util::{
 use tokio::{net::TcpListener, sync::Semaphore};
 
 mod minify;
+pub mod session;
 
 #[doc(hidden)]
 pub use minify::available_inspect_permits;
