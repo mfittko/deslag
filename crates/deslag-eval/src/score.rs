@@ -82,7 +82,9 @@ pub fn score(answer: &str, accepted: &[String], rule: Rule, tolerance: f64) -> E
         match rule {
             Rule::Exact => a == x,
             Rule::ExactCi => a.to_lowercase() == x.to_lowercase(),
-            Rule::Set => items(&a) == items(&x),
+            // The whole-string path keeps a fully quoted list. The raw path
+            // strips quotes from each item, edge items included.
+            Rule::Set => items(&a) == items(&x) || items(answer) == items(&x),
             Rule::Number => match (a.parse::<f64>(), x.parse::<f64>()) {
                 // Epsilon absorbs binary rounding at a decimal tolerance boundary.
                 (Ok(p), Ok(q)) => (p - q).abs() <= tolerance + 1e-9 * q.abs().max(1.0),

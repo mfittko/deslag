@@ -40,6 +40,16 @@ fn set_rule_drops_empty_items_and_is_case_sensitive() {
         ErrorKind::None
     );
     assert_eq!(score("a,b", &s(&["a,B"]), Rule::Set, 0.0), ErrorKind::Wrong);
+    let set_score = |a: &str| score(a, &set, Rule::Set, 0.0);
+    assert_eq!(set_score("\"5127\", \"5133\", \"5190\""), ErrorKind::None);
+    assert_eq!(set_score("`5127`, `5133`, `5190`"), ErrorKind::None);
+    assert_eq!(set_score("\"5127,5133,5190\""), ErrorKind::None);
+    assert_eq!(set_score("5190, 5127 ,5133"), ErrorKind::None);
+    assert_eq!(set_score("\"5127\", \"5133\""), ErrorKind::Wrong);
+    assert_eq!(
+        score("\"a\", \"b\"", &s(&["a,B"]), Rule::Set, 0.0),
+        ErrorKind::Wrong
+    );
 }
 
 #[test]
@@ -69,6 +79,12 @@ fn rejects_more_discordant_pairs_than_tasks() {
 #[should_panic(expected = "exceed n")]
 fn rejects_discordant_pairs_summing_past_n() {
     verdict(3, 2, 2);
+}
+
+#[test]
+#[should_panic(expected = "exceed n")]
+fn rejects_discordant_pairs_with_no_tasks() {
+    verdict(0, 1, 0);
 }
 
 #[test]
