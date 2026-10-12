@@ -80,6 +80,16 @@ fn report_pairs_savings_per_arm() {
         text += &result("e1", arm, json!("evidence_drop"), 7, u(1, 1, 1));
     }
     text += &result("t9", "table-mdkv", Value::Null, 5, none);
+    // A backend-error pair with an unchanged variant still counts.
+    text += &result("t10", "baseline", Value::Null, 10, u(50, 0, 0));
+    text += &result("t10", "lines-v1", Value::Null, 10, u(40, 0, 0))
+        .replace("\"success\":true", "\"success\":false")
+        .replace("\"error_kind\":\"none\"", "\"error_kind\":\"backend\"")
+        .replace("\"variant_unchanged\":false", "\"variant_unchanged\":true");
+    // A pair whose baseline sums are 0: both saved % columns are n/a.
+    for arm in ["baseline", "table-mdkv"] {
+        text += &result("t11", arm, Value::Null, 0, u(0, 0, 0));
+    }
     for arm in ["baseline", "json-minify"] {
         text += &result("c1", arm, json!("incompressible"), 9, u(1, 1, 1));
     }
@@ -92,15 +102,15 @@ fn report_pairs_savings_per_arm() {
     for row in [
         // Estimate saved 55 of 120; Claude saved 130 of 360 on the two complete pairs; (45 - 130) / 130.
         "| json-minify | 3 | 55 | 45.8 | 2 | 360 | 230 | 130 | 36.1 | -65.4 |",
-        // Zero Claude savings: the percentage is 0.0 and the estimate error is undefined.
-        "| lines-v1 | 1 | 0 | 0.0 | 1 | 100 | 100 | 0 | 0.0 | n/a |",
+        // t4 saves nothing; the backend-error, unchanged t10 pair still counts: (0 - 10) / 10.
+        "| lines-v1 | 2 | 0 | 0.0 | 2 | 150 | 140 | 10 | 6.7 | -100.0 |",
         "| table-csv | 1 | 30 | 60.0 | 0 | n/a | n/a | n/a | n/a | n/a |",
         // Negative Claude saving: (20 - -50) / |-50| = 140.0. t7 has an invalid estimate and is dropped.
         "| table-v2 | 1 | 20 | 50.0 | 1 | 100 | 150 | -50 | -50.0 | 140.0 |",
         // input_tokens -1 is not a Claude count.
         "| lines-v2 | 1 | 30 | 75.0 | 0 | n/a | n/a | n/a | n/a | n/a |",
-        // No baseline partner: both estimate columns are n/a.
-        "| table-mdkv | 0 | n/a | n/a | 0 | n/a | n/a | n/a | n/a | n/a |",
+        // t9 has no baseline partner; t11 has zero baseline sums, so both saved % are n/a.
+        "| table-mdkv | 1 | 0 | n/a | 1 | 0 | 0 | 0 | n/a | n/a |",
     ] {
         assert!(section.contains(row), "{row}\n{section}");
     }
