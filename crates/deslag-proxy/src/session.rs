@@ -52,19 +52,9 @@ const POLICY_VERSION: u64 = 1;
 const TRANSFORM: &str = JSON_MINIFY_ID;
 const TRANSFORM_VERSION: u64 = JSON_MINIFY_VERSION as u64;
 
-/// `DESLAG_STATE_DIR`, else `$XDG_STATE_HOME/deslag`, else
-/// `$HOME/.local/state/deslag`. Empty and relative values count as unset, so
-/// the result does not depend on the current directory.
-pub fn state_dir() -> Option<PathBuf> {
-    let var = |k| {
-        std::env::var_os(k)
-            .map(PathBuf::from)
-            .filter(|p| p.is_absolute())
-    };
-    var("DESLAG_STATE_DIR")
-        .or_else(|| var("XDG_STATE_HOME").map(|d| d.join("deslag")))
-        .or_else(|| var("HOME").map(|d| d.join(".local/state/deslag")))
-}
+/// One state-dir rule for every adapter: owner, manifests and the telemetry
+/// socket resolve to the same directory.
+pub use deslag_telemetry::state_dir;
 
 /// Atomically records the compression owner.
 pub fn write_owner(dir: &Path, owner: Owner) -> io::Result<()> {
