@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, mpsc};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use deslag_core::{
     BoundedExecutor, CompressionContext, FIRST_SLICE_JSON_MINIFY_CONTEXT, Limits,
@@ -80,8 +80,19 @@ fn table_row_cap_is_enforced() {
     assert_eq!(compress(&rows(50), &c).report.outcome, Outcome::Changed);
     let over = rows(51);
     let result = compress(&over, &c);
+    assert_eq!(result.report.outcome, Outcome::Skipped);
+    assert_eq!(result.report.reason, Some(Reason::UnsupportedFormat));
     assert_ne!(result.report.outcome, Outcome::Changed);
     assert!(matches!(&result.output, Cow::Borrowed(_)));
+}
+
+/// Spins until all permits are released, failing after 5 s.
+fn wait_idle(exec: &BoundedExecutor) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while exec.in_flight() != 0 {
+        assert!(Instant::now() < deadline, "permit not released within 5 s");
+        std::thread::yield_now();
+    }
 }
 
 const BUDGET: Duration = Duration::from_millis(10);
@@ -108,9 +119,7 @@ fn expired_job_holds_its_permit_until_it_ends() {
     release.send(()).unwrap();
     ended.recv().unwrap();
     // The permit is released right after the job returns; wait for it without a fixed sleep.
-    while exec.in_flight() != 0 {
-        std::thread::yield_now();
-    }
+    wait_idle(&exec);
     assert_eq!(exec.run(|| 1), Ok(1));
 }
 
@@ -139,9 +148,7 @@ fn panicking_job_is_rejected_and_releases_its_permit() {
     let exec = BoundedExecutor::new(1, Duration::from_secs(5)).unwrap();
     let result: Result<(), Rejected> = exec.run(|| panic!("job failure"));
     assert_eq!(result, Err(Rejected::Panicked));
-    while exec.in_flight() != 0 {
-        std::thread::yield_now();
-    }
+    wait_idle(&exec);
     assert_eq!(exec.run(|| 1), Ok(1));
 }
 
