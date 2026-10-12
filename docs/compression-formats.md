@@ -421,7 +421,7 @@ The `*( LF label-path "." index " " sub )` part of `table`, the `json` type and 
 - Blocks follow in hole order. Each block starts on a new line with its label and one space.
 - `count`, `path` and `type` are the table-v1 header grammar rules. A table-v2 column is a `v2-column`: its `v2-type` is a table-v1 `type` or `json`. A `record` is one table-v1 record, as defined in table-v1 Rows.
 - A `table` block is a table-v1 text without the `table-v1 ` prefix: the header `[count]{columns}` with the table-v1 `count` rule and the `v2-column` rule, then exactly `count` records, each after a `\n`, with the table-v1 row, type and cell rules. A table block without a `json` column ends after exactly `count` records. A table block with a `json` column ends after its last sub-block, or after its `count` records when it has no reference cell. Any record line, bare or quoted, may start with `@`, so a decoder finds the end of the records by counting them.
-- The text ends after the last line of the last block, including its bucket tables and sub-blocks. That line is a record. There is no trailing line break unless that record is empty.
+- The text ends after the last line of the last block, including its bucket tables and sub-blocks. That line is a record, the header line of a zero-row table block, or a sub-block line. There is no trailing line break unless that line is an empty record.
 - A block whose header line has `] by ` right after its count is a bucket block. Bucket blocks are specified in Bucket blocks below.
 
 ### Bucket blocks
