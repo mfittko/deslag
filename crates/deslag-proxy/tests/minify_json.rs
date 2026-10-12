@@ -144,6 +144,9 @@ async fn proxy_with(
         executor,
         ..Limits::default()
     };
+    // No service lives here, so no test reports to a real state dir. SAFETY:
+    // only std reads the environment here, and std serializes that access.
+    unsafe { std::env::set_var("DESLAG_STATE_DIR", "/nonexistent/deslag-test") };
     tokio::spawn(serve_with(listener, upstream, limits));
     (addr, seen)
 }

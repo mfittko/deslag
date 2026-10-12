@@ -23,12 +23,14 @@
 use std::{
     collections::HashSet,
     fmt,
+    path::Path,
     pin::Pin,
     task::{Context, Poll},
 };
 
 use bytes::Bytes;
-use deslag_core::{BoundedExecutor, FIRST_SLICE_JSON_MINIFY_CONTEXT, compress};
+use deslag_core::{BoundedExecutor, CompressionReport, FIRST_SLICE_JSON_MINIFY_CONTEXT, compress};
+use deslag_telemetry as local;
 use http_body_util::BodyExt;
 use hyper::{
     HeaderMap, Method, Request, StatusCode,
@@ -184,7 +186,8 @@ pub(crate) async fn prepare(
 /// Runs [`rewrite`] on the blocking pool, outside the read deadline. The permit
 /// moves into the blocking task, so it is released only when the rewrite ends,
 /// even when the caller is dropped (client disconnect). A rejected job or a
-/// panic returns `None`, so the original body is forwarded.
+/// panic returns `None`, so the original body is forwarded. The telemetry
+/// socket lookup (one `stat`) and the report sends run here too.
 async fn rewrite_blocking(
     permit: SemaphorePermit<'static>,
     input: Bytes,
@@ -193,7 +196,7 @@ async fn rewrite_blocking(
 ) -> Option<Vec<u8>> {
     tokio::task::spawn_blocking(move || {
         let _permit = permit;
-        rewrite(&input, &exec, job)
+        rewrite(&input, &exec, job, local::live_socket().as_deref())
     })
     .await
     .ok()
@@ -247,17 +250,30 @@ async fn buffer(parts: Parts, mut body: Incoming) -> Result<Buffered, hyper::Err
     Ok(Buffered::Complete(parts, buf))
 }
 
-/// Per-text compression job. Tests inject a slow one.
-type Job = fn(&str) -> Option<String>;
+/// One finished job: the changed text, if any, and the compression report.
+type Compressed = (Option<String>, CompressionReport);
 
-fn minify(text: &str) -> Option<String> {
-    compress(text, &FIRST_SLICE_JSON_MINIFY_CONTEXT).into_changed()
+/// Per-text compression job. Tests inject a slow one.
+type Job = fn(&str) -> Compressed;
+
+fn minify(text: &str) -> Compressed {
+    let result = compress(text, &FIRST_SLICE_JSON_MINIFY_CONTEXT);
+    let report = result.report.clone();
+    (result.into_changed(), report)
 }
 
 /// Minifies the string content of tool_result blocks that answer a Bash
 /// tool_use. Each text runs as its own `job` under `exec`. Returns `None` when
 /// nothing changed, the body is not a JSON object or any job is rejected.
-fn rewrite(body: &[u8], exec: &BoundedExecutor, job: Job) -> Option<Vec<u8>> {
+/// With `socket`, every compressed block is reported there once all jobs have
+/// returned; a body with a rejected job reports nothing. History resends
+/// repeat blocks, so the proxy counts submissions, not unique results.
+fn rewrite(
+    body: &[u8],
+    exec: &BoundedExecutor,
+    job: Job,
+    socket: Option<&Path>,
+) -> Option<Vec<u8>> {
     let root: Obj = serde_json::from_slice(body).ok()?;
     let messages: Vec<Obj> = parse::<Vec<&RawValue>>(root.get("messages")?)?
         .into_iter()
@@ -301,11 +317,22 @@ fn rewrite(body: &[u8], exec: &BoundedExecutor, job: Job) -> Option<Vec<u8>> {
     // Targets are in document order, so spans are increasing and disjoint.
     let mut out = Vec::with_capacity(body.len());
     let mut pos = 0;
+    let mut reports = Vec::new();
     for raw in targets {
         let Some(text) = parse::<String>(raw) else {
             continue;
         };
-        let Some(minified) = exec.run(move || job(&text)).ok()? else {
+        let (text, (changed, mut compressed)) = exec
+            .run(move || {
+                let done = job(&text);
+                (text, done)
+            })
+            .ok()?;
+        if socket.is_some() {
+            local::add_estimates(&mut compressed, &text, changed.as_deref().unwrap_or(&text));
+            reports.push(compressed);
+        }
+        let Some(minified) = changed else {
             continue;
         };
         let start = (raw.get().as_ptr() as usize).checked_sub(body.as_ptr() as usize)?;
@@ -315,6 +342,16 @@ fn rewrite(body: &[u8], exec: &BoundedExecutor, job: Job) -> Option<Vec<u8>> {
         out.extend_from_slice(&body[pos..start]);
         out.extend_from_slice(serde_json::to_string(&minified).ok()?.as_bytes());
         pos = start + raw.get().len();
+    }
+    if let Some(socket) = socket {
+        for compressed in &reports {
+            local::send_report(
+                socket,
+                compressed,
+                local::Adapter::Proxy,
+                local::ToolCategory::Bash,
+            );
+        }
     }
     if pos == 0 {
         return None;
@@ -388,7 +425,7 @@ mod tests {
     }
 
     /// Minifies, but far slower than any budget the tests below use for it.
-    fn slow_on_b(text: &str) -> Option<String> {
+    fn slow_on_b(text: &str) -> super::Compressed {
         if text.contains("\"b\"") {
             std::thread::sleep(Duration::from_secs(10));
         }
@@ -423,7 +460,7 @@ mod tests {
             br#"{"messages":[]}"#,
             br#"{"messages":[{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"[ 1 ]"}]}]}"#,
         ] {
-            assert_eq!(rewrite(body, &generous(), minify), None);
+            assert_eq!(rewrite(body, &generous(), minify, None), None);
         }
     }
 
@@ -432,24 +469,27 @@ mod tests {
         let expected = TWO_RESULTS
             .replace(r#""{\n  \"a\": 1\n}""#, r#""{\"a\":1}""#)
             .replace(r#""{\n  \"b\": 1\n}""#, r#""{\"b\":1}""#);
-        let out = rewrite(TWO_RESULTS.as_bytes(), &generous(), minify).unwrap();
+        let out = rewrite(TWO_RESULTS.as_bytes(), &generous(), minify, None).unwrap();
         assert_eq!(String::from_utf8(out).unwrap(), expected);
     }
 
     #[test]
     fn one_expired_job_forwards_the_original_body() {
         let exec = BoundedExecutor::new(1, Duration::from_millis(200)).unwrap();
-        assert_eq!(rewrite(TWO_RESULTS.as_bytes(), &exec, slow_on_b), None);
+        assert_eq!(
+            rewrite(TWO_RESULTS.as_bytes(), &exec, slow_on_b, None),
+            None
+        );
     }
 
     #[test]
     fn panicked_job_forwards_the_original_body() {
-        fn panic_on_b(text: &str) -> Option<String> {
+        fn panic_on_b(text: &str) -> super::Compressed {
             assert!(!text.contains("\"b\""), "injected panic");
             minify(text)
         }
         assert_eq!(
-            rewrite(TWO_RESULTS.as_bytes(), &generous(), panic_on_b),
+            rewrite(TWO_RESULTS.as_bytes(), &generous(), panic_on_b, None),
             None
         );
     }
@@ -459,7 +499,7 @@ mod tests {
         static PERMITS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
         static OPEN: AtomicBool = AtomicBool::new(false);
         /// Blocks until the test opens the gate.
-        fn gated(text: &str) -> Option<String> {
+        fn gated(text: &str) -> super::Compressed {
             while !OPEN.load(Ordering::Acquire) {
                 std::thread::sleep(Duration::from_millis(1));
             }
@@ -496,9 +536,47 @@ mod tests {
         while exec.in_flight() == 0 {
             std::thread::yield_now();
         }
-        assert_eq!(rewrite(TWO_RESULTS.as_bytes(), &exec, minify), None);
+        assert_eq!(rewrite(TWO_RESULTS.as_bytes(), &exec, minify, None), None);
         drop(release);
         assert!(holder.join().unwrap().is_ok());
-        assert!(rewrite(TWO_RESULTS.as_bytes(), &exec, minify).is_some());
+        assert!(rewrite(TWO_RESULTS.as_bytes(), &exec, minify, None).is_some());
+    }
+
+    #[test]
+    fn rewrite_output_does_not_depend_on_the_service() {
+        use std::os::unix::net::UnixDatagram;
+        let body = br#"{"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Bash"}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"[ 1 ]"}]}]}"#;
+        let plain = rewrite(body, &generous(), minify, None).expect("minified");
+        let dir = std::path::PathBuf::from(format!("/tmp/dsl-proxy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("s.sock");
+        // A stale socket file: the service is gone.
+        drop(UnixDatagram::bind(&path).unwrap());
+        assert_eq!(
+            rewrite(body, &generous(), minify, Some(&path)).as_ref(),
+            Some(&plain)
+        );
+        std::fs::remove_file(&path).unwrap();
+        let receiver = UnixDatagram::bind(&path).unwrap();
+        receiver.set_nonblocking(true).unwrap();
+        assert_eq!(
+            rewrite(body, &generous(), minify, Some(&path)).as_ref(),
+            Some(&plain)
+        );
+        let mut buf = [0; 1024];
+        let n = receiver.recv(&mut buf).unwrap();
+        let report: serde_json::Value = serde_json::from_slice(&buf[..n]).unwrap();
+        assert_eq!(report["adapter"], "proxy");
+        assert_eq!(report["outcome"], "changed");
+        // A body with a panicked job reports none of its blocks.
+        fn panic_on_b(text: &str) -> super::Compressed {
+            assert!(!text.contains("\"b\""), "injected panic");
+            minify(text)
+        }
+        let two = TWO_RESULTS.as_bytes();
+        assert_eq!(rewrite(two, &generous(), panic_on_b, Some(&path)), None);
+        assert!(receiver.recv(&mut buf).is_err(), "rejected body reported");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

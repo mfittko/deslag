@@ -2,14 +2,16 @@
 
 mod hook_conflicts;
 
+use std::cell::RefCell;
 use std::ffi::OsString;
 use std::io::{self, Read, Write};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use deslag_core::{BoundedExecutor, FIRST_SLICE_JSON_MINIFY_CONTEXT, Rejected};
+use deslag_core::{BoundedExecutor, CompressionReport, FIRST_SLICE_JSON_MINIFY_CONTEXT, Rejected};
 use deslag_proxy::{Upstream, serve};
+use deslag_telemetry as report;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
 
@@ -149,19 +151,33 @@ fn claude_hook(
     // Only Bash stdout and MCP text blocks are eligible. Every other tool, including
     // Read, stays byte-exact because Edit matches on Read output.
     let response = &event["tool_response"];
+    let tool = report::ToolCategory::from_tool_name(tool_name);
+    let socket = report::live_socket();
+    // Reports wait until every job returns, so an output with a rejected job
+    // reports nothing, and a job that outlives its budget never reports.
+    let reports = RefCell::new(Vec::new());
     // Each text runs as its own bounded job. Any rejection leaves the whole output unchanged.
     let run = |text: &str| {
-        let text = text.to_owned();
-        exec.run(move || job(&text))
+        let owned = text.to_owned();
+        let (changed, mut compressed) = exec.run(move || job(&owned))?;
+        if socket.is_some() {
+            report::add_estimates(&mut compressed, text, changed.as_deref().unwrap_or(text));
+            reports.borrow_mut().push(compressed);
+        }
+        Ok(changed)
     };
-    let updated = if tool_name == "Bash" {
-        minify_bash(response, &run)
-    } else if tool_name.starts_with("mcp__") {
-        minify_mcp(response, &run)
-    } else {
-        Ok(None)
+    let updated = match tool {
+        report::ToolCategory::Bash => minify_bash(response, &run),
+        report::ToolCategory::Mcp => minify_mcp(response, &run),
+        report::ToolCategory::Other => Ok(None),
     }
     .map_err(|rejected| format!("compression {}; tool output unchanged", rejected.as_str()))?;
+    if let Some(socket) = &socket {
+        // ponytail: a hook process exits after one result, so a failed send is lost uncounted.
+        for compressed in reports.into_inner() {
+            report::send_report(socket, &compressed, report::Adapter::Hook, tool);
+        }
+    }
     let Some(output) = updated.and_then(|updated| replacement(&event, updated)) else {
         return Ok(None);
     };
@@ -179,14 +195,19 @@ fn claude_hook(
     }
 }
 
+/// One finished job: the changed text, if any, and the compression report.
+type Compressed = (Option<String>, CompressionReport);
+
 /// Per-text compression job. Tests inject a slow one.
-type Job = fn(&str) -> Option<String>;
+type Job = fn(&str) -> Compressed;
 
 /// Runs one job for one text under the executor.
 type Run<'a> = dyn Fn(&str) -> Result<Option<String>, Rejected> + 'a;
 
-fn minify(text: &str) -> Option<String> {
-    deslag_core::compress(text, &FIRST_SLICE_JSON_MINIFY_CONTEXT).into_changed()
+fn minify(text: &str) -> Compressed {
+    let result = deslag_core::compress(text, &FIRST_SLICE_JSON_MINIFY_CONTEXT);
+    let report = result.report.clone();
+    (result.into_changed(), report)
 }
 
 /// Bash: only `stdout`, and never for image results.
@@ -611,7 +632,7 @@ mod tests {
     }
 
     /// Minifies, but far slower than any budget the tests below use for it.
-    fn slow_on_b(text: &str) -> Option<String> {
+    fn slow_on_b(text: &str) -> Compressed {
         if text.contains("\"b\"") {
             std::thread::sleep(std::time::Duration::from_secs(10));
         }
@@ -652,7 +673,7 @@ mod tests {
 
     #[test]
     fn panicked_job_leaves_output_unchanged() {
-        fn panic_on_b(text: &str) -> Option<String> {
+        fn panic_on_b(text: &str) -> Compressed {
             assert!(!text.contains("\"b\""), "injected panic");
             minify(text)
         }
