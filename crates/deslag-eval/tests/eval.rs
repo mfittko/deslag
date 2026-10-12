@@ -671,8 +671,8 @@ fn run_refuses_an_existing_out_path() {
 
 /// Live-backend runs against a fake `claude` script. `mode` selects its reply:
 /// `ok` (no cost field), `is_error`, `bad` (malformed JSON, exit 1), `pricey`,
-/// `cost-<json number>`, `version-fail` (`--version` exits 1) or `tmp-readonly`
-/// (an unwritable TMPDIR, so the live directory cannot be created).
+/// `cost-<json number>`, `version-fail` (`--version` exits 1) or `tmp-file`
+/// (TMPDIR is a regular file, so the live directory cannot be created).
 #[cfg(unix)]
 fn fake_live_run(mode: &str, out_exists: bool) -> (Output, Vec<Value>, PathBuf) {
     use std::os::unix::fs::PermissionsExt;
@@ -680,9 +680,11 @@ fn fake_live_run(mode: &str, out_exists: bool) -> (Output, Vec<Value>, PathBuf) 
     let bin = root.join("bin");
     let tmp = root.join("tmp");
     std::fs::create_dir_all(&bin).unwrap();
-    std::fs::create_dir_all(&tmp).unwrap();
-    if mode == "tmp-readonly" {
-        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o500)).unwrap();
+    if mode == "tmp-file" {
+        // A directory cannot be created under a file path, whatever the user.
+        std::fs::write(&tmp, "").unwrap();
+    } else {
+        std::fs::create_dir_all(&tmp).unwrap();
     }
     let script = bin.join("claude");
     std::fs::write(
@@ -742,7 +744,8 @@ esac
         .output()
         .unwrap();
     let leaked: Vec<_> = std::fs::read_dir(&tmp)
-        .unwrap()
+        .into_iter()
+        .flatten()
         .filter_map(|e| e.ok())
         .filter(|e| e.file_name().to_string_lossy().starts_with("deslag-eval-"))
         .collect();
@@ -854,7 +857,7 @@ fn live_backend_refused_out_path_leaks_no_dir() {
 #[cfg(unix)]
 #[test]
 fn live_backend_failed_live_dir_leaks_no_out_file() {
-    let (o, lines, out) = fake_live_run("tmp-readonly", false);
+    let (o, lines, out) = fake_live_run("tmp-file", false);
     let err = String::from_utf8_lossy(&o.stderr);
     assert_eq!(o.status.code(), Some(2), "{err}");
     assert!(lines.is_empty());
