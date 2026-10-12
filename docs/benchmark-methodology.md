@@ -4,7 +4,7 @@ This document predeclares the scoring rules and the non-inferiority criterion fo
 
 The two-call plumbing smoke check of the `claude` backend is excluded from the analysis.
 
-The harness is the `deslag-eval` binary in `crates/deslag-eval`. The corpus is `tests/evaluations/manifest.json`. Results are in `docs/benchmarks/evaluation.md`.
+The harness is the `deslag-eval` binary in `crates/deslag-eval`. The corpus is `tests/evaluations/manifest.json`. Results are in [docs/benchmarks/evaluation.md](benchmarks/evaluation.md).
 
 ## Unit of analysis
 
@@ -132,7 +132,7 @@ The run order is a seeded shuffle (splitmix64, Fisher-Yates) over all (task, arm
 
 - The `claude` backend refuses to start unless `DESLAG_EVAL_LIVE=1` is set and both `--model` and `--budget-usd` are given.
 - Every call passes `--max-budget-usd` with the per-run cap (`--per-run-usd`, default 0.30).
-- Before each call, the runner stops when the spent amount plus the per-run cap would exceed `--budget-usd`. A call that reports no cost counts as the full per-run cap.
+- Before each call, the runner stops when the spent amount plus the per-run cap would exceed `--budget-usd`. A call that reports no cost, or a negative or non-finite cost, counts as the full per-run cap, and the report treats such a cost as unreported.
 - The client checks `--max-budget-usd` only after a turn, so one call can exceed its cap. The total can then exceed `--budget-usd` by that excess. The runner stops with exit 2 after any call whose reported cost exceeds `--per-run-usd`. The partial results file is kept.
 - `run` refuses an existing `--out` path with exit 2, so a rerun never overwrites results.
 - `deslag-eval estimate` prints, before any money is spent, an estimated cost of a full live run under stated assumptions (estimated tokens, assumed prices and assumed output tokens) and runs times `--per-run-usd`. That product is a cap only if every call stays within `--per-run-usd`. It refuses a negative or non-finite price and a `--per-run-usd` that is not above 0.

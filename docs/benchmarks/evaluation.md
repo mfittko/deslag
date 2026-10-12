@@ -137,7 +137,7 @@ Non-control tasks that ran both table arms. Control tasks are excluded.
 
 ### Per arm
 
-All tasks, controls included. Payload tokens are estimates (deslag-estimate-v1). The columns from Input tokens to Turns are backend-reported sums; n/a means not reported. Wall ms is the summed harness wall clock of the backend calls.
+All tasks, controls included. Payload tokens are estimates (deslag-estimate-v1). The columns from Input tokens to Turns are backend-reported sums; n/a means not reported, and a negative or non-finite value counts as not reported. Wall ms is the summed harness wall clock of the backend calls.
 
 | Arm | Runs | Success | Wrong | Abstain | Backend error | Payload tokens (estimate) | Input tokens | Output tokens | Cache read | Cache creation | Cost USD | Duration ms | Turns | Wall ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |

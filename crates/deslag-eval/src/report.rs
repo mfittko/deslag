@@ -267,7 +267,7 @@ pub fn render(text: &str) -> Result<String, String> {
         let usage = REPORTED.split(' ').map(|k| reported(&rs, k)).collect();
         (!rs.is_empty()).then(|| [cells![arm, rs.len()], kinds(&rs), cells![est], usage].concat())
     });
-    let note = "All tasks, controls included. Payload tokens are estimates (deslag-estimate-v1). The columns from Input tokens to Turns are backend-reported sums; n/a means not reported. Wall ms is the summed harness wall clock of the backend calls.\n\n";
+    let note = "All tasks, controls included. Payload tokens are estimates (deslag-estimate-v1). The columns from Input tokens to Turns are backend-reported sums; n/a means not reported, and a negative or non-finite value counts as not reported. Wall ms is the summed harness wall clock of the backend calls.\n\n";
     let head = "Arm|Runs|Success|Wrong|Abstain|Backend error|Payload tokens (estimate)|Input tokens|Output tokens|Cache read|Cache creation|Cost USD|Duration ms|Turns|Wall ms";
     section(&mut md, "Per arm", note, head, per_arm.collect());
     Ok(md.trim_end().to_string() + "\n")

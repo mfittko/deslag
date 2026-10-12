@@ -393,7 +393,8 @@ fn run(args: &[String]) -> Result<(), String> {
     } else {
         format!("deslag-eval {}", deslag_core::VERSION)
     };
-    // Opened before the live directory exists, so a refused path leaks nothing.
+    // Opened before the live directory exists, so a refused path leaks no directory.
+    // A failed live directory removes the new file, so a retry can reuse the path.
     let mut out = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -402,7 +403,18 @@ fn run(args: &[String]) -> Result<(), String> {
             io::ErrorKind::AlreadyExists => format!("{out_path} exists; pass a new --out path"),
             _ => format!("{out_path}: {e}"),
         })?;
-    let dir = if live { Some(live_dir()?) } else { None };
+    let dir = if live {
+        match live_dir() {
+            Ok(d) => Some(d),
+            Err(e) => {
+                drop(out);
+                let _ = fs::remove_file(&out_path);
+                return Err(e);
+            }
+        }
+    } else {
+        None
+    };
     let mut order = pairs(&tasks);
     score::shuffle(&mut order, seed);
     let mut spent = 0.0;
