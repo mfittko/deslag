@@ -421,6 +421,81 @@ async fn changed_non_text_block_is_a_digest_mismatch() {
 }
 
 #[tokio::test]
+async fn moved_cache_breakpoint_is_not_a_digest_mismatch() {
+    let cache = json!({"type": "ephemeral"});
+    let text = |cached: bool| {
+        let mut b = json!({"type": "text", "text": R1});
+        if cached {
+            b["cache_control"] = cache.clone();
+        }
+        b
+    };
+    let image = |cached: bool| {
+        let mut b = json!({"type": "image", "source": {"type": "base64", "data": "a"}});
+        if cached {
+            b["cache_control"] = cache.clone();
+        }
+        b
+    };
+    let body = |content: Value, next: bool| {
+        let mut messages = vec![
+            json!({"role": "user", "content": "inspect the data"}),
+            json!({"role": "assistant", "content": [
+                {"type": "tool_use", "id": "toolu_1", "name": "Bash", "input": {"command": "cat x"}}
+            ]}),
+            json!({"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": "toolu_1", "content": content}
+            ]}),
+        ];
+        if next {
+            messages.push(json!({"role": "user", "content": "next"}));
+        }
+        serde_json::to_vec(&json!({"model": "m", "messages": messages})).unwrap()
+    };
+    // History without cache_control members, for byte comparison.
+    let history = |sent: &Bytes| {
+        let mut req: Value = serde_json::from_slice(sent).unwrap();
+        let mut messages = req["messages"].as_array().unwrap()[..3].to_vec();
+        for block in messages[2]["content"][0]["content"].as_array_mut().unwrap() {
+            block.as_object_mut().unwrap().remove("cache_control");
+        }
+        req["messages"] = Value::Array(messages);
+        req
+    };
+    let dir = temp_dir();
+    write_owner(&dir, Owner::Proxy).unwrap();
+    let mut p = Proxy::start(&dir, Mode::Safe).await;
+    p.turn("m", &[]).await.unwrap();
+    let first = p
+        .send(Some(SCOPE), body(json!([text(true), image(false)]), false))
+        .await
+        .unwrap();
+    // The client moves the breakpoint from the text block to the image block.
+    let moved = p
+        .send(Some(SCOPE), body(json!([text(false), image(true)]), true))
+        .await
+        .unwrap();
+    // Then drops it from the content entirely.
+    let dropped = p
+        .send(Some(SCOPE), body(json!([text(false), image(false)]), true))
+        .await
+        .unwrap();
+    let first = history(&first);
+    assert_eq!(
+        first["messages"][2]["content"][0]["content"][0]["text"],
+        min(R1)
+    );
+    assert_eq!(history(&moved), first);
+    assert_eq!(history(&dropped), first);
+    let moved: Value = serde_json::from_slice(&moved).unwrap();
+    assert_eq!(
+        moved["messages"][2]["content"][0]["content"][1]["cache_control"],
+        cache
+    );
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[tokio::test]
 async fn off_session_stays_off_after_mode_change() {
     let dir = temp_dir();
     write_owner(&dir, Owner::Proxy).unwrap();

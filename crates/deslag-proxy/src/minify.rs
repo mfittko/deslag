@@ -324,10 +324,22 @@ fn minify(text: &str) -> Option<String> {
 
 /// The complete tool-result content as compact JSON with sorted keys, so every
 /// block, text or not, is part of the source identity and whitespace and
-/// escapes are not. A missing content is the empty string.
+/// escapes are not. `cache_control` on a content block is excluded, so a moved
+/// cache breakpoint is not a changed result. A missing content is the empty
+/// string.
 fn canonical(content: Option<&RawValue>) -> String {
     content.map_or_else(String::new, |c| {
-        parse::<Value>(c).map_or_else(|| c.get().to_owned(), |v| v.to_string())
+        parse::<Value>(c).map_or_else(
+            || c.get().to_owned(),
+            |mut v| {
+                if let Some(blocks) = v.as_array_mut() {
+                    for block in blocks.iter_mut().filter_map(Value::as_object_mut) {
+                        block.remove("cache_control");
+                    }
+                }
+                v.to_string()
+            },
+        )
     })
 }
 
