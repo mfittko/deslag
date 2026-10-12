@@ -1,0 +1,217 @@
+[  1/200] Compiling crate_001 v0.1.1
+[  2/200] Compiling crate_002 v0.2.2
+[  3/200] Compiling crate_003 v0.3.3
+[  4/200] Compiling crate_004 v0.4.4
+[  5/200] Compiling crate_005 v0.5.0
+[  6/200] Compiling crate_006 v0.6.1
+[  7/200] Compiling crate_007 v0.7.2
+[  8/200] Compiling crate_008 v0.8.3
+[  9/200] Compiling crate_009 v0.0.4
+[ 10/200] Compiling crate_010 v0.1.0
+[ 11/200] Compiling crate_011 v0.2.1
+[ 12/200] Compiling crate_012 v0.3.2
+[ 13/200] Compiling crate_013 v0.4.3
+[ 14/200] Compiling crate_014 v0.5.4
+[ 15/200] Compiling crate_015 v0.6.0
+[ 16/200] Compiling crate_016 v0.7.1
+[ 17/200] Compiling crate_017 v0.8.2
+[ 18/200] Compiling crate_018 v0.0.3
+[ 19/200] Compiling crate_019 v0.1.4
+[ 20/200] Compiling crate_020 v0.2.0
+[ 21/200] Compiling crate_021 v0.3.1
+[ 22/200] Compiling crate_022 v0.4.2
+[ 23/200] Compiling crate_023 v0.5.3
+[ 24/200] Compiling crate_024 v0.6.4
+[ 25/200] Compiling crate_025 v0.7.0
+[ 26/200] Compiling crate_026 v0.8.1
+[ 27/200] Compiling crate_027 v0.0.2
+[ 28/200] Compiling crate_028 v0.1.3
+[ 29/200] Compiling crate_029 v0.2.4
+[ 30/200] Compiling crate_030 v0.3.0
+[ 31/200] Compiling crate_031 v0.4.1
+[ 32/200] Compiling crate_032 v0.5.2
+[ 33/200] Compiling crate_033 v0.6.3
+[ 34/200] Compiling crate_034 v0.7.4
+[ 35/200] Compiling crate_035 v0.8.0
+[ 36/200] Compiling crate_036 v0.0.1
+[ 37/200] Compiling crate_037 v0.1.2
+[ 38/200] Compiling crate_038 v0.2.3
+[ 39/200] Compiling crate_039 v0.3.4
+[ 40/200] Compiling crate_040 v0.4.0
+[ 41/200] Compiling crate_041 v0.5.1
+[ 42/200] Compiling crate_042 v0.6.2
+[ 43/200] Compiling crate_043 v0.7.3
+[ 44/200] Compiling crate_044 v0.8.4
+[ 45/200] Compiling crate_045 v0.0.0
+[ 46/200] Compiling crate_046 v0.1.1
+[ 47/200] Compiling crate_047 v0.2.2
+[ 48/200] Compiling crate_048 v0.3.3
+[ 49/200] Compiling crate_049 v0.4.4
+  waiting for remote cache...
+  waiting for remote cache...
+  waiting for remote cache...
+  waiting for remote cache...
+[ 51/200] Compiling crate_051 v0.6.1
+[ 52/200] Compiling crate_052 v0.7.2
+[ 53/200] Compiling crate_053 v0.8.3
+[ 54/200] Compiling crate_054 v0.0.4
+[ 55/200] Compiling crate_055 v0.1.0
+[ 56/200] Compiling crate_056 v0.2.1
+[ 57/200] Compiling crate_057 v0.3.2
+[ 58/200] Compiling crate_058 v0.4.3
+[ 59/200] Compiling crate_059 v0.5.4
+[ 60/200] Compiling crate_060 v0.6.0
+[ 61/200] Compiling crate_061 v0.7.1
+[ 62/200] Compiling crate_062 v0.8.2
+[ 63/200] Compiling crate_063 v0.0.3
+[ 64/200] Compiling crate_064 v0.1.4
+[ 65/200] Compiling crate_065 v0.2.0
+[ 66/200] Compiling crate_066 v0.3.1
+[ 67/200] Compiling crate_067 v0.4.2
+[ 68/200] Compiling crate_068 v0.5.3
+[ 69/200] Compiling crate_069 v0.6.4
+[ 70/200] Compiling crate_070 v0.7.0
+[ 71/200] Compiling crate_071 v0.8.1
+[ 72/200] Compiling crate_072 v0.0.2
+[ 73/200] Compiling crate_073 v0.1.3
+[ 74/200] Compiling crate_074 v0.2.4
+[ 75/200] Compiling crate_075 v0.3.0
+[ 76/200] Compiling crate_076 v0.4.1
+[ 77/200] Compiling crate_077 v0.5.2
+[ 78/200] Compiling crate_078 v0.6.3
+[ 79/200] Compiling crate_079 v0.7.4
+[ 80/200] Compiling crate_080 v0.8.0
+[ 81/200] Compiling crate_081 v0.0.1
+[ 82/200] Compiling crate_082 v0.1.2
+[ 83/200] Compiling crate_083 v0.2.3
+[ 84/200] Compiling crate_084 v0.3.4
+[ 85/200] Compiling crate_085 v0.4.0
+[ 86/200] Compiling crate_086 v0.5.1
+[ 87/200] Compiling crate_087 v0.6.2
+[ 88/200] Compiling crate_088 v0.7.3
+[ 89/200] Compiling crate_089 v0.8.4
+[ 90/200] Compiling crate_090 v0.0.0
+[ 91/200] Compiling crate_091 v0.1.1
+[ 92/200] Compiling crate_092 v0.2.2
+[ 93/200] Compiling crate_093 v0.3.3
+[ 94/200] Compiling crate_094 v0.4.4
+[ 95/200] Compiling crate_095 v0.5.0
+[ 96/200] Compiling crate_096 v0.6.1
+[ 97/200] Compiling crate_097 v0.7.2
+[ 98/200] Compiling crate_098 v0.8.3
+[ 99/200] Compiling crate_099 v0.0.4
+  waiting for remote cache...
+  waiting for remote cache...
+  waiting for remote cache...
+  waiting for remote cache...
+[101/200] Compiling crate_101 v0.2.1
+[102/200] Compiling crate_102 v0.3.2
+[103/200] Compiling crate_103 v0.4.3
+[104/200] Compiling crate_104 v0.5.4
+[105/200] Compiling crate_105 v0.6.0
+[106/200] Compiling crate_106 v0.7.1
+[107/200] Compiling crate_107 v0.8.2
+[108/200] Compiling crate_108 v0.0.3
+[109/200] Compiling crate_109 v0.1.4
+[110/200] Compiling crate_110 v0.2.0
+[111/200] Compiling crate_111 v0.3.1
+[112/200] Compiling crate_112 v0.4.2
+[113/200] Compiling crate_113 v0.5.3
+[114/200] Compiling crate_114 v0.6.4
+[115/200] Compiling crate_115 v0.7.0
+[116/200] Compiling crate_116 v0.8.1
+[117/200] Compiling crate_117 v0.0.2
+[118/200] Compiling crate_118 v0.1.3
+[119/200] Compiling crate_119 v0.2.4
+[120/200] Compiling crate_120 v0.3.0
+[121/200] Compiling crate_121 v0.4.1
+[122/200] Compiling crate_122 v0.5.2
+[123/200] Compiling crate_123 v0.6.3
+[124/200] Compiling crate_124 v0.7.4
+[125/200] Compiling crate_125 v0.8.0
+[126/200] Compiling crate_126 v0.0.1
+[127/200] Compiling crate_127 v0.1.2
+[128/200] Compiling crate_128 v0.2.3
+[129/200] Compiling crate_129 v0.3.4
+[130/200] Compiling crate_130 v0.4.0
+[131/200] Compiling crate_131 v0.5.1
+[132/200] Compiling crate_132 v0.6.2
+[133/200] Compiling crate_133 v0.7.3
+[134/200] Compiling crate_134 v0.8.4
+[135/200] Compiling crate_135 v0.0.0
+[136/200] Compiling crate_136 v0.1.1
+[137/200] Compiling crate_137 v0.2.2
+[138/200] Compiling crate_138 v0.3.3
+[139/200] Compiling crate_139 v0.4.4
+[140/200] Compiling crate_140 v0.5.0
+[141/200] Compiling crate_141 v0.6.1
+[142/200] Compiling crate_142 v0.7.2
+[143/200] Compiling crate_143 v0.8.3
+[144/200] Compiling crate_144 v0.0.4
+[145/200] Compiling crate_145 v0.1.0
+[146/200] Compiling crate_146 v0.2.1
+[147/200] Compiling crate_147 v0.3.2
+[148/200] Compiling crate_148 v0.4.3
+[149/200] Compiling crate_149 v0.5.4
+  waiting for remote cache...
+  waiting for remote cache...
+  waiting for remote cache...
+  waiting for remote cache...
+[151/200] Compiling crate_151 v0.7.1
+[152/200] Compiling crate_152 v0.8.2
+[153/200] Compiling crate_153 v0.0.3
+[154/200] Compiling crate_154 v0.1.4
+[155/200] Compiling crate_155 v0.2.0
+[156/200] Compiling crate_156 v0.3.1
+[157/200] Compiling crate_157 v0.4.2
+[158/200] Compiling crate_158 v0.5.3
+[159/200] Compiling crate_159 v0.6.4
+[160/200] Compiling crate_160 v0.7.0
+[161/200] Compiling crate_161 v0.8.1
+[162/200] Compiling crate_162 v0.0.2
+[163/200] Compiling crate_163 v0.1.3
+[164/200] Compiling crate_164 v0.2.4
+[165/200] Compiling crate_165 v0.3.0
+[166/200] Compiling crate_166 v0.4.1
+[167/200] Compiling crate_167 v0.5.2
+[168/200] Compiling crate_168 v0.6.3
+[169/200] Compiling crate_169 v0.7.4
+[170/200] Compiling crate_170 v0.8.0
+[171/200] Compiling crate_171 v0.0.1
+[172/200] Compiling crate_172 v0.1.2
+[173/200] Compiling crate_173 v0.2.3
+[174/200] Compiling crate_174 v0.3.4
+[175/200] Compiling crate_175 v0.4.0
+[176/200] Compiling crate_176 v0.5.1
+[177/200] Compiling crate_177 v0.6.2
+[178/200] Compiling crate_178 v0.7.3
+[179/200] Compiling crate_179 v0.8.4
+[180/200] Compiling crate_180 v0.0.0
+[181/200] Compiling crate_181 v0.1.1
+[182/200] Compiling crate_182 v0.2.2
+[183/200] Compiling crate_183 v0.3.3
+[184/200] Compiling crate_184 v0.4.4
+[185/200] Compiling crate_185 v0.5.0
+[186/200] Compiling crate_186 v0.6.1
+[187/200] Compiling crate_187 v0.7.2
+[188/200] Compiling crate_188 v0.8.3
+[189/200] Compiling crate_189 v0.0.4
+[190/200] Compiling crate_190 v0.1.0
+[191/200] Compiling crate_191 v0.2.1
+[192/200] Compiling crate_192 v0.3.2
+[193/200] Compiling crate_193 v0.4.3
+[194/200] Compiling crate_194 v0.5.4
+[195/200] Compiling crate_195 v0.6.0
+[196/200] Compiling crate_196 v0.7.1
+[197/200] Compiling crate_197 v0.8.2
+[198/200] Compiling crate_198 v0.0.3
+[199/200] Compiling crate_199 v0.1.4
+  waiting for remote cache...
+  waiting for remote cache...
+  waiting for remote cache...
+  waiting for remote cache...
+    Finished release profile [optimized] target(s) in 3m 12s
+packaging artifacts
+artifact deslag-0.1.0.zip sha256=0d4c8e1a9b7f6e5d4c3b2a1908f7e6d5c4b3a2918f7e6d5c4b3a291807f6e5d4
+artifact deslag-0.1.0.tar.gz sha256=3f9ac2e817b4d6059e1c8a7f2b3d4e5f60718293a4b5c6d7e8f9012a3b4c5d6e
+upload complete

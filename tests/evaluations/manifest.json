@@ -1,0 +1,199 @@
+{
+  "tasks": [
+    {
+      "id": "api-users-email",
+      "category": "api_query",
+      "input": "inputs/api_query_users.json",
+      "question": "What is the email address of the user with login kmarsh?",
+      "answers": ["k.marsh@example.test"],
+      "rule": "exact_ci",
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
+    },
+    {
+      "id": "api-repo-branch",
+      "category": "api_query",
+      "input": "inputs/api_query_repo.json",
+      "question": "What is the repository's default branch?",
+      "answers": ["trunk-2026"],
+      "rule": "exact",
+      "arms": ["json-minify"]
+    },
+    {
+      "id": "api-search-email",
+      "category": "api_query",
+      "input": "inputs/api_query_search.json",
+      "question": "In the search results, what is the email address of the user with login tvoss?",
+      "answers": ["t.voss@example.test"],
+      "rule": "exact_ci",
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
+    },
+    {
+      "id": "code-defines-fn",
+      "category": "code_search",
+      "input": "inputs/code_search_matches.json",
+      "question": "Which file defines the function parse_retry_after? Answer with the file path.",
+      "answers": ["src/net/backoff.rs"],
+      "rule": "exact",
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
+    },
+    {
+      "id": "code-const-line",
+      "category": "code_search",
+      "input": "inputs/code_search_grep.txt",
+      "question": "On which line of src/http/client.rs is the constant MAX_REDIRECTS defined? Answer with the line number.",
+      "answers": ["1187"],
+      "rule": "number",
+      "arms": ["lines-v1"]
+    },
+    {
+      "id": "fail-test-name",
+      "category": "failure_diagnosis",
+      "input": "inputs/failure_diagnosis_test.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "answers": ["billing::invoice::rounds_half_even"],
+      "rule": "exact",
+      "arms": ["lines-v1", "lines-v2"]
+    },
+    {
+      "id": "fail-ci-job",
+      "category": "failure_diagnosis",
+      "input": "inputs/failure_diagnosis_jobs.json",
+      "question": "Which CI job concluded with failure? Answer with the job name.",
+      "answers": ["integration (postgres-16)"],
+      "rule": "exact",
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
+    },
+    {
+      "id": "triage-open-p0",
+      "category": "issue_triage",
+      "input": "inputs/issue_triage_labels.json",
+      "question": "What is the number of the open issue labeled p0?",
+      "answers": ["4182"],
+      "rule": "number",
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
+    },
+    {
+      "id": "triage-assignee-set",
+      "category": "issue_triage",
+      "input": "inputs/issue_triage_assignees.json",
+      "question": "List the numbers of all open issues assigned to dkato, comma-separated.",
+      "answers": ["5127,5133,5190"],
+      "rule": "set",
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
+    },
+    {
+      "id": "logs-503-request",
+      "category": "logs",
+      "input": "inputs/logs_service.log",
+      "question": "Which request_id failed with status 503?",
+      "answers": ["req-7f3a9c"],
+      "rule": "exact",
+      "arms": ["lines-v1", "lines-v2"]
+    },
+    {
+      "id": "logs-403-ip",
+      "category": "logs",
+      "input": "inputs/logs_access.log",
+      "question": "Which client IP address received the only 403 response?",
+      "answers": ["203.0.113.77"],
+      "rule": "exact",
+      "arms": ["lines-v1", "lines-v2"]
+    },
+    {
+      "id": "agg-max-errors",
+      "category": "aggregation",
+      "input": "inputs/aggregation_services.json",
+      "question": "Which service has the highest error_count in a single row? Answer with the service name.",
+      "answers": ["ledger-sync"],
+      "rule": "exact",
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
+    },
+    {
+      "id": "agg-max-duration",
+      "category": "aggregation",
+      "input": "inputs/aggregation_builds.json",
+      "question": "What is the longest duration_s among builds with status success?",
+      "answers": ["1873"],
+      "rule": "number",
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
+    },
+    {
+      "id": "id-order-by-amount",
+      "category": "exact_id",
+      "input": "inputs/exact_id_orders.json",
+      "question": "What is the order_id of the order with amount_cents 48213?",
+      "answers": ["ord_9KQ2M7XA"],
+      "rule": "exact",
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
+    },
+    {
+      "id": "id-deploy-commit",
+      "category": "exact_id",
+      "input": "inputs/exact_id_deploys.json",
+      "question": "Which commit SHA is deployed to production-eu for the service checkout? Answer with the full SHA.",
+      "answers": ["4be1c09d7a3f5e2286c1d0b9f47a6e3c58d2b710"],
+      "rule": "exact_ci",
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
+    },
+    {
+      "id": "buried-key-delete",
+      "category": "buried_evidence",
+      "input": "inputs/buried_evidence_audit.json",
+      "question": "Which actor deleted the API key key_q8Wm2?",
+      "answers": ["svc-rotator-b"],
+      "rule": "exact",
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
+    },
+    {
+      "id": "buried-artifact-sha",
+      "category": "buried_evidence",
+      "input": "inputs/buried_evidence_build.log",
+      "question": "What sha256 checksum is reported for the artifact deslag-0.1.0.tar.gz?",
+      "answers": ["3f9ac2e817b4d6059e1c8a7f2b3d4e5f60718293a4b5c6d7e8f9012a3b4c5d6e"],
+      "rule": "exact_ci",
+      "arms": ["lines-v1", "lines-v2"]
+    },
+    {
+      "id": "control-prose",
+      "category": "incompressible",
+      "control": "incompressible",
+      "input": "inputs/incompressible_prose.txt",
+      "question": "Who is the on-call engineer for the week of 2026-09-28?",
+      "answers": ["Priya Raman"],
+      "rule": "exact_ci",
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2", "lines-v1", "lines-v2"]
+    },
+    {
+      "id": "control-minimal-json",
+      "category": "incompressible",
+      "control": "incompressible",
+      "input": "inputs/incompressible_minimal.json",
+      "question": "How many rows did the nightly-export job write?",
+      "answers": ["18342"],
+      "rule": "number",
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2", "lines-v1", "lines-v2"]
+    },
+    {
+      "id": "control-drop-revoker",
+      "category": "evidence_drop",
+      "control": "evidence_drop",
+      "input": "inputs/evidence_drop_sessions.json",
+      "question": "Who revoked session sess_k21?",
+      "answers": ["mallory-ops"],
+      "rule": "exact",
+      "arms": ["drop-evidence"],
+      "evidence": "\"revoked_by\": \"mallory-ops\""
+    },
+    {
+      "id": "control-drop-alert",
+      "category": "evidence_drop",
+      "control": "evidence_drop",
+      "input": "inputs/evidence_drop_deploy.log",
+      "question": "Which alert triggered the rollback?",
+      "answers": ["checkout-latency-p99"],
+      "rule": "exact",
+      "arms": ["drop-evidence", "lines-v2"],
+      "evidence": "rollback triggered by"
+    }
+  ]
+}

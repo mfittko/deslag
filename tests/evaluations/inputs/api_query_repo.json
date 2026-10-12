@@ -1,0 +1,21 @@
+{
+  "id": 88213,
+  "name": "ledger",
+  "full_name": "acme-synthetic/ledger",
+  "private": true,
+  "owner": {
+    "login": "acme-synthetic",
+    "type": "Organization"
+  },
+  "description": "Double-entry ledger service",
+  "default_branch": "trunk-2026",
+  "topics": ["accounting", "rust", "service"],
+  "open_issues_count": 37,
+  "permissions": {
+    "admin": false,
+    "push": true,
+    "pull": true
+  },
+  "created_at": "2024-03-11T09:12:44Z",
+  "pushed_at": "2026-09-29T17:02:10Z"
+}

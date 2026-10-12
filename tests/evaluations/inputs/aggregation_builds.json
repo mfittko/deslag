@@ -1,0 +1,302 @@
+[
+  {
+    "build_id": 90001,
+    "branch": "feature/b1",
+    "status": "success",
+    "duration_s": 317
+  },
+  {
+    "build_id": 90002,
+    "branch": "feature/b2",
+    "status": "success",
+    "duration_s": 334
+  },
+  {
+    "build_id": 90003,
+    "branch": "feature/b3",
+    "status": "success",
+    "duration_s": 351
+  },
+  {
+    "build_id": 90004,
+    "branch": "feature/b4",
+    "status": "failure",
+    "duration_s": 368
+  },
+  {
+    "build_id": 90005,
+    "branch": "feature/b5",
+    "status": "success",
+    "duration_s": 385
+  },
+  {
+    "build_id": 90006,
+    "branch": "feature/b6",
+    "status": "success",
+    "duration_s": 402
+  },
+  {
+    "build_id": 90007,
+    "branch": "feature/b0",
+    "status": "success",
+    "duration_s": 419
+  },
+  {
+    "build_id": 90008,
+    "branch": "feature/b1",
+    "status": "failure",
+    "duration_s": 436
+  },
+  {
+    "build_id": 90009,
+    "branch": "feature/b2",
+    "status": "success",
+    "duration_s": 453
+  },
+  {
+    "build_id": 90010,
+    "branch": "feature/b3",
+    "status": "success",
+    "duration_s": 470
+  },
+  {
+    "build_id": 90011,
+    "branch": "feature/b4",
+    "status": "success",
+    "duration_s": 487
+  },
+  {
+    "build_id": 90012,
+    "branch": "feature/b5",
+    "status": "failure",
+    "duration_s": 504
+  },
+  {
+    "build_id": 90013,
+    "branch": "feature/b6",
+    "status": "success",
+    "duration_s": 521
+  },
+  {
+    "build_id": 90014,
+    "branch": "feature/b0",
+    "status": "success",
+    "duration_s": 538
+  },
+  {
+    "build_id": 90015,
+    "branch": "feature/b1",
+    "status": "success",
+    "duration_s": 555
+  },
+  {
+    "build_id": 90016,
+    "branch": "feature/b2",
+    "status": "failure",
+    "duration_s": 572
+  },
+  {
+    "build_id": 90017,
+    "branch": "feature/b3",
+    "status": "success",
+    "duration_s": 589
+  },
+  {
+    "build_id": 90018,
+    "branch": "feature/b4",
+    "status": "success",
+    "duration_s": 606
+  },
+  {
+    "build_id": 90019,
+    "branch": "feature/b5",
+    "status": "success",
+    "duration_s": 623
+  },
+  {
+    "build_id": 90020,
+    "branch": "feature/b6",
+    "status": "failure",
+    "duration_s": 640
+  },
+  {
+    "build_id": 90021,
+    "branch": "feature/b0",
+    "status": "success",
+    "duration_s": 657
+  },
+  {
+    "build_id": 90022,
+    "branch": "feature/b1",
+    "status": "success",
+    "duration_s": 1873
+  },
+  {
+    "build_id": 90023,
+    "branch": "feature/b2",
+    "status": "success",
+    "duration_s": 691
+  },
+  {
+    "build_id": 90024,
+    "branch": "feature/b3",
+    "status": "failure",
+    "duration_s": 708
+  },
+  {
+    "build_id": 90025,
+    "branch": "feature/b4",
+    "status": "success",
+    "duration_s": 725
+  },
+  {
+    "build_id": 90026,
+    "branch": "feature/b5",
+    "status": "success",
+    "duration_s": 742
+  },
+  {
+    "build_id": 90027,
+    "branch": "feature/b6",
+    "status": "success",
+    "duration_s": 759
+  },
+  {
+    "build_id": 90028,
+    "branch": "feature/b0",
+    "status": "failure",
+    "duration_s": 776
+  },
+  {
+    "build_id": 90029,
+    "branch": "feature/b1",
+    "status": "success",
+    "duration_s": 793
+  },
+  {
+    "build_id": 90030,
+    "branch": "feature/b2",
+    "status": "success",
+    "duration_s": 810
+  },
+  {
+    "build_id": 90031,
+    "branch": "feature/b3",
+    "status": "success",
+    "duration_s": 827
+  },
+  {
+    "build_id": 90032,
+    "branch": "feature/b4",
+    "status": "failure",
+    "duration_s": 844
+  },
+  {
+    "build_id": 90033,
+    "branch": "feature/b5",
+    "status": "success",
+    "duration_s": 861
+  },
+  {
+    "build_id": 90034,
+    "branch": "feature/b6",
+    "status": "success",
+    "duration_s": 878
+  },
+  {
+    "build_id": 90035,
+    "branch": "feature/b0",
+    "status": "success",
+    "duration_s": 895
+  },
+  {
+    "build_id": 90036,
+    "branch": "feature/b1",
+    "status": "failure",
+    "duration_s": 2410
+  },
+  {
+    "build_id": 90037,
+    "branch": "feature/b2",
+    "status": "success",
+    "duration_s": 929
+  },
+  {
+    "build_id": 90038,
+    "branch": "feature/b3",
+    "status": "success",
+    "duration_s": 946
+  },
+  {
+    "build_id": 90039,
+    "branch": "feature/b4",
+    "status": "success",
+    "duration_s": 963
+  },
+  {
+    "build_id": 90040,
+    "branch": "feature/b5",
+    "status": "failure",
+    "duration_s": 980
+  },
+  {
+    "build_id": 90041,
+    "branch": "feature/b6",
+    "status": "success",
+    "duration_s": 997
+  },
+  {
+    "build_id": 90042,
+    "branch": "feature/b0",
+    "status": "success",
+    "duration_s": 1014
+  },
+  {
+    "build_id": 90043,
+    "branch": "feature/b1",
+    "status": "success",
+    "duration_s": 1031
+  },
+  {
+    "build_id": 90044,
+    "branch": "feature/b2",
+    "status": "failure",
+    "duration_s": 1048
+  },
+  {
+    "build_id": 90045,
+    "branch": "feature/b3",
+    "status": "success",
+    "duration_s": 1065
+  },
+  {
+    "build_id": 90046,
+    "branch": "feature/b4",
+    "status": "success",
+    "duration_s": 1082
+  },
+  {
+    "build_id": 90047,
+    "branch": "feature/b5",
+    "status": "success",
+    "duration_s": 1099
+  },
+  {
+    "build_id": 90048,
+    "branch": "feature/b6",
+    "status": "failure",
+    "duration_s": 1116
+  },
+  {
+    "build_id": 90049,
+    "branch": "feature/b0",
+    "status": "success",
+    "duration_s": 1133
+  },
+  {
+    "build_id": 90050,
+    "branch": "feature/b1",
+    "status": "success",
+    "duration_s": 1150
+  }
+]

@@ -1,0 +1,322 @@
+[
+  {
+    "id": 1001,
+    "login": "user37",
+    "email": "user37@example.test",
+    "role": "member",
+    "team": {"name": "payments", "region": "us-east"},
+    "active": true
+  },
+  {
+    "id": 1002,
+    "login": "user74",
+    "email": "user74@example.test",
+    "role": "member",
+    "team": {"name": "search", "region": "ap-south"},
+    "active": true
+  },
+  {
+    "id": 1003,
+    "login": "user111",
+    "email": "user111@example.test",
+    "role": "viewer",
+    "team": {"name": "growth", "region": "eu-west"},
+    "active": true
+  },
+  {
+    "id": 1004,
+    "login": "user148",
+    "email": "user148@example.test",
+    "role": "member",
+    "team": {"name": "infra", "region": "us-east"},
+    "active": true
+  },
+  {
+    "id": 1005,
+    "login": "user185",
+    "email": "user185@example.test",
+    "role": "billing",
+    "team": {"name": "platform", "region": "ap-south"},
+    "active": true
+  },
+  {
+    "id": 1006,
+    "login": "user222",
+    "email": "user222@example.test",
+    "role": "admin",
+    "team": {"name": "payments", "region": "eu-west"},
+    "active": true
+  },
+  {
+    "id": 1007,
+    "login": "user259",
+    "email": "user259@example.test",
+    "role": "member",
+    "team": {"name": "search", "region": "us-east"},
+    "active": false
+  },
+  {
+    "id": 1008,
+    "login": "user296",
+    "email": "user296@example.test",
+    "role": "member",
+    "team": {"name": "growth", "region": "ap-south"},
+    "active": true
+  },
+  {
+    "id": 1009,
+    "login": "user333",
+    "email": "user333@example.test",
+    "role": "viewer",
+    "team": {"name": "infra", "region": "eu-west"},
+    "active": true
+  },
+  {
+    "id": 1010,
+    "login": "user370",
+    "email": "user370@example.test",
+    "role": "member",
+    "team": {"name": "platform", "region": "us-east"},
+    "active": true
+  },
+  {
+    "id": 1011,
+    "login": "user407",
+    "email": "user407@example.test",
+    "role": "billing",
+    "team": {"name": "payments", "region": "ap-south"},
+    "active": true
+  },
+  {
+    "id": 1012,
+    "login": "user444",
+    "email": "user444@example.test",
+    "role": "admin",
+    "team": {"name": "search", "region": "eu-west"},
+    "active": true
+  },
+  {
+    "id": 1013,
+    "login": "user481",
+    "email": "user481@example.test",
+    "role": "member",
+    "team": {"name": "growth", "region": "us-east"},
+    "active": true
+  },
+  {
+    "id": 1014,
+    "login": "user518",
+    "email": "user518@example.test",
+    "role": "member",
+    "team": {"name": "infra", "region": "ap-south"},
+    "active": false
+  },
+  {
+    "id": 1015,
+    "login": "user555",
+    "email": "user555@example.test",
+    "role": "viewer",
+    "team": {"name": "platform", "region": "eu-west"},
+    "active": true
+  },
+  {
+    "id": 1016,
+    "login": "user592",
+    "email": "user592@example.test",
+    "role": "member",
+    "team": {"name": "payments", "region": "us-east"},
+    "active": true
+  },
+  {
+    "id": 1017,
+    "login": "user629",
+    "email": "user629@example.test",
+    "role": "billing",
+    "team": {"name": "search", "region": "ap-south"},
+    "active": true
+  },
+  {
+    "id": 1018,
+    "login": "user666",
+    "email": "user666@example.test",
+    "role": "admin",
+    "team": {"name": "growth", "region": "eu-west"},
+    "active": true
+  },
+  {
+    "id": 1019,
+    "login": "user703",
+    "email": "user703@example.test",
+    "role": "member",
+    "team": {"name": "infra", "region": "us-east"},
+    "active": true
+  },
+  {
+    "id": 1020,
+    "login": "user740",
+    "email": "user740@example.test",
+    "role": "member",
+    "team": {"name": "platform", "region": "ap-south"},
+    "active": true
+  },
+  {
+    "id": 1021,
+    "login": "user777",
+    "email": "user777@example.test",
+    "role": "viewer",
+    "team": {"name": "payments", "region": "eu-west"},
+    "active": false
+  },
+  {
+    "id": 1022,
+    "login": "user814",
+    "email": "user814@example.test",
+    "role": "member",
+    "team": {"name": "search", "region": "us-east"},
+    "active": true
+  },
+  {
+    "id": 1023,
+    "login": "kmarsh",
+    "email": "k.marsh@example.test",
+    "role": "billing",
+    "team": {"name": "growth", "region": "ap-south"},
+    "active": true
+  },
+  {
+    "id": 1024,
+    "login": "user888",
+    "email": "user888@example.test",
+    "role": "admin",
+    "team": {"name": "infra", "region": "eu-west"},
+    "active": true
+  },
+  {
+    "id": 1025,
+    "login": "user925",
+    "email": "user925@example.test",
+    "role": "member",
+    "team": {"name": "platform", "region": "us-east"},
+    "active": true
+  },
+  {
+    "id": 1026,
+    "login": "user962",
+    "email": "user962@example.test",
+    "role": "member",
+    "team": {"name": "payments", "region": "ap-south"},
+    "active": true
+  },
+  {
+    "id": 1027,
+    "login": "user999",
+    "email": "user999@example.test",
+    "role": "viewer",
+    "team": {"name": "search", "region": "eu-west"},
+    "active": true
+  },
+  {
+    "id": 1028,
+    "login": "user36",
+    "email": "user36@example.test",
+    "role": "member",
+    "team": {"name": "growth", "region": "us-east"},
+    "active": false
+  },
+  {
+    "id": 1029,
+    "login": "user73",
+    "email": "user73@example.test",
+    "role": "billing",
+    "team": {"name": "infra", "region": "ap-south"},
+    "active": true
+  },
+  {
+    "id": 1030,
+    "login": "user110",
+    "email": "user110@example.test",
+    "role": "admin",
+    "team": {"name": "platform", "region": "eu-west"},
+    "active": true
+  },
+  {
+    "id": 1031,
+    "login": "user147",
+    "email": "user147@example.test",
+    "role": "member",
+    "team": {"name": "payments", "region": "us-east"},
+    "active": true
+  },
+  {
+    "id": 1032,
+    "login": "user184",
+    "email": "user184@example.test",
+    "role": "member",
+    "team": {"name": "search", "region": "ap-south"},
+    "active": true
+  },
+  {
+    "id": 1033,
+    "login": "user221",
+    "email": "user221@example.test",
+    "role": "viewer",
+    "team": {"name": "growth", "region": "eu-west"},
+    "active": true
+  },
+  {
+    "id": 1034,
+    "login": "user258",
+    "email": "user258@example.test",
+    "role": "member",
+    "team": {"name": "infra", "region": "us-east"},
+    "active": true
+  },
+  {
+    "id": 1035,
+    "login": "user295",
+    "email": "user295@example.test",
+    "role": "billing",
+    "team": {"name": "platform", "region": "ap-south"},
+    "active": false
+  },
+  {
+    "id": 1036,
+    "login": "user332",
+    "email": "user332@example.test",
+    "role": "admin",
+    "team": {"name": "payments", "region": "eu-west"},
+    "active": true
+  },
+  {
+    "id": 1037,
+    "login": "user369",
+    "email": "user369@example.test",
+    "role": "member",
+    "team": {"name": "search", "region": "us-east"},
+    "active": true
+  },
+  {
+    "id": 1038,
+    "login": "user406",
+    "email": "user406@example.test",
+    "role": "member",
+    "team": {"name": "growth", "region": "ap-south"},
+    "active": true
+  },
+  {
+    "id": 1039,
+    "login": "user443",
+    "email": "user443@example.test",
+    "role": "viewer",
+    "team": {"name": "infra", "region": "eu-west"},
+    "active": true
+  },
+  {
+    "id": 1040,
+    "login": "user480",
+    "email": "user480@example.test",
+    "role": "member",
+    "team": {"name": "platform", "region": "us-east"},
+    "active": true
+  }
+]
