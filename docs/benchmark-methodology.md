@@ -64,7 +64,7 @@ Each task names one rule:
 | `exact` | The normalized answer equals a normalized accepted answer, case-sensitive. |
 | `exact_ci` | As `exact`, case-insensitive. |
 | `set` | The answer, split on commas with each item normalized and empty items dropped, equals an accepted answer split the same way, as a set. Both the whole answer and each item may carry one pair of quotes or backticks. Case-sensitive. Order does not matter. |
-| `number` | The normalized answer parses as a 64-bit float and differs from an accepted answer by at most the task's `tolerance` (default 0). The comparison adds an epsilon of `1e-9 * max(1, abs(accepted))` to the tolerance, so 1.1 against 1.0 with tolerance 0.1 is within tolerance. |
+| `number` | The normalized answer parses as a 64-bit float and differs from an accepted answer by at most the task's `tolerance` (default 0). The comparison adds an epsilon of `4 * f64::EPSILON * max(1, abs(answer), abs(accepted))` to the tolerance, a few units of float rounding, so 1.1 against 1.0 with tolerance 0.1 is within tolerance. A non-finite value (infinity or NaN) never matches. |
 
 Success is binary. Each failure has one error kind:
 
