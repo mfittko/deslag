@@ -35,9 +35,9 @@ Per session manifest:
 
 | Field | Purpose |
 | --- | --- |
-| Scope digest | Session identity; the raw session id is not stored in exported data |
+| Scope digest | Session identity; the raw session id is not stored in exported data. Stored as `scope_digest`, `sha256(scope)` in hex. A manifest whose scope digest is not that of the request scope is corrupt state |
 | Owner | Always `proxy`, because only the proxy writes a manifest; any other value is corrupt. The configured owner is read per request and is not pinned |
-| Mode | `off` or `safe`. `observe` is deferred: `deslag_proxy::session` does not implement it, so a manifest that names it is corrupt state. A mode change applies to new sessions only. An `off` session transforms nothing and records no decisions. Its first request without tool results writes a manifest with mode `off` and no decisions. That manifest marks the session boundary, so the session keeps passing through after the configuration changes to `safe`. Configured `off` does not pass through a request that carries tool results under a scope with no manifest. While the owner is `proxy`, it rejects that request with `MissingManifest`, as `safe` does |
+| Mode | `off` or `safe`. `observe` is deferred: `deslag_proxy::session` does not implement it, so a manifest that names it is corrupt state. A mode change applies to new sessions only. An `off` session transforms nothing and records no decisions; an `off` manifest with decisions is corrupt state. Its first request without tool results writes a manifest with mode `off` and no decisions. That manifest marks the session boundary, so the session keeps passing through after the configuration changes to `safe`. Configured `off` does not pass through a request that carries tool results under a scope with no manifest. While the owner is `proxy`, it rejects that request with `MissingManifest`, as `safe` does |
 | Model profile | Model in use when the manifest was created; each decision records its own model profile |
 | Policy version | Policy in force when the manifest was created |
 

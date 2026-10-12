@@ -89,8 +89,12 @@ pub fn read_owner(dir: &Path) -> Owner {
 }
 
 pub fn manifest_path(dir: &Path, scope: &str) -> PathBuf {
-    let name = hex(digest(&SHA256, scope.as_bytes()).as_ref());
-    dir.join("sessions").join(format!("{name}.json"))
+    dir.join("sessions")
+        .join(format!("{}.json", scope_digest(scope)))
+}
+
+fn scope_digest(scope: &str) -> String {
+    hex(digest(&SHA256, scope.as_bytes()).as_ref())
 }
 
 /// Removes session manifests and leftover temp files last modified before
@@ -177,6 +181,8 @@ impl Store {
     /// is otherwise `unchanged`. New decisions are committed before return.
     /// A session without a manifest passes through while the owner is not the
     /// proxy; once the owner is the proxy, its requests with tool results fail.
+    /// A manifest whose `scope_digest` is not `sha256(scope)`, or an `off`
+    /// manifest with decisions, is corrupt.
     /// The owner is read per request and pinned decisions replay under any
     /// owner, so after a change from `proxy` to `hook` earlier results keep
     /// their pinned encoding. Only `mode` is pinned per session. A manifest
@@ -198,6 +204,7 @@ impl Store {
         let path = manifest_path(&self.dir, scope);
         let has_results = !candidates.is_empty();
         let pass = vec![false; candidates.len()];
+        let scope_digest = scope_digest(scope);
         let mut manifest = match fs::read(&path) {
             Err(e) if e.kind() == io::ErrorKind::NotFound => {
                 if owner != Owner::Proxy {
@@ -212,7 +219,8 @@ impl Store {
                 } else {
                     "safe"
                 };
-                let fresh = json!({"version": VERSION, "owner": "proxy", "mode": mode,
+                let fresh = json!({"version": VERSION, "scope_digest": scope_digest,
+                    "owner": "proxy", "mode": mode,
                     "model_profile": model, "policy_version": POLICY_VERSION, "decisions": {}});
                 write_manifest(&path, &fresh)?;
                 return Ok(pass);
@@ -230,8 +238,14 @@ impl Store {
                         Ok(pass)
                     };
                 }
-                // An absent version is corrupt state, never version skew.
-                match parsed.filter(|m| m["version"] == VERSION && m["decisions"].is_object()) {
+                // An absent version is corrupt state, never version skew. A
+                // manifest of another scope, for example one copied under
+                // this file name, is corrupt and never replays.
+                match parsed.filter(|m| {
+                    m["version"] == VERSION
+                        && m["scope_digest"] == scope_digest.as_str()
+                        && m["decisions"].is_object()
+                }) {
                     Some(m) => m,
                     None if has_results => return Err(ReplayError::MissingManifest),
                     // A corrupt manifest is never overwritten.
@@ -241,10 +255,14 @@ impl Store {
         };
         // Mode is pinned per session; the configured owner is read per
         // request. Only the proxy writes a manifest, so a manifest owner other
-        // than `proxy`, any other mode, or a missing one, is corrupt.
+        // than `proxy`, any other mode, or a missing one, is corrupt. An
+        // `off` session records no decisions, so `off` with decisions is too.
+        let no_decisions = manifest["decisions"]
+            .as_object()
+            .is_some_and(|d| d.is_empty());
         match (manifest["owner"].as_str(), manifest["mode"].as_str()) {
             (Some("proxy"), Some("safe")) => {}
-            (Some("proxy"), Some("off")) => {
+            (Some("proxy"), Some("off")) if no_decisions => {
                 refresh(&path);
                 return Ok(pass);
             }

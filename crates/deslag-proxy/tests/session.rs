@@ -489,7 +489,24 @@ fn manifest_with_a_foreign_owner_or_no_mode_is_missing_manifest() {
     no_owner.as_object_mut().unwrap().remove("owner");
     let mut no_mode = base.clone();
     no_mode.as_object_mut().unwrap().remove("mode");
-    for m in [hook, no_owner, no_mode] {
+    // A manifest of another scope copied under this scope's file name.
+    store.replay("other", "m", &[], |_| true).unwrap();
+    let foreign_scope = manifest(&dir, "other");
+    let mut no_scope = base.clone();
+    no_scope.as_object_mut().unwrap().remove("scope_digest");
+    // An `off` manifest records no decisions; one with decisions is corrupt.
+    let mut off_with_decisions = base.clone();
+    off_with_decisions["mode"] = json!("off");
+    off_with_decisions["decisions"] = json!({"toolu_1": {
+        "digest": "x", "encoded": {"transform": ID, "version": V}}});
+    for m in [
+        hook,
+        no_owner,
+        no_mode,
+        foreign_scope,
+        no_scope,
+        off_with_decisions,
+    ] {
         fs::write(manifest_path(&dir, "s"), m.to_string()).unwrap();
         let got = store.replay("s", "m", &[candidate("toolu_1", "x")], |_| unreachable!());
         assert!(
