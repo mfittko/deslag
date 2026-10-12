@@ -2,8 +2,11 @@
 //! Includes process spawn, stdin/stdout pipes and exit. No thresholds.
 
 use std::io::Write;
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+
+use deslag_proxy::session::{Owner, write_owner};
 
 const WARMUP: usize = 10;
 const SAMPLES: usize = 200;
@@ -36,9 +39,10 @@ fn event() -> Vec<u8> {
     serde_json::to_vec(&event).unwrap()
 }
 
-fn invoke(args: &[&str], input: &[u8]) -> Duration {
+fn invoke(state: &Path, args: &[&str], input: &[u8]) -> Duration {
     let start = Instant::now();
     let mut child = Command::new(env!("CARGO_BIN_EXE_deslag"))
+        .env("DESLAG_STATE_DIR", state)
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -60,6 +64,9 @@ fn percentile(sorted: &[Duration], q: f64) -> Duration {
 
 fn main() {
     let input = event();
+    // The hook owns compression, so --minify-json replaces the result.
+    let state = std::env::temp_dir().join(format!("deslag-hook-bench-{}", std::process::id()));
+    write_owner(&state, Owner::Hook).unwrap();
     println!(
         "### deslag hook claude, whole process ({} byte event, concurrency 1, warmup {WARMUP}, samples {SAMPLES})\n",
         input.len()
@@ -71,9 +78,9 @@ fn main() {
         ("--minify-json", &["hook", "claude", "--minify-json"]),
     ] {
         for _ in 0..WARMUP {
-            invoke(args, &input);
+            invoke(&state, args, &input);
         }
-        let mut times: Vec<Duration> = (0..SAMPLES).map(|_| invoke(args, &input)).collect();
+        let mut times: Vec<Duration> = (0..SAMPLES).map(|_| invoke(&state, args, &input)).collect();
         times.sort();
         println!(
             "| {mode} | {:?} | {:?} | {:?} |",

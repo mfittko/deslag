@@ -1,8 +1,35 @@
 use std::io::Write;
+use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU32, Ordering};
 
-fn run(args: &[&str], stdin: &[u8]) -> Output {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_deslag"))
+use deslag_proxy::session::{Owner, write_owner};
+
+/// A fresh state directory with `owner` written, if any.
+fn state(owner: Option<Owner>) -> PathBuf {
+    static N: AtomicU32 = AtomicU32::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "deslag-hook-{}-{}",
+        std::process::id(),
+        N.fetch_add(1, Ordering::Relaxed)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    if let Some(owner) = owner {
+        write_owner(&dir, owner).unwrap();
+    }
+    dir
+}
+
+/// The binary with every state-dir variable cleared, then `env` applied.
+fn run_env(args: &[&str], stdin: &[u8], env: &[(&str, &PathBuf)]) -> Output {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_deslag"));
+    for var in ["DESLAG_STATE_DIR", "XDG_STATE_HOME", "HOME"] {
+        cmd.env_remove(var);
+    }
+    let mut child = cmd
+        .envs(env.iter().copied())
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -11,6 +38,13 @@ fn run(args: &[&str], stdin: &[u8]) -> Output {
         .expect("spawn deslag");
     child.stdin.take().unwrap().write_all(stdin).unwrap();
     child.wait_with_output().unwrap()
+}
+
+/// Runs with a state directory whose owner is the hook.
+fn run(args: &[&str], stdin: &[u8]) -> Output {
+    static DIR: OnceLock<PathBuf> = OnceLock::new();
+    let dir = DIR.get_or_init(|| state(Some(Owner::Hook)));
+    run_env(args, stdin, &[("DESLAG_STATE_DIR", dir)])
 }
 
 fn fixture(name: &str) -> Vec<u8> {
@@ -128,4 +162,40 @@ fn without_flag_pretty_json_is_untouched() {
     let output = run(&["hook", "claude"], &fixture("posttooluse-bash-json.json"));
     assert_eq!(output.status.code(), Some(0));
     assert!(output.stdout.is_empty());
+}
+
+#[test]
+fn minify_flag_replaces_only_when_the_hook_owns_compression() {
+    let input = fixture("posttooluse-bash-json.json");
+    let args = ["hook", "claude", "--minify-json"];
+    for owner in [Some(Owner::Proxy), Some(Owner::None), None] {
+        let dir = state(owner);
+        let output = run_env(&args, &input, &[("DESLAG_STATE_DIR", &dir)]);
+        assert_eq!(output.status.code(), Some(0), "{owner:?}");
+        assert!(output.stdout.is_empty(), "{owner:?}");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    let unknown = state(None);
+    std::fs::write(unknown.join("owner"), "hooks\n").unwrap();
+    let output = run_env(&args, &input, &[("DESLAG_STATE_DIR", &unknown)]);
+    assert!(output.stdout.is_empty(), "unknown owner");
+    assert!(
+        run_env(&args, &input, &[]).stdout.is_empty(),
+        "no state dir"
+    );
+
+    // XDG_STATE_HOME/deslag, then HOME/.local/state/deslag.
+    let xdg = state(None);
+    write_owner(&xdg.join("deslag"), Owner::Hook).unwrap();
+    assert!(
+        !run_env(&args, &input, &[("XDG_STATE_HOME", &xdg)])
+            .stdout
+            .is_empty()
+    );
+    let home = state(None);
+    write_owner(&home.join(".local/state/deslag"), Owner::Hook).unwrap();
+    assert!(!run_env(&args, &input, &[("HOME", &home)]).stdout.is_empty());
+    for dir in [unknown, xdg, home] {
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 }

@@ -6,7 +6,7 @@ use std::process::ExitCode;
 use std::time::SystemTime;
 
 use deslag_core::FIRST_SLICE_JSON_MINIFY_CONTEXT;
-use deslag_proxy::session::{self, Mode, Store};
+use deslag_proxy::session::{self, Mode, Owner, Store};
 use deslag_proxy::{Upstream, serve};
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
@@ -139,7 +139,7 @@ fn claude_hook(mut input: impl Read, minify_json: bool) -> Result<Option<Value>,
         return Err("hook input has no tool_response".to_string());
     }
     // Only Bash stdout is eligible. Read output stays byte-exact because Edit matches on it.
-    if !minify_json || tool_name != "Bash" {
+    if !minify_json || tool_name != "Bash" || !hook_owns_compression() {
         return Ok(None);
     }
     let response = &event["tool_response"];
@@ -153,6 +153,12 @@ fn claude_hook(mut input: impl Read, minify_json: bool) -> Result<Option<Value>,
     let mut updated = response.clone();
     updated["stdout"] = Value::String(minified);
     Ok(replacement(&event, updated))
+}
+
+/// The hook compresses only when the configured owner is the hook. It keeps no
+/// replay state: the client stores and resends the replacement.
+fn hook_owns_compression() -> bool {
+    session::state_dir().is_some_and(|dir| session::read_owner(&dir) == Owner::Hook)
 }
 
 /// Builds the PostToolUse output that replaces the tool result with `updated`.
