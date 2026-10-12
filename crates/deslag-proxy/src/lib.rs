@@ -9,6 +9,7 @@
 use std::{convert::Infallible, fmt, io, net::IpAddr, sync::Arc, time::Duration};
 
 use bytes::Bytes;
+use deslag_core::BoundedExecutor;
 use http_body_util::{Either, Full};
 use hyper::{
     HeaderMap, Method, Request, Response, StatusCode, Uri, Version,
@@ -175,7 +176,7 @@ pub const BODY_READ_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Connection and timeout bounds. None of them limits how long a response
 /// body may stream once the upstream has answered.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Limits {
     /// Further connections wait in the listen backlog until a slot frees.
     pub max_connections: usize,
@@ -186,6 +187,10 @@ pub struct Limits {
     /// Bounds the buffered body read of a `--minify-json` request, so a stalled
     /// upload cannot hold an inspection permit forever. Other bodies stream.
     pub body_read_timeout: Duration,
+    /// Runs each tool result's compression off the async worker threads under a
+    /// parallel job limit and a processing budget. A rejected job forwards the
+    /// original body. Clones share one permit pool.
+    pub executor: BoundedExecutor,
 }
 
 impl Default for Limits {
@@ -196,6 +201,7 @@ impl Default for Limits {
             connect_timeout: CONNECT_TIMEOUT,
             pool_idle_timeout: POOL_IDLE_TIMEOUT,
             body_read_timeout: BODY_READ_TIMEOUT,
+            executor: BoundedExecutor::default(),
         }
     }
 }
@@ -277,12 +283,13 @@ pub async fn serve_with(
             }
         };
         let _ = stream.set_nodelay(true);
-        let (client, upstream) = (client.clone(), upstream.clone());
+        let (client, upstream, exec) = (client.clone(), upstream.clone(), limits.executor.clone());
         let svc = service_fn(move |req| {
             forward(
                 client.clone(),
                 upstream.clone(),
                 limits.body_read_timeout,
+                exec.clone(),
                 req,
             )
         });
@@ -302,6 +309,7 @@ async fn forward(
     client: HttpsClient,
     upstream: Upstream,
     body_read_timeout: Duration,
+    exec: BoundedExecutor,
     req: Request<Incoming>,
 ) -> Result<Response<ProxyBody>, Infallible> {
     let target = (req.method() != Method::CONNECT)
@@ -314,7 +322,7 @@ async fn forward(
             "unsupported request target",
         ));
     };
-    let mut req = match minify::prepare(req, upstream.minify_json, body_read_timeout).await {
+    let mut req = match minify::prepare(req, upstream.minify_json, body_read_timeout, exec).await {
         Ok(req) => req,
         Err(status) => {
             return Ok(error(
@@ -530,32 +538,32 @@ mod tests {
         for bad in [
             Limits {
                 max_connections: 0,
-                ..d
+                ..d.clone()
             },
             Limits {
                 max_connections: Semaphore::MAX_PERMITS + 1,
-                ..d
+                ..d.clone()
             },
             Limits {
                 header_read_timeout: Duration::ZERO,
-                ..d
+                ..d.clone()
             },
             Limits {
                 connect_timeout: Duration::ZERO,
-                ..d
+                ..d.clone()
             },
             Limits {
                 pool_idle_timeout: Duration::MAX,
-                ..d
+                ..d.clone()
             },
             Limits {
                 body_read_timeout: Duration::ZERO,
-                ..d
+                ..d.clone()
             },
         ] {
             let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let up = Upstream::parse("https://api.anthropic.com").unwrap();
-            let err = serve_with(listener, up, bad).await.unwrap_err();
+            let err = serve_with(listener, up, bad.clone()).await.unwrap_err();
             assert_eq!(err.kind(), io::ErrorKind::InvalidInput, "{bad:?}");
         }
     }
