@@ -1,0 +1,17 @@
+[package]
+name = "deslag-eval"
+description = "Development-only paired task-evaluation harness for deslag."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "deslag-eval"
+path = "src/main.rs"
+
+[dependencies]
+deslag-core = { path = "../deslag-core" }
+serde_json = "=1.0.152"
