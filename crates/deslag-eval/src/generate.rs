@@ -167,6 +167,20 @@ pub fn check(input: &str, q: &Query, answer: &str) -> Result<(), String> {
     if !same {
         return Err(format!("recomputed {got:?}, expected {answer:?}"));
     }
+    // A number answer must be a whole value token: after ':' and before ',', '}' or a line end.
+    if number
+        && !input.match_indices(answer).any(|(i, _)| {
+            input[..i].trim_end().ends_with(':')
+                && matches!(
+                    input[i + answer.len()..].chars().next(),
+                    Some(',' | '}' | '\n' | '\r')
+                )
+        })
+    {
+        return Err(format!(
+            "number {answer:?} is not a whole value in the payload"
+        ));
+    }
     match answer.split(',').find(|i| !input.contains(*i)) {
         Some(i) => Err(format!("answer item {i:?} is not in the payload")),
         None => Ok(()),

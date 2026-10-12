@@ -228,6 +228,10 @@ fn load_file(
 fn generate(args: &[String]) -> Result<(), String> {
     let f = flags(args, "seed out")?;
     let out: String = parsed(&f, "out", None)?;
+    // An empty path resolves to the current directory and would overwrite its manifest.json.
+    if out.trim().is_empty() {
+        return Err(format!("--out needs a non-empty path\n{USAGE}"));
+    }
     generate::run(parsed(&f, "seed", None)?, Path::new(&out))
 }
 

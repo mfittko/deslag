@@ -942,6 +942,7 @@ fn every_transform_arm_has_100_non_control_pairs() {
     for arm in [
         "json-minify",
         "table-csv",
+        "table-mdkv",
         "table-v2",
         "lines-v1",
         "lines-v2",

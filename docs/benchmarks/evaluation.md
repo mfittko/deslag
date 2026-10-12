@@ -17,13 +17,14 @@ This file holds live run 1 (pilot corpus), the predeclared live run 2, a two-cal
 | Corpus size per arm (full corpus) | non-control pairs: json-minify 106, table-csv 105, table-mdkv 105, table-v2 105, lines-v1 106, lines-v2 105; changed non-control pairs (the transform changed the payload): json-minify 106, table-csv 104, table-mdkv 104, table-v2 105, lines-v1 104, lines-v2 105; 935 runs |
 | Live run 2 | predeclared in Live runs, not yet run |
 | Mock dry run | below, full corpus, plumbing evidence only |
-| Generated | live run 1 at commit 2627754 (v0.1.0-alpha.2), 2026-10-12; mock output reproduced on the full corpus at the head of the corpus change |
+| Generated | live run 1 at commit 2627754 (v0.1.0-alpha.2), 2026-10-12; mock output reproduced on the full corpus generated with seed 7700 at commit 4b2d4e1 (`tests/evaluations/generated/manifest.json` sha256 `e620eeec695f7a909b58eb4e087d22e21241286f2681c5b824a820588171d848`) |
 
 ## Live runs
 
-Run 1: one model, one seed, every (task, arm) pair of the 21-task pilot corpus (the manifest before the generated corpus was included). Its numbers stay as recorded. Its report is in [Live run 1](#live-run-1). The command needs authorized Claude credentials and spends money. CI never runs it.
+Run 1: one model, one seed, every (task, arm) pair of the 21-task pilot corpus (the manifest before the generated corpus was included). Its numbers stay as recorded. Its report is in [Live run 1](#live-run-1). The command needs authorized Claude credentials and spends money. CI never runs it. The command checks out commit 2627754 first, because the current manifest includes the generated corpus.
 
 ```sh
+git checkout 2627754
 mkdir -p tmp/eval
 DESLAG_EVAL_LIVE=1 cargo run -q -p deslag-eval --locked -- run \
   --manifest tests/evaluations/manifest.json \
@@ -228,7 +229,7 @@ jq -rs '(map(select(.arm=="baseline"))|map({key:.task,value:.payload_tokens_est}
 
 ## Mock dry run
 
-The mock backend answers with the accepted answer when it occurs verbatim in the payload, else `NOT_FOUND`. It measures evidence presence only. Its results show that the harness pairs runs, scores them, detects evidence loss and keeps the incompressible controls unchanged. The run covers the full corpus (228 tasks, 935 runs). The output was reproduced at the head of the corpus change. The mock reports no usage, so the Claude columns of the paired savings table show `n/a`. The verdicts below describe the mock only and are not model evidence.
+The mock backend answers with the accepted answer when it occurs verbatim in the payload, else `NOT_FOUND`. It measures evidence presence only. Its results show that the harness pairs runs, scores them, detects evidence loss and keeps the incompressible controls unchanged. The run covers the full corpus (228 tasks, 935 runs). The output was reproduced on the corpus generated with seed 7700 at commit 4b2d4e1 (`tests/evaluations/generated/manifest.json` sha256 `e620eeec695f7a909b58eb4e087d22e21241286f2681c5b824a820588171d848`). The mock reports no usage, so the Claude columns of the paired savings table show `n/a`. The verdicts below describe the mock backend only.
 
 ```sh
 mkdir -p tmp/eval

@@ -1,0 +1,2 @@
+# The frozen evaluation corpus keeps its committed bytes on every checkout.
+tests/evaluations/** -text

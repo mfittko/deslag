@@ -1,4 +1,4 @@
-//! Generator, self-check, manifest include and the paired-savings report.
+//! Generator, self-check and manifest include.
 //! Offline only; no test reaches a paid model.
 
 use std::{
@@ -73,6 +73,25 @@ fn another_seed_changes_the_corpus() {
     assert_ne!(read(&a), read(&b));
 }
 
+#[test]
+fn generate_refuses_an_empty_out_path() {
+    for out in ["", "   "] {
+        let o = eval(&["generate", "--seed", "1", "--out", out]);
+        assert_eq!(o.status.code(), Some(2), "{out:?}");
+        assert!(String::from_utf8_lossy(&o.stderr).contains("non-empty path"));
+    }
+    // A relative path resolves against the working directory.
+    let dir = fresh_dir("relative-out");
+    let o = Command::new(BIN)
+        .args(["generate", "--seed", "1", "--out", "./out"])
+        .current_dir(&dir)
+        .env_remove("DESLAG_EVAL_LIVE")
+        .output()
+        .unwrap();
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    assert!(dir.join("out/manifest.json").exists());
+}
+
 fn lookup(name: &str) -> Query {
     Query::Json {
         conds: vec![("name", json!(name))],
@@ -103,6 +122,10 @@ fn self_check_refuses_an_answer_that_is_absent_wrong_or_not_unique() {
         pick: Pick::Max { num: "n", name },
     };
     assert_eq!(check(rows, &max(None), "1204.10"), Ok(()));
+    assert!(check(rows, &max(None), "1204.1").is_err());
+    let pretty = "[\n  {\"id\": \"a1\", \"n\": 205.20\n  },\n  {\"id\": \"b2\", \"n\": 3}\n]";
+    assert_eq!(check(pretty, &max(None), "205.20"), Ok(()));
+    assert!(check(pretty, &max(None), "205.2").is_err());
     assert_eq!(check(rows, &max(Some("id")), "a1"), Ok(()));
     assert!(check(&rows.replace("1204.10", "7"), &max(Some("id")), "a1").is_err());
     // A text query matches exactly one line.
