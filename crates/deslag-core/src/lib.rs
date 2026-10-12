@@ -819,10 +819,16 @@ mod tests {
             ..FIRST_SLICE_JSON_MINIFY_CONTEXT
         };
         // table-v1, table-v2 with sub-blocks, and a wrapper object.
-        for input in [rows(40), nested, format!(r#"{{"rows":{}}}"#, rows(40))] {
+        let cases = [
+            (rows(40), "table-v1 ["),
+            (nested, "table-v2 @0\n@0 "),
+            (format!(r#"{{"rows":{}}}"#, rows(40)), "table-v2 {"),
+        ];
+        for (input, start) in cases {
             MINIFIED.with_borrow_mut(Vec::clear);
             let result = compress(&input, &ctx);
             assert_eq!(result.report.outcome, Outcome::Changed, "{input}");
+            assert!(result.output.starts_with(start), "{}", result.output);
             let passes =
                 MINIFIED.with_borrow(|v| v.iter().filter(|&&p| p == input.as_ptr()).count());
             assert_eq!(passes, 1, "{input}");

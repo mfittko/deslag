@@ -144,9 +144,10 @@ fn select(
     opts: &TableOptions,
 ) -> Option<String> {
     // A cell becomes a sub-block only when its string starts with `[` or `{`.
-    // Strings hold only canonical escapes, so such a string starts `"[` or
-    // `"{` in the minified array. Without one, sub::apply returns each block
-    // unchanged, and its parse and rewrite are skipped.
+    // A block exists only when every string lexeme is canonical (`canonical_text`
+    // in `parse_rows`), so such a string starts `"[` or `"{` in the minified
+    // array. Without one, sub::apply returns each block unchanged, and its
+    // parse and rewrite are skipped.
     let nested = array.contains("\"[") || array.contains("\"{");
     [table, bucket::encode(array, label, opts.max_rows)]
         .into_iter()
