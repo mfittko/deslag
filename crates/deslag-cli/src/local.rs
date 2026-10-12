@@ -440,7 +440,12 @@ fn append_or_truncate(
 ) -> io::Result<()> {
     let len = file.metadata()?.len();
     write(file).inspect_err(|_| {
-        let _ = file.set_len(len);
+        if let Err(e) = file.set_len(len) {
+            log(io::Error::new(
+                e.kind(),
+                format!("rollback of a torn append failed: {e}"),
+            ));
+        }
     })
 }
 
