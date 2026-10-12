@@ -312,7 +312,7 @@ block    = header *( LF record )
 - A hole is a label outside any JSON string in the skeleton. A `@` inside a string is text. A `@` cannot occur outside a string in valid JSON, so holes are unambiguous.
 - Holes are numbered `@0`, `@1`, `@2` and so on, in skeleton order. Each index occurs once. There is at least one hole.
 - Blocks follow in hole order. Each block starts on a new line with its label and one space.
-- A `block` is a table-v1 text without the `table-v1 ` prefix: the header `[count]{columns}` with the table-v1 header grammar, then exactly `count` records, each after a `\n`, with the table-v1 row, type and cell rules. The records of a block end where the next `\n@` label line or the end of text begins. The decoder counts records, so a quoted cell may contain a line that starts with `@`.
+- A `block` is a table-v1 text without the `table-v1 ` prefix: the header `[count]{columns}` with the table-v1 header grammar, then exactly `count` records, each after a `\n`, with the table-v1 row, type and cell rules. A block ends after exactly `count` records. Any record line, bare or quoted, may start with `@`, so a decoder finds the end of a block by counting records.
 - The text ends after the last record of the last block. There is no trailing line break unless the last record is empty.
 
 ### Decoder
@@ -346,7 +346,7 @@ Encoder output is canonical. The decoder also accepts some non-canonical texts t
 
 The gain check is the table-v1 gain check, applied to the whole table-v2 text against the minified document.
 
-Known limit: per-hole selection compares bytes only. The token gain check applies to the whole text, never to a single hole.
+Known limit: per-hole selection compares bytes only. The token gain check applies only to the whole table-v2 text.
 
 ### Integration
 
