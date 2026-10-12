@@ -425,7 +425,14 @@ fn corrupt_manifest_with_tool_results_is_missing_manifest() {
     store.replay("s", "m", &[], |_| true).unwrap();
     let mut array = manifest(&dir, "s");
     array["decisions"] = json!([]);
-    for bytes in [b"{ not json".to_vec(), array.to_string().into_bytes()] {
+    let corrupt = [
+        b"{ not json".to_vec(),
+        array.to_string().into_bytes(),
+        b"[]".to_vec(),
+        b"{}".to_vec(),
+        br#"{"version":1}"#.to_vec(),
+    ];
+    for bytes in corrupt {
         fs::write(&path, &bytes).unwrap();
         let got = store.replay("s", "m", &[candidate("toolu_1", "x")], |_| unreachable!());
         assert!(matches!(got, Err(ReplayError::MissingManifest)), "{got:?}");
@@ -441,12 +448,19 @@ fn version_2_manifest_with_tool_results_is_unsupported() {
     store.replay("s", "m", &[], |_| true).unwrap();
     let mut m = manifest(&dir, "s");
     m["version"] = json!(2);
-    fs::write(manifest_path(&dir, "s"), m.to_string()).unwrap();
-    let got = store.replay("s", "m", &[candidate("toolu_1", "x")], |_| unreachable!());
-    assert!(
-        matches!(got, Err(ReplayError::UnsupportedManifest)),
-        "{got:?}"
-    );
+    // A future format may reshape or drop `decisions`; the version decides.
+    for m in [
+        m,
+        json!({"version": 2, "decisions": []}),
+        json!({"version": 2}),
+    ] {
+        fs::write(manifest_path(&dir, "s"), m.to_string()).unwrap();
+        let got = store.replay("s", "m", &[candidate("toolu_1", "x")], |_| unreachable!());
+        assert!(
+            matches!(got, Err(ReplayError::UnsupportedManifest)),
+            "{m}: {got:?}"
+        );
+    }
     fs::remove_dir_all(dir).unwrap();
 }
 

@@ -172,7 +172,10 @@ impl Store {
     /// proxy; once the owner is the proxy, its requests with tool results fail.
     /// The owner is read per request and pinned decisions replay under any
     /// owner, so after a change from `proxy` to `hook` earlier results keep
-    /// their pinned encoding.
+    /// their pinned encoding. Only `mode` is pinned per session. A manifest
+    /// whose owner or mode is not `proxy`/`safe` or `proxy`/`off` is corrupt:
+    /// it returns `MissingManifest` when the request carries tool results and
+    /// passes through otherwise.
     pub fn replay(
         &self,
         scope: &str,
@@ -207,6 +210,16 @@ impl Store {
             Err(e) => return Err(ReplayError::Io(e)),
             Ok(bytes) => {
                 let parsed = serde_json::from_slice::<Value>(&bytes).ok();
+                // A future format may reshape `decisions`, so a present
+                // version decides before the shape check.
+                let skew = parsed.as_ref().and_then(|m| m.get("version"));
+                if skew.is_some_and(|v| *v != VERSION) {
+                    return if has_results {
+                        Err(ReplayError::UnsupportedManifest)
+                    } else {
+                        Ok(pass)
+                    };
+                }
                 match parsed.filter(|m| m["decisions"].is_object()) {
                     Some(m) => m,
                     None if has_results => return Err(ReplayError::MissingManifest),
@@ -222,8 +235,9 @@ impl Store {
                 Ok(pass)
             };
         }
-        // Owner and mode are pinned per session. Only the proxy writes a
-        // manifest, so any other owner or mode, or a missing one, is corrupt.
+        // Mode is pinned per session; the configured owner is read per
+        // request. Only the proxy writes a manifest, so a manifest owner other
+        // than `proxy`, any other mode, or a missing one, is corrupt.
         match (manifest["owner"].as_str(), manifest["mode"].as_str()) {
             (Some("proxy"), Some("safe")) => {}
             (Some("proxy"), Some("off")) => return Ok(pass),
@@ -305,7 +319,7 @@ fn create_dir(dir: &Path) -> io::Result<()> {
 
 /// Writes a sibling temp file, syncs it, renames it over `path` and syncs the
 /// directory, so a reader sees the old or the new content, never a mix. The
-/// temp name is `<name>.<pid>.<n>.tmp` with the first `n` that does not exist
+/// temp name is `<stem>.<pid>.<n>.tmp` (the file name without its extension) with the first `n` that does not exist
 /// yet, so a leftover of a crashed process with the same pid, or a concurrent
 /// commit, is skipped and never touched.
 fn commit(path: &Path, bytes: &[u8]) -> io::Result<()> {
