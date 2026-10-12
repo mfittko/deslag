@@ -19,6 +19,7 @@ hyper-rustls = { version = "=0.27.10", default-features = false, features = ["ht
 hyper-util = { version = "=0.1.21", features = ["client-legacy", "http1", "tokio"] }
 tokio = { version = "=1.53.2", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
 deslag-core = { path = "../deslag-core" }
+deslag-telemetry = { path = "../deslag-telemetry" }
 # RawValue spans let the proxy splice tool results without re-serializing the request.
 serde = "=1.0.229"
 serde_json = { version = "=1.0.152", features = ["raw_value"] }

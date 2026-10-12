@@ -4,6 +4,8 @@ use std::process::{Command, Output, Stdio};
 fn run(args: &[&str], stdin: &[u8]) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_deslag"))
         .args(args)
+        // No service lives here, so no test reports to a real state dir.
+        .env("DESLAG_STATE_DIR", "/nonexistent/deslag-test")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

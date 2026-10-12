@@ -19,12 +19,14 @@
 use std::{
     collections::HashSet,
     fmt,
+    path::Path,
     pin::Pin,
     task::{Context, Poll},
 };
 
 use bytes::Bytes;
-use deslag_core::{FIRST_SLICE_JSON_MINIFY_CONTEXT, compress};
+use deslag_core::FIRST_SLICE_JSON_MINIFY_CONTEXT;
+use deslag_telemetry as local;
 use http_body_util::BodyExt;
 use hyper::{
     HeaderMap, Method, Request, StatusCode,
@@ -191,7 +193,7 @@ async fn buffer(mut parts: Parts, mut body: Incoming) -> Result<Request<ReqBody>
         };
         return Ok(Request::from_parts(parts, body));
     }
-    if let Some(rewritten) = rewrite(&buf) {
+    if let Some(rewritten) = rewrite(&buf, local::live_socket().as_deref()) {
         buf = rewritten;
         parts
             .headers
@@ -207,7 +209,9 @@ async fn buffer(mut parts: Parts, mut body: Incoming) -> Result<Request<ReqBody>
 
 /// Minifies the string content of tool_result blocks that answer a Bash
 /// tool_use. Returns `None` when nothing changed or the body is not a JSON object.
-fn rewrite(body: &[u8]) -> Option<Vec<u8>> {
+/// With `socket`, every compressed block is reported there. History resends
+/// repeat blocks, so the proxy counts submissions, not unique results.
+fn rewrite(body: &[u8], socket: Option<&Path>) -> Option<Vec<u8>> {
     let root: Obj = serde_json::from_slice(body).ok()?;
     let messages: Vec<Obj> = parse::<Vec<&RawValue>>(root.get("messages")?)?
         .into_iter()
@@ -252,9 +256,16 @@ fn rewrite(body: &[u8]) -> Option<Vec<u8>> {
     let mut out = Vec::with_capacity(body.len());
     let mut pos = 0;
     for raw in targets {
-        let Some(minified) = parse::<String>(raw)
-            .and_then(|s| compress(&s, &FIRST_SLICE_JSON_MINIFY_CONTEXT).into_changed())
-        else {
+        let Some(minified) = parse::<String>(raw).and_then(|s| {
+            local::compress_reported(
+                &s,
+                &FIRST_SLICE_JSON_MINIFY_CONTEXT,
+                socket,
+                local::Adapter::Proxy,
+                local::ToolCategory::Bash,
+            )
+            .into_changed()
+        }) else {
             continue;
         };
         let start = (raw.get().as_ptr() as usize).checked_sub(body.as_ptr() as usize)?;
@@ -350,7 +361,33 @@ mod tests {
             br#"{"messages":[]}"#,
             br#"{"messages":[{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"[ 1 ]"}]}]}"#,
         ] {
-            assert_eq!(rewrite(body), None);
+            assert_eq!(rewrite(body, None), None);
         }
+    }
+
+    #[test]
+    fn rewrite_output_does_not_depend_on_the_service() {
+        use std::os::unix::net::UnixDatagram;
+        let body = br#"{"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Bash"}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"[ 1 ]"}]}]}"#;
+        let plain = rewrite(body, None).expect("minified");
+        let dir = std::path::PathBuf::from(format!("/tmp/dsl-proxy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("s.sock");
+        // A stale socket file: the service is gone.
+        drop(UnixDatagram::bind(&path).unwrap());
+        assert_eq!(rewrite(body, Some(&path)).as_ref(), Some(&plain));
+        std::fs::remove_file(&path).unwrap();
+        let receiver = UnixDatagram::bind(&path).unwrap();
+        assert_eq!(rewrite(body, Some(&path)).as_ref(), Some(&plain));
+        let mut buf = [0; 1024];
+        receiver.set_nonblocking(true).unwrap();
+        let n = receiver.recv(&mut buf).unwrap();
+        let report: serde_json::Value = serde_json::from_slice(&buf[..n]).unwrap();
+        assert_eq!(report["adapter"], "proxy");
+        assert_eq!(report["outcome"], "changed");
+        // At least the stale-socket send; other tests in this binary may add more.
+        assert!(report["dropped"].as_u64() >= Some(1));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

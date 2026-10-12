@@ -6,6 +6,7 @@ use std::process::ExitCode;
 
 use deslag_core::FIRST_SLICE_JSON_MINIFY_CONTEXT;
 use deslag_proxy::{Upstream, serve};
+use deslag_telemetry as report;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
 
@@ -135,7 +136,17 @@ fn claude_hook(mut input: impl Read, minify_json: bool) -> Result<Option<Value>,
     let Some(minified) = response
         .get("stdout")
         .and_then(Value::as_str)
-        .and_then(|s| deslag_core::compress(s, &FIRST_SLICE_JSON_MINIFY_CONTEXT).into_changed())
+        .and_then(|s| {
+            // A hook process exits after one result, so a failed send is lost uncounted.
+            report::compress_reported(
+                s,
+                &FIRST_SLICE_JSON_MINIFY_CONTEXT,
+                report::live_socket().as_deref(),
+                report::Adapter::Hook,
+                report::ToolCategory::from_tool_name(tool_name),
+            )
+            .into_changed()
+        })
     else {
         return Ok(None);
     };
