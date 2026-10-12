@@ -108,6 +108,21 @@ Each result line records, when the backend reports them: input, output, cache-re
 
 The harness never retries a call. A call that the client answers with an error, a failed exit or malformed output is recorded with error kind `backend`, so the retry count is always zero. A failure to start the client or to wait for it aborts the run with exit 2, and the partial results file is kept. Tool-call count does not apply, because the corpus is single-turn read-back with tools disabled. Multi-turn agentic tasks with real tools are a follow-up.
 
+### Paired Claude prompt-token savings
+
+This measure is secondary. It never decides pass or fail. The scoring rules and the non-inferiority criterion are unchanged. It is predeclared before live run 2.
+
+The report computes it per arm over non-control pairs. The `drop-evidence` arm is a control arm and has no row. The definitions are:
+
+- The prompt tokens of one run are `input_tokens + cache_read_tokens + cache_creation_tokens`.
+- A pair counts only when both of its runs report all three values as finite numbers that are at least 0.
+- Claude saved tokens are the sum of the baseline prompt tokens minus the sum of the arm prompt tokens, over the counted pairs.
+- Claude saved % is Claude saved tokens divided by the sum of the baseline prompt tokens.
+- The report shows these values next to the `deslag-estimate-v1` payload savings of the arm, which sum the baseline minus the arm payload tokens over all non-control pairs.
+- Estimate error % is the estimate saved tokens on the same counted pairs minus Claude saved tokens, divided by Claude saved tokens. It is `n/a` when Claude saved tokens are 0 or when no pair counts.
+
+Prompt tokens include the system prompt and the client overhead. Both cancel in the per-pair difference, but they dilute the percentage. Cache status does not change the sum, because cache-read and cache-creation tokens count the same as input tokens. A mock results file reports no usage, so its Claude columns show `n/a`.
+
 ## Corpus and controls
 
 Each task in `tests/evaluations/manifest.json` has `id`, `category`, `input` (a path relative to the manifest), `question`, `answers`, `rule`, an optional `tolerance` (a number >= 0), `arms`, an optional `control` and, for the evidence-drop control, `evidence`. A `control`, when present, is `incompressible` or `evidence_drop`. Only a task with control `evidence_drop` may list the `drop-evidence` arm. Every accepted answer of a `number` task parses as a finite number. The manifest is trusted and committed, so an input path may also be absolute. All content is synthetic. No real user content is exported.
