@@ -126,12 +126,19 @@ fn mock_run_detects_evidence_loss_and_keeps_controls_unchanged() {
             Some(other) => panic!("unknown control {other}"),
         }
     }
+    // lines-v2 runs on the incompressible control, which the loop above keeps unchanged.
+    assert!(
+        lines
+            .iter()
+            .any(|l| l["arm"] == "lines-v2" && l["control"] == "incompressible")
+    );
     // Every transform arm changes at least one input, so the corpus exercises it.
     for arm in [
         "json-minify",
         "table-csv",
         "table-mdkv",
         "lines-v1",
+        "lines-v2",
         "drop-evidence",
     ] {
         assert!(
@@ -249,7 +256,7 @@ fn estimate_prints_a_cost() {
     assert!(o.status.success());
     let md = String::from_utf8(o.stdout).unwrap();
     assert!(
-        md.contains("| Estimated cost | USD ") && md.contains("| Hard cap (66 runs"),
+        md.contains("| Estimated cost | USD ") && md.contains("| Hard cap (73 runs"),
         "{md}"
     );
 }
