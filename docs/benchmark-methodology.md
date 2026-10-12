@@ -4,7 +4,7 @@ This document predeclares the scoring rules and the non-inferiority criterion fo
 
 The two-call plumbing smoke check of the `claude` backend is excluded from the analysis.
 
-The harness is the `deslag-eval` binary in `crates/deslag-eval`. The corpus is `tests/evaluations/manifest.json`. Results are in `docs/benchmarks/evaluation.md`. The `deslag-eval` binary with its `estimate` and `run --out` commands, the `mock` and `claude` backends, the report and its exit-2 behavior, and `docs/benchmarks/evaluation.md` land with stacked PR #60.
+The harness is the `deslag-eval` binary in `crates/deslag-eval`. The corpus is `tests/evaluations/manifest.json`. Results are in [docs/benchmarks/evaluation.md](benchmarks/evaluation.md).
 
 ## Unit of analysis
 
@@ -45,7 +45,7 @@ Every run sends this user prompt, with `{payload}` replaced by the arm's payload
 Question: {question}
 ```
 
-The prompt does not explain table-v1, Markdown-KV, lines-v1 or lines-v2. A deployed hook does not explain them either.
+The prompt does not explain table-v1, table-v2, Markdown-KV, lines-v1 or lines-v2. A deployed hook does not explain them either.
 
 One evaluation run uses one model. The result lines record the model id and the client version. `claude -p` has no temperature setting. Tools are disabled (`--tools ""`). Each run is a single turn.
 
@@ -117,7 +117,7 @@ The categories are the PLAN §14.4 task kinds: `api_query`, `code_search`, `fail
 Two control kinds validate the harness:
 
 - `incompressible`: inputs that every listed transform declines. Every arm equals baseline. Any paired difference measures run-to-run noise of the model.
-- `evidence_drop`: the `drop-evidence` arm removes the answer-carrying line. It must score below baseline. This shows that the harness detects evidence loss. A transform arm on an `evidence_drop` task must keep the evidence. The report shows `evidence kept` when no pair has a successful baseline and a failed arm and at least one baseline succeeded. It shows `baseline failed` when no baseline succeeded. Otherwise it shows `a transform lost evidence`.
+- `evidence_drop`: the `drop-evidence` arm removes the answer-carrying line. It must score below baseline. This shows that the harness detects evidence loss. For the `drop-evidence` arm, the report shows `baseline failed` when no baseline succeeded, `evidence loss detected` when the arm succeeded on fewer pairs than baseline, and `evidence loss not detected` otherwise. A transform arm on an `evidence_drop` task must keep the evidence. The report shows `evidence kept` when no pair has a successful baseline and a failed arm and at least one baseline succeeded. It shows `baseline failed` when no baseline succeeded. Otherwise it shows `a transform lost evidence`.
 
 ## Backends
 
@@ -133,10 +133,10 @@ The run order is a seeded shuffle (splitmix64, Fisher-Yates) over all (task, arm
 
 - The `claude` backend refuses to start unless `DESLAG_EVAL_LIVE=1` is set and both `--model` and `--budget-usd` are given.
 - Every call passes `--max-budget-usd` with the per-run cap (`--per-run-usd`, default 0.30).
-- Before each call, the runner stops when the spent amount plus the per-run cap would exceed `--budget-usd`. A call that reports no cost counts as the full per-run cap.
+- Before each call, the runner stops when the spent amount plus the per-run cap would exceed `--budget-usd`. A call that reports no cost, or a negative or non-finite cost, counts as the full per-run cap, and the report treats such a cost as unreported.
 - The client checks `--max-budget-usd` only after a turn, so one call can exceed its cap. The total can then exceed `--budget-usd` by that excess. The runner stops with exit 2 after any call whose reported cost exceeds `--per-run-usd`. The partial results file is kept.
 - `run` refuses an existing `--out` path with exit 2, so a rerun never overwrites results.
-- `deslag-eval estimate` prints, before any money is spent, an estimated cost of a full live run under stated assumptions (estimated tokens, assumed prices and assumed output tokens) and a hard cap of runs times `--per-run-usd`. The hard cap is the only bound in its output. It refuses a negative or non-finite price and a `--per-run-usd` that is not above 0.
+- `cargo run -q -p deslag-eval --locked -- estimate` prints, before any money is spent, an estimated cost of a full live run under stated assumptions (estimated tokens, assumed prices and assumed output tokens) and runs times `--per-run-usd`. That product is a cap only if every call stays within `--per-run-usd`. It refuses a negative or non-finite price and a `--per-run-usd` that is not above 0.
 - CI runs only `cargo test`, which uses the mock backend. CI never sets `DESLAG_EVAL_LIVE`.
 
 ## Table format read-back

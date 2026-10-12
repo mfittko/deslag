@@ -1,6 +1,7 @@
-//! Scoring for `deslag-eval`. The rules are predeclared in
+//! Scoring and reporting for `deslag-eval`. The rules are predeclared in
 //! `docs/benchmark-methodology.md`.
 
+pub mod report;
 pub mod score;
 
 /// Every arm except `baseline`, which every task runs.
