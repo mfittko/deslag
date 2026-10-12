@@ -2,7 +2,10 @@
 //!
 //! One owner selects the adapter that compresses: `hook`, `proxy` or `none`.
 //! It lives in `<state dir>/owner` and is never inferred from tool-result
-//! content. A missing, unreadable or unknown owner is `none`.
+//! content. A missing, unreadable or unknown owner is `none`. Only one
+//! adapter transforms a session while the owner stays fixed for it. After a
+//! change from `proxy` to `hook`, pinned decisions keep replaying while the
+//! hook compresses new results.
 //!
 //! Proxy mode pins one decision per `(session, tool_use_id)` in
 //! `<state dir>/sessions/<sha256(session id)>.json` and replays it on every
@@ -169,6 +172,9 @@ impl Store {
     /// is otherwise `unchanged`. New decisions are committed before return.
     /// A session without a manifest passes through while the owner is not the
     /// proxy; once the owner is the proxy, its requests with tool results fail.
+    /// The owner is read per request and pinned decisions replay under any
+    /// owner, so after a change from `proxy` to `hook` the proxy keeps encoding
+    /// earlier results while the hook compresses new ones.
     pub fn replay(
         &self,
         scope: &str,

@@ -353,16 +353,28 @@ async fn missing_or_corrupt_state_fails_explicitly() {
         .unwrap_err();
     assert_eq!((status, &body["error"]["type"]), (500, &json!("api_error")));
 
-    // A failed commit is a server error too. A regular file at the sessions
-    // path makes the directory creation fail for any uid, root included.
+    // A failed commit is a server error too. On unix a dangling symlink at the
+    // sessions path makes the manifest read return NotFound, so the request
+    // reaches the commit, and the directory creation fails for any uid, root
+    // included. Elsewhere a regular file gives the same errors.
     let sessions = path.parent().unwrap();
     fs::remove_dir_all(sessions).unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(dir.join("missing"), sessions).unwrap();
+    #[cfg(not(unix))]
     fs::write(sessions, b"").unwrap();
+    let read = fs::read(manifest_path(&dir, "session-w")).unwrap_err();
+    assert_eq!(
+        read.kind(),
+        std::io::ErrorKind::NotFound,
+        "read arm skipped"
+    );
     let (status, body) = p
         .send(Some("session-w"), conversation("m", &[]))
         .await
         .unwrap_err();
     assert_eq!((status, &body["error"]["type"]), (500, &json!("api_error")));
+    assert!(!dir.join("missing").exists(), "commit created no directory");
     fs::remove_dir_all(dir).unwrap();
 }
 

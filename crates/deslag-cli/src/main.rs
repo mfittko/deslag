@@ -156,7 +156,9 @@ fn claude_hook(mut input: impl Read, minify_json: bool) -> Result<Option<Value>,
 }
 
 /// The hook compresses only when the configured owner is the hook. It keeps no
-/// replay state: the client stores and resends the replacement.
+/// replay state: the client stores and resends the replacement. The owner is
+/// read per call, so after a mid-session change from `proxy` to `hook` the hook
+/// compresses new results while the proxy replays its earlier decisions.
 fn hook_owns_compression() -> bool {
     session::state_dir().is_some_and(|dir| session::read_owner(&dir) == Owner::Hook)
 }

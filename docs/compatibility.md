@@ -40,7 +40,7 @@ Runs 2 and 3 used throwaway `jq` hooks to characterize the client. The deslag ad
 
 `deslag hook claude --minify-json` and `deslag proxy --minify-json` remove insignificant whitespace from JSON in Bash tool results only. Both call `deslag_core::compress` with `FIRST_SLICE_JSON_MINIFY_CONTEXT` and commit the output only for a `Changed` result, through `into_changed`. The plugin hook in `plugins/claude` does not pass the flag, so it stays a no-op. Neither flag has been run against a live client. Token savings from whitespace removal have not been measured.
 
-Status: experimental. Each flag compresses only when the configured owner in `<state dir>/owner` names its component, so the hook and the proxy never both transform one session. The proxy pins per-result decisions in a session manifest and replays them; see the README section on the compression owner and proxy replay.
+Status: experimental. Each flag compresses only when the configured owner in `<state dir>/owner` names its component, so the hook and the proxy never both transform one session while the owner stays fixed for it. After a mid-session change from `proxy` to `hook`, the proxy keeps replaying earlier pinned decisions while the hook compresses new results. Start a new session after an owner change. The proxy pins per-result decisions in a session manifest and replays them; see the README section on the compression owner and proxy replay.
 
 - Removing the proxy or its `--minify-json` flag mid-session makes the client resend original results. Content stays correct, but the cached prefix is lost. Start a new session.
 - The proxy passes requests with `content-encoding` through unchanged. A client that compresses only some requests would see drift.
