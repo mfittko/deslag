@@ -1,0 +1,386 @@
+//! Session state: owner file, retention, atomic commits, commit latency and
+//! pinned-decision validation, against the public `session` API.
+
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicU32, Ordering},
+    time::{Duration, Instant, SystemTime},
+};
+
+use deslag_core::{JSON_MINIFY_ID as ID, JSON_MINIFY_VERSION as V};
+use deslag_proxy::session::{
+    Candidate, Mode, Owner, RETENTION, ReplayError, Store, manifest_path, prune, read_owner,
+    write_owner,
+};
+use serde_json::{Value, json};
+
+fn temp_dir() -> PathBuf {
+    static N: AtomicU32 = AtomicU32::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "deslag-session-{}-{}",
+        std::process::id(),
+        N.fetch_add(1, Ordering::Relaxed)
+    ));
+    let _ = fs::remove_dir_all(&dir);
+    dir
+}
+
+fn store(dir: &Path) -> Store {
+    write_owner(dir, Owner::Proxy).unwrap();
+    Store {
+        dir: dir.to_path_buf(),
+        mode: Mode::Safe,
+    }
+}
+
+fn candidate<'a>(id: &'a str, text: &str) -> Candidate<'a> {
+    Candidate {
+        id,
+        newest: true,
+        source: serde_json::to_string(text).unwrap(),
+        texts: vec![text.to_owned()],
+    }
+}
+
+fn manifest(dir: &Path, scope: &str) -> Value {
+    serde_json::from_slice(&fs::read(manifest_path(dir, scope)).unwrap()).unwrap()
+}
+
+#[cfg(unix)]
+fn mode_of(path: &Path) -> u32 {
+    use std::os::unix::fs::PermissionsExt;
+    fs::metadata(path).unwrap().permissions().mode() & 0o777
+}
+
+#[test]
+fn owner_round_trips_and_unknown_content_is_none() {
+    let dir = temp_dir().join("state");
+    assert_eq!(read_owner(&dir), Owner::None, "missing owner file");
+    for (owner, text) in [
+        (Owner::Hook, "hook\n"),
+        (Owner::Proxy, "proxy\n"),
+        (Owner::None, "none\n"),
+    ] {
+        write_owner(&dir, owner).unwrap();
+        assert_eq!(read_owner(&dir), owner);
+        assert_eq!(fs::read_to_string(dir.join("owner")).unwrap(), text);
+    }
+    #[cfg(unix)]
+    {
+        assert_eq!(mode_of(&dir), 0o700);
+        assert_eq!(mode_of(&dir.join("owner")), 0o600);
+    }
+    for unknown in ["Proxy\n", "hook proxy\n", "", "\u{0}"] {
+        fs::write(dir.join("owner"), unknown).unwrap();
+        assert_eq!(read_owner(&dir), Owner::None, "{unknown:?}");
+    }
+    fs::remove_dir_all(dir.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn prune_removes_only_expired_session_files() {
+    let dir = temp_dir();
+    assert_eq!(prune(&dir, RETENTION, SystemTime::now()).unwrap(), 0);
+    let store = store(&dir);
+    for scope in ["old", "new"] {
+        store.replay(scope, "m", &[], |_| true).unwrap();
+    }
+    let old = manifest_path(&dir, "old");
+    let stale_tmp = old.with_extension("tmp");
+    fs::write(&stale_tmp, b"partial").unwrap();
+    let expired = SystemTime::now() - RETENTION - Duration::from_secs(60);
+    for path in [&old, &stale_tmp] {
+        fs::File::options()
+            .write(true)
+            .open(path)
+            .unwrap()
+            .set_modified(expired)
+            .unwrap();
+    }
+    assert_eq!(prune(&dir, RETENTION, SystemTime::now()).unwrap(), 2);
+    assert!(!old.exists() && !stale_tmp.exists());
+    assert!(manifest_path(&dir, "new").exists());
+    assert!(dir.join("owner").exists(), "prune touches sessions only");
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn commits_record_every_decision_and_their_latency_is_measured() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let path = manifest_path(&dir, "s");
+
+    const N: usize = 200;
+    let mut times = Vec::with_capacity(N);
+    for i in 0..N {
+        let id = format!("toolu_{i}");
+        let c = [candidate(&id, "{ \"a\": 1 }")];
+        let start = Instant::now();
+        assert_eq!(
+            store.replay("s", "m", &c, |_| i % 2 == 0).unwrap(),
+            [i % 2 == 0]
+        );
+        times.push(start.elapsed());
+    }
+    times.sort();
+    println!(
+        "session: {N} commits, p50 {:?}, max {:?}",
+        times[N / 2],
+        times[N - 1]
+    );
+
+    let m = manifest(&dir, "s");
+    assert_eq!(m["decisions"].as_object().unwrap().len(), N);
+    assert_eq!(m["decisions"]["toolu_0"]["encoded"]["version"], V);
+    assert_eq!(m["decisions"]["toolu_1"]["unchanged"], true);
+    let leftovers: Vec<_> = fs::read_dir(path.parent().unwrap())
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .filter(|n| n.to_string_lossy().ends_with(".tmp"))
+        .collect();
+    assert!(leftovers.is_empty(), "{leftovers:?}");
+    #[cfg(unix)]
+    {
+        assert_eq!(mode_of(path.parent().unwrap()), 0o700);
+        assert_eq!(mode_of(&path), 0o600);
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn commits_leave_other_temp_files_alone() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let path = manifest_path(&dir, "s");
+    // Temp files of another process or an interrupted commit.
+    let foreign = [path.with_extension("tmp"), path.with_extension("1.0.tmp")];
+    for tmp in &foreign {
+        fs::write(tmp, b"{ torn").unwrap();
+    }
+    for i in 0..3 {
+        let id = format!("toolu_{i}");
+        store
+            .replay("s", "m", &[candidate(&id, "x")], |_| false)
+            .unwrap();
+    }
+    for tmp in &foreign {
+        assert_eq!(fs::read(tmp).unwrap(), b"{ torn", "{tmp:?}");
+    }
+    assert_eq!(
+        manifest(&dir, "s")["decisions"].as_object().unwrap().len(),
+        3
+    );
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn a_crash_leftover_at_the_first_temp_name_does_not_fail_the_commit() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    let path = manifest_path(&dir, "s");
+    // Left by a crashed proxy that had the same pid, for example pid 1. They
+    // are planted before the first commit at the first temp names, so that
+    // commit hits them.
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let leftovers: Vec<_> = (0..256)
+        .map(|n| path.with_extension(format!("{}.{n}.tmp", std::process::id())))
+        .collect();
+    for leftover in &leftovers {
+        fs::write(leftover, b"{ torn").unwrap();
+    }
+    store.replay("s", "m", &[], |_| true).unwrap();
+    store
+        .replay("s", "m", &[candidate("toolu_0", "x")], |_| false)
+        .unwrap();
+    for leftover in &leftovers {
+        assert_eq!(fs::read(leftover).unwrap(), b"{ torn", "{leftover:?}");
+    }
+    assert_eq!(
+        manifest(&dir, "s")["decisions"]["toolu_0"]["unchanged"],
+        true
+    );
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn unreadable_manifest_is_an_io_error() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    fs::create_dir_all(manifest_path(&dir, "s")).unwrap();
+    for c in [vec![], vec![candidate("toolu_1", "x")]] {
+        let got = store.replay("s", "m", &c, |_| true);
+        assert!(matches!(got, Err(ReplayError::Io(_))), "{got:?}");
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn prune_skips_entries_that_are_not_files() {
+    let dir = temp_dir();
+    store(&dir).replay("s", "m", &[], |_| true).unwrap();
+    let not_a_file = dir.join("sessions/stray.json");
+    fs::create_dir(&not_a_file).unwrap();
+    let later = SystemTime::now() + RETENTION + Duration::from_secs(60);
+    assert_eq!(prune(&dir, RETENTION, later).unwrap(), 1);
+    assert!(!manifest_path(&dir, "s").exists());
+    assert!(not_a_file.is_dir());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn a_decision_that_is_not_an_object_is_corrupt() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let c = [candidate("toolu_1", "x")];
+    store.replay("s", "m", &c, |_| true).unwrap();
+    let base = manifest(&dir, "s");
+    let digest = base["decisions"]["toolu_1"]["digest"].clone();
+    for form in [json!(null), json!(true), digest.clone(), json!([digest])] {
+        let mut m = base.clone();
+        m["decisions"]["toolu_1"] = form.clone();
+        fs::write(manifest_path(&dir, "s"), m.to_string()).unwrap();
+        let got = store.replay("s", "m", &c, |_| unreachable!());
+        assert!(
+            matches!(&got, Err(ReplayError::CorruptDecision(id)) if id == "toolu_1"),
+            "{form}: {got:?}"
+        );
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn decision_digest_forms_are_validated() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let c = [candidate("toolu_1", "x")];
+    store.replay("s", "m", &c, |_| true).unwrap();
+    let base = manifest(&dir, "s");
+    let other = "0".repeat(64);
+    for (digest, mismatch) in [
+        (None, false),
+        (Some(json!(null)), false),
+        (Some(json!(123)), false),
+        (Some(json!(other)), true),
+    ] {
+        let mut m = base.clone();
+        let mut decision = json!({"unchanged": true});
+        if let Some(d) = &digest {
+            decision["digest"] = d.clone();
+        }
+        m["decisions"]["toolu_1"] = decision;
+        fs::write(manifest_path(&dir, "s"), m.to_string()).unwrap();
+        let got = store.replay("s", "m", &c, |_| unreachable!());
+        let ok = match &got {
+            Err(ReplayError::DigestMismatch(id)) => mismatch && id == "toolu_1",
+            Err(ReplayError::CorruptDecision(id)) => !mismatch && id == "toolu_1",
+            _ => false,
+        };
+        assert!(ok, "{digest:?}: {got:?}");
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn a_corrupt_manifest_is_never_overwritten_without_tool_results() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    let path = manifest_path(&dir, "s");
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let mut v2 = manifest(&dir, "s");
+    v2["version"] = json!(2);
+    for bytes in [b"{ not json".to_vec(), v2.to_string().into_bytes()] {
+        fs::write(&path, &bytes).unwrap();
+        let got = store.replay("s", "m", &[], |_| unreachable!());
+        assert!(matches!(&got, Ok(v) if v.is_empty()), "{got:?}");
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn pinned_decision_forms_are_validated() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let c = [candidate("toolu_1", "x")];
+    store.replay("s", "m", &c, |_| true).unwrap();
+    let base = manifest(&dir, "s");
+    let digest = base["decisions"]["toolu_1"]["digest"].clone();
+    assert_eq!(digest.as_str().unwrap().len(), 64, "sha-256 hex");
+
+    let ok = |encode: bool| Some(encode);
+    let cases: [(Value, Option<bool>, &str); 13] = [
+        (json!({"unchanged": true}), ok(false), ""),
+        (
+            json!({"encoded": {"transform": ID, "version": V}}),
+            ok(true),
+            "",
+        ),
+        (
+            json!({"encoded": {"transform": ID, "version": V + 1}}),
+            None,
+            "retired",
+        ),
+        (
+            json!({"encoded": {"transform": "other", "version": 1}}),
+            None,
+            "retired",
+        ),
+        (
+            json!({"encoded": {"transform": "json-min", "version": V}}),
+            None,
+            "retired",
+        ),
+        (json!({"encoded": {"version": 1}}), None, "corrupt"),
+        (
+            json!({"encoded": {"transform": ID, "version": 1.0}}),
+            None,
+            "corrupt",
+        ),
+        (
+            json!({"encoded": {"transform": ID, "version": "1"}}),
+            None,
+            "corrupt",
+        ),
+        (
+            json!({"encoded": {"transform": ID, "version": -1}}),
+            None,
+            "corrupt",
+        ),
+        (json!({}), None, "corrupt"),
+        (json!({"unchanged": false}), None, "corrupt"),
+        (
+            json!({"unchanged": true, "encoded": {"transform": ID, "version": V}}),
+            None,
+            "corrupt",
+        ),
+        (
+            json!({"unchanged": false, "encoded": {"transform": ID, "version": V}}),
+            None,
+            "corrupt",
+        ),
+    ];
+    for (form, want, err) in cases {
+        let mut m = base.clone();
+        let mut decision = form.clone();
+        decision["digest"] = digest.clone();
+        m["decisions"]["toolu_1"] = decision;
+        fs::write(manifest_path(&dir, "s"), m.to_string()).unwrap();
+        // Replays never decide again, so `decide` must not be consulted.
+        let got = store.replay("s", "m", &c, |_| unreachable!());
+        match (got, want, err) {
+            (Ok(v), Some(w), _) => assert_eq!(v, [w], "{form}"),
+            (Err(ReplayError::RetiredTransform(id)), None, "retired")
+            | (Err(ReplayError::CorruptDecision(id)), None, "corrupt") => {
+                assert_eq!(id, "toolu_1")
+            }
+            (got, _, _) => panic!("{form}: {got:?}"),
+        }
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
