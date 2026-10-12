@@ -166,7 +166,15 @@ fn run_order_is_seeded() {
         order("8", "mock-8.jsonl"),
     );
     assert_eq!(a, b);
-    assert_ne!(a, c);
+    // Every line carries its seed, so compare only the executed (task, arm) sequence.
+    let sequence = |lines: &[Value]| {
+        let mut l: Vec<&Value> = lines.iter().collect();
+        l.sort_by_key(|l| l["order"].as_u64());
+        l.iter()
+            .map(|l| (l["task"].clone(), l["arm"].clone()))
+            .collect::<Vec<_>>()
+    };
+    assert_ne!(sequence(&a), sequence(&c));
 }
 
 #[test]
