@@ -252,11 +252,26 @@ fn parallel_invocations_do_not_contaminate_each_other() {
     for (child, (input, _)) in children.iter_mut().zip(&cases) {
         child.stdin.take().unwrap().write_all(input).unwrap();
     }
+    // 24 processes contend for the CPU, so a job can miss the 10 ms default budget.
+    // That case fails open: no stdout, one budget diagnostic. Every replacement
+    // must still be exactly its own case's, never another case's content.
+    let mut replacements = 0;
     for (i, (child, (_, expected))) in children.into_iter().zip(&cases).enumerate() {
         let output = child.wait_with_output().unwrap();
-        assert!(output.stderr.is_empty(), "case {i}");
-        assert_eq!(&single_output(&output), expected, "case {i}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let actual = single_output(&output);
+        if expected.is_some() && actual.is_none() && !stderr.is_empty() {
+            assert_eq!(
+                stderr, "deslag: compression budget_exceeded; tool output unchanged\n",
+                "case {i}"
+            );
+            continue;
+        }
+        assert!(stderr.is_empty(), "case {i}: {stderr}");
+        assert_eq!(&actual, expected, "case {i}");
+        replacements += usize::from(actual.is_some());
     }
+    assert!(replacements > 0);
 }
 
 #[test]

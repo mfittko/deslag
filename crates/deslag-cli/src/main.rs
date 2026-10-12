@@ -640,11 +640,30 @@ mod tests {
             {"type": "text", "text": "{\n  \"b\": 1\n}"},
         ]);
         let bytes = serde_json::to_vec(&event).unwrap();
-        let exec = BoundedExecutor::new(1, std::time::Duration::from_secs(2)).unwrap();
+        let exec = BoundedExecutor::new(1, std::time::Duration::from_millis(200)).unwrap();
         let result = claude_hook(bytes.as_slice(), true, |_| None, &exec, slow_on_b);
         assert_eq!(
             result,
             Err("compression budget_exceeded; tool output unchanged".to_string())
+        );
+    }
+
+    #[test]
+    fn panicked_job_leaves_output_unchanged() {
+        fn panic_on_b(text: &str) -> Option<String> {
+            assert!(!text.contains("\"b\""), "injected panic");
+            minify(text)
+        }
+        let result = claude_hook(
+            pretty_bash().as_slice(),
+            true,
+            |_| None,
+            &generous(),
+            panic_on_b,
+        );
+        assert_eq!(
+            result,
+            Err("compression job_panicked; tool output unchanged".to_string())
         );
     }
 

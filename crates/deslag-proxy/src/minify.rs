@@ -16,8 +16,8 @@
 //! are not forwarded upstream. `/v1/messages/count_tokens` is not rewritten,
 //! so its counts can overstate. Each tool result is compressed as one job of
 //! `Limits::executor`. When the executor rejects any job (busy, budget exceeded
-//! or panicked), the whole body is forwarded unrewritten, so under load a resend can differ from the
-//! first send.
+//! or panicked), the whole body is forwarded unrewritten, so under load a
+//! resend can differ from the first send.
 
 use std::{
     collections::HashSet,
@@ -122,7 +122,9 @@ impl Body for ReqBody {
 /// `POST /v1/messages` body is buffered and its Bash tool results minified.
 /// Anything else streams through untouched. A failed buffered read is `400`.
 /// A buffered read that exceeds `read_timeout` after its permit is granted is
-/// `408`: the request is rejected, never forwarded unrewritten.
+/// `408`: the request is rejected, never forwarded unrewritten. The rewrite
+/// runs after the read, outside that deadline, and holds the permit until it
+/// ends. A rejected or panicked rewrite forwards the original body.
 pub(crate) async fn prepare(
     req: Request<Incoming>,
     enabled: bool,
@@ -150,23 +152,44 @@ pub(crate) async fn prepare(
         .await
         .expect("semaphore is never closed");
     // The deadline starts at the permit, so time spent queued does not count.
-    match tokio::time::timeout(read_timeout, buffer(parts, body, exec)).await {
-        Ok(Ok(req)) => Ok(req),
-        Ok(Err(_)) => Err(StatusCode::BAD_REQUEST),
-        Err(_) => Err(StatusCode::REQUEST_TIMEOUT),
+    let (mut parts, buf) = match tokio::time::timeout(read_timeout, buffer(parts, body)).await {
+        Ok(Ok(Buffered::Complete(parts, buf))) => (parts, buf),
+        Ok(Ok(Buffered::Forward(req))) => return Ok(req),
+        Ok(Err(_)) => return Err(StatusCode::BAD_REQUEST),
+        Err(_) => return Err(StatusCode::REQUEST_TIMEOUT),
+    };
+    // The rewrite blocks, so it runs on the blocking pool, outside the read
+    // deadline and with the permit still held. A rejected job or a panic there
+    // forwards the original.
+    let mut buf = Bytes::from(buf);
+    let input = buf.clone();
+    let rewritten = tokio::task::spawn_blocking(move || rewrite(&input, &exec, minify)).await;
+    if let Ok(Some(rewritten)) = rewritten {
+        buf = rewritten.into();
+        parts
+            .headers
+            .insert(header::CONTENT_LENGTH, buf.len().into());
     }
+    let body = ReqBody {
+        prefix: Some(buf),
+        rest: None,
+        trailers: None,
+    };
+    Ok(Request::from_parts(parts, body))
 }
 
-/// Buffers up to `MAX_INSPECT_BYTES` of `body` and rewrites it once complete.
-/// A body with trailers is never rewritten, because a trailer such as
-/// `content-digest` can pin its bytes. The trailers are kept in the body, but
-/// they do not reach the upstream: the hop-by-hop strip removes the `trailer`
-/// header, and a `content-length` body carries no trailers over HTTP/1.1.
-async fn buffer(
-    mut parts: Parts,
-    mut body: Incoming,
-    exec: BoundedExecutor,
-) -> Result<Request<ReqBody>, hyper::Error> {
+/// Result of [`buffer`]: a complete body to rewrite, or a request to forward as is.
+enum Buffered {
+    Complete(Parts, Vec<u8>),
+    Forward(Request<ReqBody>),
+}
+
+/// Buffers up to `MAX_INSPECT_BYTES` of `body`. A body with trailers is never
+/// rewritten, because a trailer such as `content-digest` can pin its bytes. The
+/// trailers are kept in the body, but they do not reach the upstream: the
+/// hop-by-hop strip removes the `trailer` header, and a `content-length` body
+/// carries no trailers over HTTP/1.1.
+async fn buffer(parts: Parts, mut body: Incoming) -> Result<Buffered, hyper::Error> {
     let hint = body.size_hint().exact().unwrap_or(0);
     let mut buf = Vec::with_capacity(hint.min(MAX_INSPECT_BYTES as u64 + 1) as usize);
     let mut trailers: Option<HeaderMap> = None;
@@ -188,7 +211,7 @@ async fn buffer(
                 rest: Some(body),
                 trailers: None,
             };
-            return Ok(Request::from_parts(parts, body));
+            return Ok(Buffered::Forward(Request::from_parts(parts, body)));
         }
     }
     if trailers.is_some() {
@@ -197,24 +220,9 @@ async fn buffer(
             rest: None,
             trailers,
         };
-        return Ok(Request::from_parts(parts, body));
+        return Ok(Buffered::Forward(Request::from_parts(parts, body)));
     }
-    // The rewrite blocks, so it runs on the blocking pool. A panic there forwards the original.
-    let mut buf = Bytes::from(buf);
-    let input = buf.clone();
-    let rewritten = tokio::task::spawn_blocking(move || rewrite(&input, &exec, minify)).await;
-    if let Ok(Some(rewritten)) = rewritten {
-        buf = rewritten.into();
-        parts
-            .headers
-            .insert(header::CONTENT_LENGTH, buf.len().into());
-    }
-    let body = ReqBody {
-        prefix: Some(buf),
-        rest: None,
-        trailers: None,
-    };
-    Ok(Request::from_parts(parts, body))
+    Ok(Buffered::Complete(parts, buf))
 }
 
 /// Per-text compression job. Tests inject a slow one.
@@ -407,8 +415,20 @@ mod tests {
 
     #[test]
     fn one_expired_job_forwards_the_original_body() {
-        let exec = BoundedExecutor::new(1, Duration::from_secs(2)).unwrap();
+        let exec = BoundedExecutor::new(1, Duration::from_millis(200)).unwrap();
         assert_eq!(rewrite(TWO_RESULTS.as_bytes(), &exec, slow_on_b), None);
+    }
+
+    #[test]
+    fn panicked_job_forwards_the_original_body() {
+        fn panic_on_b(text: &str) -> Option<String> {
+            assert!(!text.contains("\"b\""), "injected panic");
+            minify(text)
+        }
+        assert_eq!(
+            rewrite(TWO_RESULTS.as_bytes(), &generous(), panic_on_b),
+            None
+        );
     }
 
     #[test]
