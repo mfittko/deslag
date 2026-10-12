@@ -205,19 +205,18 @@ fn variant(arm: &str, task: &Task) -> Option<String> {
         token_counter: Some(&EstimateCounter),
         ..FIRST_SLICE_JSON_MINIFY_CONTEXT
     };
+    // table-csv and table-mdkv share these options, so both formats see the same table-v1 inputs.
+    let v1 = TableOptions {
+        max_rows: FIRST_SLICE_JSON_MINIFY_CONTEXT.limits.max_table_rows,
+        max_depth: FIRST_SLICE_JSON_MINIFY_CONTEXT.limits.max_json_depth,
+        token_counter: Some(&EstimateCounter),
+        ..TableOptions::default()
+    };
     let out = match arm {
         "json-minify" => minify_json(input),
-        "table-csv" => compress(input, &only(true, false, false)).into_changed(),
-        // Same row and depth limits as the table-csv arm, so both formats see the same inputs.
-        "table-mdkv" => table::render_markdown_kv(
-            input,
-            &TableOptions {
-                max_rows: FIRST_SLICE_JSON_MINIFY_CONTEXT.limits.max_table_rows,
-                max_depth: FIRST_SLICE_JSON_MINIFY_CONTEXT.limits.max_json_depth,
-                token_counter: Some(&EstimateCounter),
-                ..TableOptions::default()
-            },
-        ),
+        "table-csv" => table::encode(input, &v1).ok(),
+        "table-mdkv" => table::render_markdown_kv(input, &v1),
+        "table-v2" => compress(input, &only(true, false, false)).into_changed(),
         "lines-v1" => compress(input, &only(false, true, false)).into_changed(),
         "lines-v2" => compress(input, &only(false, false, true)).into_changed(),
         "drop-evidence" => task.evidence.as_deref().map(|ev| {

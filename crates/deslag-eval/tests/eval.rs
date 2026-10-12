@@ -137,6 +137,7 @@ fn mock_run_detects_evidence_loss_and_keeps_controls_unchanged() {
         "json-minify",
         "table-csv",
         "table-mdkv",
+        "table-v2",
         "lines-v1",
         "lines-v2",
         "drop-evidence",
@@ -185,11 +186,11 @@ fn report_renders_format_comparison_and_controls() {
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     let md = String::from_utf8(o.stdout).unwrap();
     assert!(
-        md.contains("| table-v1 CSV | table-csv | 10 | 10/10 (100.0%) |"),
+        md.contains("| table-v1 CSV | table-csv | 11 | 11/11 (100.0%) |"),
         "{md}"
     );
     assert!(
-        md.contains("| Markdown-KV | table-mdkv | 10 | 10/10 (100.0%) |"),
+        md.contains("| Markdown-KV | table-mdkv | 11 | 11/11 (100.0%) |"),
         "{md}"
     );
     assert!(md.contains("| evidence_drop | drop-evidence | 2 | 2/2 (100.0%) | 0/2 (0.0%) | 0 | 2 | evidence loss detected |"), "{md}");
@@ -260,7 +261,7 @@ fn report_renders_format_comparison_and_controls() {
     }
     // The pilot is below 81 pairs per arm, so no arm can pass.
     assert!(
-        md.contains("| table-csv | 10 | 0 |")
+        md.contains("| table-csv | 11 | 1 |")
             && md.contains("not shown")
             && !md.contains("passes |"),
         "{md}"
@@ -422,7 +423,7 @@ fn report_gives_an_arm_without_non_control_pairs_no_data() {
         table.contains("| lines-v2 | 0 | 0 | 0 | 0 | n/a | n/a | n/a | n/a | no data |"),
         "{table}"
     );
-    assert!(table.contains("| table-csv | 10 | 0 |"), "{table}");
+    assert!(table.contains("| table-csv | 11 | 1 |"), "{table}");
     assert!(table.contains("not shown"), "{table}");
     assert!(!table.contains("| drop-evidence |"), "{table}");
     assert!(!table.contains("| baseline |"), "{table}");
@@ -436,7 +437,7 @@ fn estimate_prints_a_cost() {
     let md = String::from_utf8(o.stdout).unwrap();
     assert!(
         md.contains("| Estimated cost | USD ")
-            && md.contains("| Cap if every call stays within --per-run-usd (73 runs"),
+            && md.contains("| Cap if every call stays within --per-run-usd (90 runs"),
         "{md}"
     );
 }
@@ -817,7 +818,7 @@ fn live_backend_counts_only_a_valid_reported_cost() {
             None => {
                 assert!(o.status.success(), "{mode}: {err}");
                 assert!(err.contains("spent 0.0000 USD"), "{mode}: {err}");
-                assert_eq!(lines.len(), 73, "{mode}");
+                assert_eq!(lines.len(), 90, "{mode}");
             }
         }
     }
