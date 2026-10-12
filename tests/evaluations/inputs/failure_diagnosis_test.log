@@ -1,0 +1,92 @@
+   Compiling billing v0.4.2 (/work/billing)
+    Finished test profile [unoptimized + debuginfo] target(s) in 41.07s
+     Running unittests src/lib.rs (target/debug/deps/billing-5d1c)
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+waiting for test database to accept connections
+running 48 tests
+test billing::ledger::case_1 ... ok
+test billing::invoice::case_2 ... ok
+test billing::refund::case_3 ... ok
+test billing::currency::case_4 ... ok
+test billing::payout::case_5 ... ok
+test billing::tax::case_6 ... ok
+test billing::ledger::case_7 ... ok
+test billing::invoice::case_8 ... ok
+test billing::refund::case_9 ... ok
+test billing::currency::case_10 ... ok
+test billing::payout::case_11 ... ok
+test billing::tax::case_12 ... ok
+test billing::ledger::case_13 ... ok
+test billing::invoice::case_14 ... ok
+test billing::refund::case_15 ... ok
+test billing::currency::case_16 ... ok
+test billing::payout::case_17 ... ok
+test billing::tax::case_18 ... ok
+test billing::ledger::case_19 ... ok
+test billing::invoice::case_20 ... ok
+test billing::refund::case_21 ... ok
+test billing::currency::case_22 ... ok
+test billing::payout::case_23 ... ok
+test billing::tax::case_24 ... ok
+test billing::ledger::case_25 ... ok
+test billing::invoice::case_26 ... ok
+test billing::invoice::rounds_half_even ... FAILED
+test billing::currency::case_28 ... ok
+test billing::payout::case_29 ... ok
+test billing::tax::case_30 ... ok
+test billing::ledger::case_31 ... ok
+test billing::invoice::case_32 ... ok
+test billing::refund::case_33 ... ok
+test billing::currency::case_34 ... ok
+test billing::payout::case_35 ... ok
+test billing::tax::case_36 ... ok
+test billing::ledger::case_37 ... ok
+test billing::invoice::case_38 ... ok
+test billing::refund::case_39 ... ok
+test billing::currency::case_40 ... ok
+test billing::payout::case_41 ... ok
+test billing::tax::case_42 ... ok
+test billing::ledger::case_43 ... ok
+test billing::invoice::case_44 ... ok
+test billing::refund::case_45 ... ok
+test billing::currency::case_46 ... ok
+test billing::payout::case_47 ... ok
+test billing::tax::case_48 ... ok
+
+failures:
+
+---- billing::invoice::rounds_half_even stdout ----
+thread 'billing::invoice::rounds_half_even' panicked at src/billing/invoice.rs:88:9:
+assertion `left == right` failed
+  left: 1003
+ right: 1002
+
+test result: FAILED. 47 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out

@@ -1,0 +1,302 @@
+[
+  {
+    "path": "src/net/pool.rs",
+    "line": 18,
+    "column": 2,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/api/handlers.rs",
+    "line": 31,
+    "column": 3,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/jobs/worker.rs",
+    "line": 44,
+    "column": 4,
+    "text": "retry_count += 1;"
+  },
+  {
+    "path": "src/api/rate.rs",
+    "line": 57,
+    "column": 5,
+    "text": "if attempt > max_retry { return Err(Error::Exhausted); }"
+  },
+  {
+    "path": "src/net/client.rs",
+    "line": 70,
+    "column": 6,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/net/pool.rs",
+    "line": 83,
+    "column": 7,
+    "text": "retry_count += 1;"
+  },
+  {
+    "path": "src/api/handlers.rs",
+    "line": 96,
+    "column": 8,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/jobs/worker.rs",
+    "line": 109,
+    "column": 9,
+    "text": "if attempt > max_retry { return Err(Error::Exhausted); }"
+  },
+  {
+    "path": "src/api/rate.rs",
+    "line": 122,
+    "column": 1,
+    "text": "retry_count += 1;"
+  },
+  {
+    "path": "src/net/client.rs",
+    "line": 135,
+    "column": 2,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/net/pool.rs",
+    "line": 148,
+    "column": 3,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/api/handlers.rs",
+    "line": 161,
+    "column": 4,
+    "text": "if attempt > max_retry { return Err(Error::Exhausted); }"
+  },
+  {
+    "path": "src/jobs/worker.rs",
+    "line": 174,
+    "column": 5,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/api/rate.rs",
+    "line": 187,
+    "column": 6,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/net/client.rs",
+    "line": 200,
+    "column": 7,
+    "text": "retry_count += 1;"
+  },
+  {
+    "path": "src/net/pool.rs",
+    "line": 213,
+    "column": 8,
+    "text": "if attempt > max_retry { return Err(Error::Exhausted); }"
+  },
+  {
+    "path": "src/api/handlers.rs",
+    "line": 226,
+    "column": 9,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/jobs/worker.rs",
+    "line": 239,
+    "column": 1,
+    "text": "retry_count += 1;"
+  },
+  {
+    "path": "src/api/rate.rs",
+    "line": 252,
+    "column": 2,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/net/client.rs",
+    "line": 265,
+    "column": 3,
+    "text": "if attempt > max_retry { return Err(Error::Exhausted); }"
+  },
+  {
+    "path": "src/net/pool.rs",
+    "line": 278,
+    "column": 4,
+    "text": "retry_count += 1;"
+  },
+  {
+    "path": "src/api/handlers.rs",
+    "line": 291,
+    "column": 5,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/jobs/worker.rs",
+    "line": 304,
+    "column": 6,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/api/rate.rs",
+    "line": 317,
+    "column": 7,
+    "text": "if attempt > max_retry { return Err(Error::Exhausted); }"
+  },
+  {
+    "path": "src/net/client.rs",
+    "line": 330,
+    "column": 8,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/net/pool.rs",
+    "line": 343,
+    "column": 9,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/api/handlers.rs",
+    "line": 356,
+    "column": 1,
+    "text": "retry_count += 1;"
+  },
+  {
+    "path": "src/jobs/worker.rs",
+    "line": 369,
+    "column": 2,
+    "text": "if attempt > max_retry { return Err(Error::Exhausted); }"
+  },
+  {
+    "path": "src/api/rate.rs",
+    "line": 382,
+    "column": 3,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/net/client.rs",
+    "line": 395,
+    "column": 4,
+    "text": "retry_count += 1;"
+  },
+  {
+    "path": "src/net/backoff.rs",
+    "line": 8,
+    "column": 5,
+    "text": "pub fn parse_retry_after(value: &str) -> Option<Duration> {"
+  },
+  {
+    "path": "src/api/handlers.rs",
+    "line": 21,
+    "column": 6,
+    "text": "if attempt > max_retry { return Err(Error::Exhausted); }"
+  },
+  {
+    "path": "src/jobs/worker.rs",
+    "line": 34,
+    "column": 7,
+    "text": "retry_count += 1;"
+  },
+  {
+    "path": "src/api/rate.rs",
+    "line": 47,
+    "column": 8,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/net/client.rs",
+    "line": 60,
+    "column": 9,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/net/pool.rs",
+    "line": 73,
+    "column": 1,
+    "text": "if attempt > max_retry { return Err(Error::Exhausted); }"
+  },
+  {
+    "path": "src/api/handlers.rs",
+    "line": 86,
+    "column": 2,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/jobs/worker.rs",
+    "line": 99,
+    "column": 3,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/api/rate.rs",
+    "line": 112,
+    "column": 4,
+    "text": "retry_count += 1;"
+  },
+  {
+    "path": "src/net/client.rs",
+    "line": 125,
+    "column": 5,
+    "text": "if attempt > max_retry { return Err(Error::Exhausted); }"
+  },
+  {
+    "path": "src/net/pool.rs",
+    "line": 138,
+    "column": 6,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/api/handlers.rs",
+    "line": 151,
+    "column": 7,
+    "text": "retry_count += 1;"
+  },
+  {
+    "path": "src/jobs/worker.rs",
+    "line": 164,
+    "column": 8,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/api/rate.rs",
+    "line": 177,
+    "column": 9,
+    "text": "if attempt > max_retry { return Err(Error::Exhausted); }"
+  },
+  {
+    "path": "src/net/client.rs",
+    "line": 190,
+    "column": 1,
+    "text": "retry_count += 1;"
+  },
+  {
+    "path": "src/net/pool.rs",
+    "line": 203,
+    "column": 2,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/api/handlers.rs",
+    "line": 216,
+    "column": 3,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/jobs/worker.rs",
+    "line": 229,
+    "column": 4,
+    "text": "if attempt > max_retry { return Err(Error::Exhausted); }"
+  },
+  {
+    "path": "src/api/rate.rs",
+    "line": 242,
+    "column": 5,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  },
+  {
+    "path": "src/net/client.rs",
+    "line": 255,
+    "column": 6,
+    "text": "let delay = parse_retry_after(headers.get(RETRY_AFTER)?);"
+  }
+]

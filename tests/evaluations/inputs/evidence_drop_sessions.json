@@ -1,0 +1,102 @@
+[
+  {
+    "session": "sess_k17",
+    "user": "u3",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k34",
+    "user": "u6",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k1",
+    "user": "u9",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k18",
+    "user": "u12",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k35",
+    "user": "u15",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k2",
+    "user": "u18",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k19",
+    "user": "u21",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k36",
+    "user": "u24",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k3",
+    "user": "u27",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k20",
+    "user": "u30",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k37",
+    "user": "u33",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k4",
+    "user": "u36",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k21",
+    "user": "u39",
+    "revoked_by": "mallory-ops"
+  },
+  {
+    "session": "sess_k38",
+    "user": "u42",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k5",
+    "user": "u45",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k22",
+    "user": "u48",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k39",
+    "user": "u51",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k6",
+    "user": "u54",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k23",
+    "user": "u57",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k40",
+    "user": "u60",
+    "revoked_by": null
+  }
+]

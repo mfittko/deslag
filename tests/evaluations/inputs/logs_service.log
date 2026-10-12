@@ -1,0 +1,86 @@
+2026-09-30T10:00:00Z INFO request_id=req-00000 status=200 upstream=payments
+2026-09-30T10:00:07Z INFO request_id=req-00911 status=200 upstream=payments
+2026-09-30T10:00:14Z INFO request_id=req-01822 status=200 upstream=payments
+2026-09-30T10:00:21Z INFO request_id=req-02733 status=200 upstream=payments
+2026-09-30T10:00:28Z INFO request_id=req-03644 status=200 upstream=payments
+2026-09-30T10:00:35Z INFO request_id=req-04555 status=200 upstream=payments
+2026-09-30T10:01:42Z INFO request_id=req-05466 status=200 upstream=payments
+2026-09-30T10:01:49Z INFO request_id=req-06377 status=200 upstream=payments
+2026-09-30T10:01:56Z INFO request_id=req-07288 status=200 upstream=payments
+2026-09-30T10:01:03Z INFO request_id=req-08199 status=200 upstream=payments
+2026-09-30T10:01:10Z INFO request_id=req-09110 status=200 upstream=payments
+2026-09-30T10:01:17Z INFO request_id=req-10021 status=200 upstream=payments
+2026-09-30T10:02:24Z INFO request_id=req-10932 status=200 upstream=payments
+2026-09-30T10:02:31Z INFO request_id=req-11843 status=200 upstream=payments
+2026-09-30T10:02:38Z INFO request_id=req-12754 status=200 upstream=payments
+2026-09-30T10:02:45Z INFO request_id=req-13665 status=200 upstream=payments
+2026-09-30T10:02:52Z INFO request_id=req-14576 status=200 upstream=payments
+2026-09-30T10:02:59Z INFO request_id=req-15487 status=200 upstream=payments
+2026-09-30T10:03:06Z INFO request_id=req-16398 status=200 upstream=payments
+2026-09-30T10:03:13Z INFO request_id=req-17309 status=200 upstream=payments
+2026-09-30T10:03:20Z INFO request_id=req-18220 status=200 upstream=payments
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+[pool] connection to db-primary:5432 refused, retrying
+2026-09-30T10:03:27Z INFO request_id=req-19131 status=200 upstream=payments
+2026-09-30T10:03:34Z INFO request_id=req-20042 status=200 upstream=payments
+2026-09-30T10:03:41Z INFO request_id=req-20953 status=200 upstream=payments
+2026-09-30T10:04:48Z INFO request_id=req-21864 status=200 upstream=payments
+2026-09-30T10:04:55Z INFO request_id=req-22775 status=200 upstream=payments
+2026-09-30T10:04:02Z INFO request_id=req-23686 status=200 upstream=payments
+2026-09-30T10:04:09Z INFO request_id=req-24597 status=200 upstream=payments
+2026-09-30T10:04:16Z INFO request_id=req-25508 status=200 upstream=payments
+2026-09-30T10:04:23Z INFO request_id=req-26419 status=200 upstream=payments
+2026-09-30T10:05:30Z INFO request_id=req-27330 status=200 upstream=payments
+2026-09-30T10:05:37Z INFO request_id=req-28241 status=200 upstream=payments
+2026-09-30T10:05:44Z INFO request_id=req-29152 status=200 upstream=payments
+2026-09-30T10:05:51Z INFO request_id=req-30063 status=200 upstream=payments
+2026-09-30T10:05:58Z INFO request_id=req-30974 status=200 upstream=payments
+2026-09-30T10:05:05Z INFO request_id=req-31885 status=200 upstream=payments
+2026-09-30T10:06:12Z INFO request_id=req-32796 status=200 upstream=payments
+2026-09-30T10:06:19Z INFO request_id=req-33707 status=200 upstream=payments
+2026-09-30T10:06:26Z INFO request_id=req-34618 status=200 upstream=payments
+2026-09-30T10:06:33Z INFO request_id=req-35529 status=200 upstream=payments
+2026-09-30T10:06:40Z INFO request_id=req-36440 status=200 upstream=payments
+2026-09-30T10:06:47Z INFO request_id=req-37351 status=200 upstream=payments
+2026-09-30T10:14:07Z ERROR request_id=req-7f3a9c status=503 upstream=payments
+2026-09-30T10:07:54Z INFO request_id=req-38262 status=200 upstream=payments
+2026-09-30T10:07:01Z INFO request_id=req-39173 status=200 upstream=payments
+2026-09-30T10:07:08Z INFO request_id=req-40084 status=200 upstream=payments
+2026-09-30T10:07:15Z INFO request_id=req-40995 status=200 upstream=payments
+2026-09-30T10:07:22Z INFO request_id=req-41906 status=200 upstream=payments
+2026-09-30T10:07:29Z INFO request_id=req-42817 status=200 upstream=payments
+2026-09-30T10:08:36Z INFO request_id=req-43728 status=200 upstream=payments
+2026-09-30T10:08:43Z INFO request_id=req-44639 status=200 upstream=payments
+2026-09-30T10:08:50Z INFO request_id=req-45550 status=200 upstream=payments
+2026-09-30T10:08:57Z INFO request_id=req-46461 status=200 upstream=payments
+2026-09-30T10:08:04Z INFO request_id=req-47372 status=200 upstream=payments
+2026-09-30T10:08:11Z INFO request_id=req-48283 status=200 upstream=payments
+2026-09-30T10:09:18Z INFO request_id=req-49194 status=200 upstream=payments
+2026-09-30T10:09:25Z INFO request_id=req-50105 status=200 upstream=payments
+2026-09-30T10:09:32Z INFO request_id=req-51016 status=200 upstream=payments
+2026-09-30T10:09:39Z INFO request_id=req-51927 status=200 upstream=payments
+2026-09-30T10:09:46Z INFO request_id=req-52838 status=200 upstream=payments
+2026-09-30T10:09:53Z INFO request_id=req-53749 status=200 upstream=payments
