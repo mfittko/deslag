@@ -22,6 +22,8 @@ deslag-core = { path = "../deslag-core" }
 # RawValue spans let the proxy splice tool results without re-serializing the request.
 serde = "=1.0.229"
 serde_json = { version = "=1.0.152", features = ["raw_value"] }
+# SHA-256 for session-scope and tool-result digests; already in the tree via rustls.
+ring = { version = "=0.17.14", default-features = false }
 
 [dev-dependencies]
 tokio = { version = "=1.53.2", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }

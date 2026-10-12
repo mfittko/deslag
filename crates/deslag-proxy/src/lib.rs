@@ -24,6 +24,7 @@ use hyper_util::{
 use tokio::{net::TcpListener, sync::Semaphore};
 
 mod minify;
+pub mod session;
 
 #[doc(hidden)]
 pub use minify::available_inspect_permits;
