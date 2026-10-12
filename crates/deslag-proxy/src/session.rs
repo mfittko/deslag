@@ -2,17 +2,16 @@
 //!
 //! One owner selects the adapter that compresses: `hook`, `proxy` or `none`.
 //! It lives in `<state dir>/owner` and is never inferred from tool-result
-//! content. A missing, unreadable or unknown owner is `none`. Only one
-//! adapter transforms a session while the owner stays fixed for it. After a
-//! change from `proxy` to `hook`, pinned decisions keep replaying while the
-//! hook compresses new results.
+//! content. A missing, unreadable or unknown owner is `none`. The proxy
+//! decides new results only while the owner is `proxy`; pinned decisions
+//! replay under any owner.
 //!
 //! Proxy mode pins one decision per `(session, tool_use_id)` in
 //! `<state dir>/sessions/<sha256(session id)>.json` and replays it on every
 //! later request, so resent history keeps its bytes. Each new decision,
-//! `unchanged` included, is committed atomically before the request that
-//! carries the result is forwarded. A manifest holds digests and decisions,
-//! never tool content or the raw session id.
+//! `unchanged` included, is committed atomically before `Store::replay`
+//! returns. A manifest holds digests and decisions, never tool content or the
+//! raw session id.
 
 use std::{
     fs,
@@ -172,8 +171,8 @@ impl Store {
     /// A session without a manifest passes through while the owner is not the
     /// proxy; once the owner is the proxy, its requests with tool results fail.
     /// The owner is read per request and pinned decisions replay under any
-    /// owner, so after a change from `proxy` to `hook` the proxy keeps encoding
-    /// earlier results while the hook compresses new ones.
+    /// owner, so after a change from `proxy` to `hook` earlier results keep
+    /// their pinned encoding.
     pub fn replay(
         &self,
         scope: &str,
@@ -295,7 +294,7 @@ fn write_manifest(path: &Path, manifest: &Value) -> io::Result<()> {
     commit(path, manifest.to_string().as_bytes())
 }
 
-/// Owner-only directory on unix.
+/// Creates missing directories owner-only on unix.
 fn create_dir(dir: &Path) -> io::Result<()> {
     let mut builder = fs::DirBuilder::new();
     builder.recursive(true);
