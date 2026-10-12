@@ -338,6 +338,59 @@ fn estimate_validates_prices_and_cap() {
 }
 
 #[test]
+fn estimate_refuses_token_overflow() {
+    let m = manifest();
+    for (extra, ok) in [
+        (&["--output-tokens", "256"][..], true),
+        (&["--overhead-tokens", "0"], true),
+        (&["--output-tokens", "18446744073709551615"], false),
+        (&["--overhead-tokens", "18446744073709551615"], false),
+    ] {
+        let o = Command::new(BIN)
+            .args(["estimate", "--manifest", m.to_str().unwrap()])
+            .args(extra)
+            .output()
+            .unwrap();
+        assert_eq!(o.status.success(), ok, "{extra:?}");
+        if !ok {
+            assert_eq!(o.status.code(), Some(2), "{extra:?}");
+            assert!(o.stdout.is_empty(), "{extra:?}");
+            let err = String::from_utf8_lossy(&o.stderr);
+            assert!(err.contains("estimate needs"), "{extra:?}: {err}");
+        }
+    }
+}
+
+#[test]
+fn report_gives_an_arm_without_non_control_pairs_no_data() {
+    // lines-v2 then runs only on control tasks.
+    let (_, lines) = mock_run("16", "control-only.jsonl");
+    let text: String = lines
+        .iter()
+        .filter(|l| l["arm"] != "lines-v2" || !l["control"].is_null())
+        .map(|l| format!("{l}\n"))
+        .collect();
+    let path = Path::new(env!("CARGO_TARGET_TMPDIR")).join("control-only-edit.jsonl");
+    std::fs::write(&path, text).unwrap();
+    let o = eval(&["report", path.to_str().unwrap()]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let md = String::from_utf8(o.stdout).unwrap();
+    let table = md
+        .split("### Non-inferiority per arm")
+        .nth(1)
+        .and_then(|s| s.split("### ").next())
+        .unwrap();
+    assert!(
+        table.contains("| lines-v2 | 0 | 0 | 0 | 0 | n/a | n/a | n/a | n/a | no data |"),
+        "{table}"
+    );
+    assert!(table.contains("| table-csv | 10 | 0 |"), "{table}");
+    assert!(table.contains("not shown"), "{table}");
+    assert!(!table.contains("| drop-evidence |"), "{table}");
+    assert!(!table.contains("| baseline |"), "{table}");
+}
+
+#[test]
 fn estimate_prints_a_cost() {
     let m = manifest();
     let o = eval(&["estimate", "--manifest", m.to_str().unwrap()]);

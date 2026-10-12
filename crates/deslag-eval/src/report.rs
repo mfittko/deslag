@@ -45,16 +45,23 @@ impl Paired {
         self.unchanged += u32::from(arm["variant_unchanged"] == true);
     }
 
-    /// Both success rates, difference and lower bound in pp, verdict. A
-    /// `Paired` exists only after its first `add`, so `n > 0`.
+    /// Both success rates, difference and lower bound in pp, verdict. With
+    /// `n == 0` the difference and bound are `n/a` and the verdict is `no data`.
     fn cells(&self) -> Vec<String> {
         let (n, b, c) = (self.n, self.b, self.c);
         let pp = |x: f64| format!("{:+.1}", x * 100.0);
+        let (diff, low) = match n {
+            0 => ("n/a".to_string(), "n/a".to_string()),
+            _ => (
+                pp((f64::from(c) - f64::from(b)) / f64::from(n)),
+                pp(score::lower_bound(n, b, c)),
+            ),
+        };
         cells![
             rate(self.base_ok, n),
             rate(self.arm_ok, n),
-            pp((f64::from(c) - f64::from(b)) / f64::from(n)),
-            pp(score::lower_bound(n, b, c)),
+            diff,
+            low,
             score::verdict(n, b, c)
         ]
     }
@@ -158,6 +165,14 @@ pub fn render(text: &str) -> Result<String, String> {
         };
         for s in scopes {
             paired.entry((s, arm.clone())).or_default().add(b, r);
+        }
+    }
+    // An arm without non-control pairs still gets a per-arm row with verdict
+    // `no data`. drop-evidence is a control arm and gets no per-arm row.
+    for r in &rows {
+        let arm = r["arm"].as_str().unwrap_or("");
+        if arm != "baseline" && arm != "drop-evidence" {
+            paired.entry(("all".into(), arm.into())).or_default();
         }
     }
 

@@ -481,16 +481,18 @@ fn estimate(args: &[String]) -> Result<(), String> {
         return Err("estimate needs prices per Mtok >= 0 and --per-run-usd > 0".into());
     }
     let runs = pairs(&tasks);
-    let input: u64 = runs
-        .iter()
-        .map(|(t, a)| {
-            let payload = variant(a, t).unwrap_or_else(|| t.input.clone());
-            tokens(SYSTEM_PROMPT) + tokens(&user_prompt(&payload, &t.question)) + overhead
-        })
-        .sum();
+    let too_big = || "estimate needs token counts that fit in u64".to_string();
+    let input = runs.iter().try_fold(0u64, |sum, (t, a)| {
+        let payload = variant(a, t).unwrap_or_else(|| t.input.clone());
+        let run = tokens(SYSTEM_PROMPT) + tokens(&user_prompt(&payload, &t.question));
+        run.checked_add(overhead)
+            .and_then(|run| sum.checked_add(run))
+            .ok_or_else(too_big)
+    })?;
     let n = runs.len() as u64;
+    let output = n.checked_mul(out_tokens).ok_or_else(too_big)?;
     // Every input token is priced as a cache write (1.25x), the costliest input kind.
-    let cost = (input as f64 * in_price * 1.25 + (n * out_tokens) as f64 * out_price) / 1e6;
+    let cost = (input as f64 * in_price * 1.25 + output as f64 * out_price) / 1e6;
     let cap = n as f64 * per_run;
     println!(
         "| Field | Value |
