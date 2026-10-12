@@ -147,6 +147,9 @@ async fn proxy(minify: bool) -> (SocketAddr, mpsc::UnboundedReceiver<Seen>) {
         };
         upstream = upstream.with_json_minification(store);
     }
+    // No service lives here, so no test reports to a real state dir. SAFETY:
+    // only std reads the environment here, and std serializes that access.
+    unsafe { std::env::set_var("DESLAG_STATE_DIR", "/nonexistent/deslag-test") };
     tokio::spawn(serve(listener, upstream));
     let mut p = (addr, seen);
     if minify {

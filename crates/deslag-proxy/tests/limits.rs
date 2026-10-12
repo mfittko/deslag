@@ -200,6 +200,9 @@ async fn stalled_minify_uploads_release_permits_at_body_read_timeout() {
         });
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
+    // No service lives here, so no test reports to a real state dir. SAFETY:
+    // only std reads the environment here, and std serializes that access.
+    unsafe { std::env::set_var("DESLAG_STATE_DIR", "/nonexistent/deslag-test") };
     tokio::spawn(serve_with(listener, upstream, limits));
 
     // Taken before any permit is granted, so no stalled permit can time out

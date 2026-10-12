@@ -12,6 +12,7 @@ use std::time::SystemTime;
 use deslag_core::FIRST_SLICE_JSON_MINIFY_CONTEXT;
 use deslag_proxy::session::{self, Mode, Owner, Store};
 use deslag_proxy::{Upstream, serve};
+use deslag_telemetry as report;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
 
@@ -165,12 +166,11 @@ fn claude_hook(
     // Only Bash stdout and MCP text blocks are eligible. Every other tool, including
     // Read, stays byte-exact because Edit matches on Read output.
     let response = &event["tool_response"];
-    let updated = if tool_name == "Bash" {
-        minify_bash(response)
-    } else if tool_name.starts_with("mcp__") {
-        minify_mcp(response)
-    } else {
-        None
+    let tool = report::ToolCategory::from_tool_name(tool_name);
+    let updated = match tool {
+        report::ToolCategory::Bash => minify_bash(response, tool),
+        report::ToolCategory::Mcp => minify_mcp(response, tool),
+        report::ToolCategory::Other => None,
     };
     let Some(output) = updated.and_then(|updated| replacement(&event, updated)) else {
         return Ok(None);
@@ -189,26 +189,35 @@ fn claude_hook(
     }
 }
 
-fn minify(text: &str) -> Option<String> {
-    deslag_core::compress(text, &FIRST_SLICE_JSON_MINIFY_CONTEXT).into_changed()
+/// Compresses `text` and reports the result to a running local service, if any.
+fn minify(text: &str, tool: report::ToolCategory) -> Option<String> {
+    // ponytail: a hook process exits after one result, so a failed send is lost uncounted.
+    report::compress_reported(
+        text,
+        &FIRST_SLICE_JSON_MINIFY_CONTEXT,
+        report::live_socket().as_deref(),
+        report::Adapter::Hook,
+        tool,
+    )
+    .into_changed()
 }
 
 /// Bash: only `stdout`, and never for image results.
-fn minify_bash(response: &Value) -> Option<Value> {
+fn minify_bash(response: &Value, tool: report::ToolCategory) -> Option<Value> {
     if response["isImage"] == true {
         return None;
     }
     let mut updated = response.clone();
-    updated["stdout"] = minify(response.get("stdout")?.as_str()?)?.into();
+    updated["stdout"] = minify(response.get("stdout")?.as_str()?, tool)?.into();
     Some(updated)
 }
 
 /// MCP: only the `text` of `"type": "text"` blocks in a content-block array.
-fn minify_mcp(response: &Value) -> Option<Value> {
+fn minify_mcp(response: &Value, tool: report::ToolCategory) -> Option<Value> {
     let mut updated = response.as_array()?.clone();
     let mut changed = false;
     for block in updated.iter_mut().filter(|block| block["type"] == "text") {
-        if let Some(minified) = block["text"].as_str().and_then(minify) {
+        if let Some(minified) = block["text"].as_str().and_then(|text| minify(text, tool)) {
             block["text"] = minified.into();
             changed = true;
         }

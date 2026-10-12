@@ -24,12 +24,14 @@
 use std::{
     collections::HashSet,
     fmt,
+    path::Path,
     pin::Pin,
     task::{Context, Poll},
 };
 
 use bytes::Bytes;
 use deslag_core::{FIRST_SLICE_JSON_MINIFY_CONTEXT, compress};
+use deslag_telemetry as local;
 use http_body_util::BodyExt;
 use hyper::{
     HeaderMap, Method, Request, StatusCode,
@@ -191,7 +193,7 @@ pub(crate) async fn prepare(
         let store = store.clone();
         let (back, result) = tokio::task::spawn_blocking(move || {
             let _permit = permit;
-            let result = rewrite(&buf, &store, &scope);
+            let result = rewrite(&buf, &store, &scope, local::live_socket().as_deref());
             (buf, result)
         })
         .await
@@ -292,8 +294,15 @@ fn reject(e: ReplayError) -> Reject {
 }
 
 /// Replays the session's decisions on the tool results and splices json-minify
-/// output where they encode. `Ok(None)` forwards the body unchanged.
-fn rewrite(body: &[u8], store: &Store, scope: &str) -> Result<Option<Vec<u8>>, ReplayError> {
+/// output where they encode. `Ok(None)` forwards the body unchanged. With
+/// `socket`, every spliced block is reported there. History resends repeat
+/// blocks, so the proxy counts submissions, not unique results.
+fn rewrite(
+    body: &[u8],
+    store: &Store,
+    scope: &str,
+    socket: Option<&Path>,
+) -> Result<Option<Vec<u8>>, ReplayError> {
     let Some((model, bash_ids, results)) = tool_results(body) else {
         return Ok(None);
     };
@@ -315,7 +324,7 @@ fn rewrite(body: &[u8], store: &Store, scope: &str) -> Result<Option<Vec<u8>>, R
         .zip(encode)
         .filter(|(_, encode)| *encode)
         .flat_map(|((_, _, _, targets), _)| targets.iter().copied());
-    Ok(splice(body, targets))
+    Ok(splice(body, targets, socket))
 }
 
 fn minify(text: &str) -> Option<String> {
@@ -401,12 +410,25 @@ fn tool_results(body: &[u8]) -> Option<ToolResults<'_>> {
 }
 
 /// Replaces each string target that json-minify changes. `None` when nothing changed.
-fn splice<'a>(body: &[u8], targets: impl Iterator<Item = &'a RawValue>) -> Option<Vec<u8>> {
+fn splice<'a>(
+    body: &[u8],
+    targets: impl Iterator<Item = &'a RawValue>,
+    socket: Option<&Path>,
+) -> Option<Vec<u8>> {
     // Targets are in document order, so spans are increasing and disjoint.
     let mut out = Vec::with_capacity(body.len());
     let mut pos = 0;
     for raw in targets {
-        let Some(minified) = parse::<String>(raw).and_then(|s| minify(&s)) else {
+        let Some(minified) = parse::<String>(raw).and_then(|s| {
+            local::compress_reported(
+                &s,
+                &FIRST_SLICE_JSON_MINIFY_CONTEXT,
+                socket,
+                local::Adapter::Proxy,
+                local::ToolCategory::Bash,
+            )
+            .into_changed()
+        }) else {
             continue;
         };
         let start = (raw.get().as_ptr() as usize).checked_sub(body.as_ptr() as usize)?;
@@ -477,7 +499,9 @@ mod tests {
     use http_body_util::BodyExt;
     use hyper::HeaderMap;
 
-    use super::{ReqBody, rewrite};
+    use serde_json::value::RawValue;
+
+    use super::{ReqBody, rewrite, splice};
     use crate::session::{Mode, Store};
 
     #[tokio::test]
@@ -507,7 +531,32 @@ mod tests {
                 dir: std::env::temp_dir().join("deslag-no-such-state-dir"),
                 mode: Mode::Safe,
             };
-            assert!(matches!(rewrite(body, &store, "s"), Ok(None)));
+            assert!(matches!(rewrite(body, &store, "s", None), Ok(None)));
         }
+    }
+
+    #[test]
+    fn splice_output_does_not_depend_on_the_service() {
+        use std::os::unix::net::UnixDatagram;
+        let body = br#""[ 1 ]""#;
+        let target = || std::iter::once(serde_json::from_slice::<&RawValue>(body).unwrap());
+        let plain = splice(body, target(), None).expect("minified");
+        let dir = std::path::PathBuf::from(format!("/tmp/dsl-proxy-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("s.sock");
+        // A stale socket file: the service is gone.
+        drop(UnixDatagram::bind(&path).unwrap());
+        assert_eq!(splice(body, target(), Some(&path)).as_ref(), Some(&plain));
+        std::fs::remove_file(&path).unwrap();
+        let receiver = UnixDatagram::bind(&path).unwrap();
+        assert_eq!(splice(body, target(), Some(&path)).as_ref(), Some(&plain));
+        let mut buf = [0; 1024];
+        receiver.set_nonblocking(true).unwrap();
+        let n = receiver.recv(&mut buf).unwrap();
+        let report: serde_json::Value = serde_json::from_slice(&buf[..n]).unwrap();
+        assert_eq!(report["adapter"], "proxy");
+        assert_eq!(report["outcome"], "changed");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

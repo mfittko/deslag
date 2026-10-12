@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 deslag-core = { path = "../deslag-core" }
 deslag-proxy = { path = "../deslag-proxy" }
+deslag-telemetry = { path = "../deslag-telemetry" }
 # The runtime is built only for `deslag proxy`. Exact pin, matching deslag-proxy.
 tokio = { version = "=1.53.2", features = ["rt-multi-thread", "net"] }
 # arbitrary_precision keeps untouched numbers in tool_response byte-exact on re-emit.
