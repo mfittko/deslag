@@ -1,11 +1,18 @@
 use std::io::Write;
+use std::os::unix::net::UnixDatagram;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+use std::time::{Duration, Instant};
 
 fn run(args: &[&str], stdin: &[u8]) -> Output {
+    // No service lives here, so no test reports to a real state dir.
+    run_in(Path::new("/nonexistent/deslag-test"), args, stdin)
+}
+
+fn run_in(state_dir: &Path, args: &[&str], stdin: &[u8]) -> Output {
     let mut child = Command::new(env!("CARGO_BIN_EXE_deslag"))
         .args(args)
-        // No service lives here, so no test reports to a real state dir.
-        .env("DESLAG_STATE_DIR", "/nonexistent/deslag-test")
+        .env("DESLAG_STATE_DIR", state_dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -130,4 +137,61 @@ fn without_flag_pretty_json_is_untouched() {
     let output = run(&["hook", "claude"], &fixture("posttooluse-bash-json.json"));
     assert_eq!(output.status.code(), Some(0));
     assert!(output.stdout.is_empty());
+}
+
+/// A fresh short directory under /tmp, removed on drop: macOS caps socket
+/// paths at 104 bytes.
+struct TempDir(PathBuf);
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn temp_dir(name: &str) -> TempDir {
+    let dir = PathBuf::from(format!("/tmp/dsl-hook-{}-{name}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    TempDir(dir)
+}
+
+#[test]
+fn live_service_gets_a_hook_report_and_output_is_unchanged() {
+    let input = fixture("posttooluse-bash-json.json");
+    let args = ["hook", "claude", "--minify-json"];
+    let baseline = run(&args, &input);
+    let dir = temp_dir("live");
+    let service = UnixDatagram::bind(dir.0.join("local.sock")).unwrap();
+    service
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+
+    let output = run_in(&dir.0, &args, &input);
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+    assert_eq!(output.stdout, baseline.stdout);
+
+    let mut buf = [0; 1024];
+    let n = service.recv(&mut buf).expect("hook sends a report");
+    let report = json(&buf[..n]);
+    assert_eq!(report["adapter"], "hook");
+    assert_eq!(report["tool"], "bash");
+}
+
+#[test]
+fn stale_socket_does_not_change_output_or_block() {
+    let input = fixture("posttooluse-bash-json.json");
+    let args = ["hook", "claude", "--minify-json"];
+    let baseline = run(&args, &input);
+    let dir = temp_dir("stale");
+    // Bind and drop: the socket file stays with no listener behind it.
+    drop(UnixDatagram::bind(dir.0.join("local.sock")).unwrap());
+
+    let start = Instant::now();
+    let output = run_in(&dir.0, &args, &input);
+    assert!(start.elapsed() < Duration::from_secs(5));
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+    assert_eq!(output.stdout, baseline.stdout);
 }

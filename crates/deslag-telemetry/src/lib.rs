@@ -7,11 +7,7 @@
 //! IDs, paths, raw tool names or request IDs.
 
 use std::{
-    fs, io,
-    os::unix::{
-        fs::{DirBuilderExt, PermissionsExt},
-        net::UnixDatagram,
-    },
+    os::unix::net::UnixDatagram,
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -25,8 +21,6 @@ use serde_json::json;
 pub const MAX_MESSAGE_BYTES: usize = 512;
 /// Service socket file name inside [`state_dir`].
 pub const SOCKET_FILE: &str = "local.sock";
-/// Aggregate store file name inside [`state_dir`].
-pub const STATS_FILE: &str = "stats.jsonl";
 
 /// `$DESLAG_STATE_DIR`, else `$XDG_STATE_HOME/deslag`, else
 /// `$HOME/.local/state/deslag`. Empty or relative values are ignored, as the
@@ -40,20 +34,6 @@ pub fn state_dir() -> Option<PathBuf> {
     var("DESLAG_STATE_DIR")
         .or_else(|| var("XDG_STATE_HOME").map(|d| d.join("deslag")))
         .or_else(|| var("HOME").map(|d| d.join(".local/state/deslag")))
-}
-
-/// Creates [`state_dir`] with mode 0700. An existing directory gets mode 0700
-/// again; a symlink at that path is followed but its target keeps its mode.
-pub fn ensure_state_dir() -> io::Result<PathBuf> {
-    let dir = state_dir().ok_or_else(|| io::Error::other("no state directory: set HOME"))?;
-    fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(&dir)?;
-    if fs::symlink_metadata(&dir)?.is_dir() {
-        fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))?;
-    }
-    Ok(dir)
 }
 
 /// The service socket path when the socket file exists. One `stat`, so adapters
