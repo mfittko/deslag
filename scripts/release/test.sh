@@ -37,7 +37,7 @@ expect_eq() {
 
 new_repo() {
   local dir=$tmp/$1
-  mkdir -p "$dir/crates/a/src" "$dir/plugins/claude/.claude-plugin" "$dir/changes"
+  mkdir -p "$dir/crates/a/src" "$dir/fuzz/src" "$dir/plugins/claude/.claude-plugin" "$dir/changes"
   cat >"$dir/Cargo.toml" <<'EOF'
 [workspace]
 resolver = "2"
@@ -49,16 +49,30 @@ edition = "2021"
 EOF
   cat >"$dir/crates/a/Cargo.toml" <<'EOF'
 [package]
-name = "a"
+name = "deslag-core"
 version.workspace = true
 edition.workspace = true
 EOF
   : >"$dir/crates/a/src/lib.rs"
+  # The fuzz crate is its own workspace with its own lock file.
+  cat >"$dir/fuzz/Cargo.toml" <<'EOF'
+[package]
+name = "fuzz"
+version = "0.0.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+deslag-core = { path = "../crates/a" }
+EOF
+  : >"$dir/fuzz/src/lib.rs"
   printf '{\n  "name": "deslag",\n  "version": "0.1.0"\n}\n' >"$dir/plugins/claude/.claude-plugin/plugin.json"
   printf '# Changelog\n\n## Unreleased\n\n## 0.0.1 - 2020-01-01\n\n- First.\n' >"$dir/CHANGELOG.md"
   echo "# Fragments" >"$dir/changes/README.md"
   echo "# readme" >"$dir/README.md"
-  (cd "$dir" && git init -q -b main && cargo generate-lockfile --offline -q && git add -A && git commit -qm base)
+  (cd "$dir" && git init -q -b main && cargo generate-lockfile --offline -q &&
+    cargo generate-lockfile --offline -q --manifest-path fuzz/Cargo.toml && git add -A && git commit -qm base)
   echo "$dir"
 }
 
@@ -70,9 +84,23 @@ expect_ok "check-versions accepts a matching bare version" "$r" "$here/check-ver
 expect_fail "check-versions rejects a tag that differs" "does not match" "$r" "$here/check-versions.sh" v0.2.0
 printf '{\n  "version": "0.1.1"\n}\n' >"$r/plugins/claude/.claude-plugin/plugin.json"
 expect_fail "check-versions rejects mismatched surfaces" "differ" "$r" "$here/check-versions.sh"
+printf '{\n  "version": "0.1.0"\n}\n' >"$r/plugins/claude/.claude-plugin/plugin.json"
+# set_fuzz_lock <version>: pin deslag-core in fuzz/Cargo.lock to <version>.
+set_fuzz_lock() {
+  awk -v v="$1" 'core && /^version = / { $0 = "version = \"" v "\""; core = 0 } $0 == "name = \"deslag-core\"" { core = 1 } { print }' \
+    "$r/fuzz/Cargo.lock" >"$r/fuzz/Cargo.lock.new" && command mv -f "$r/fuzz/Cargo.lock.new" "$r/fuzz/Cargo.lock"
+}
+set_fuzz_lock 0.0.9
+expect_fail "check-versions rejects a fuzz/Cargo.lock that pins another deslag-core" "fuzz/Cargo.lock pins deslag-core 0.0.9" "$r" "$here/check-versions.sh"
+set_fuzz_lock 0.1.0
+expect_ok "check-versions accepts a matching fuzz/Cargo.lock" "$r" "$here/check-versions.sh"
+command mv -f "$r/fuzz/Cargo.lock" "$r/fuzz/Cargo.lock.bak"
+expect_fail "check-versions fails without fuzz/Cargo.lock" "fuzz/Cargo.lock is missing" "$r" "$here/check-versions.sh"
+command mv -f "$r/fuzz/Cargo.lock.bak" "$r/fuzz/Cargo.lock"
 set_version() {
   sed "s/^version = .*/version = \"$1\"/" "$r/Cargo.toml" >"$r/Cargo.toml.new" && command mv -f "$r/Cargo.toml.new" "$r/Cargo.toml"
   printf '{\n  "version": "%s"\n}\n' "$1" >"$r/plugins/claude/.claude-plugin/plugin.json"
+  set_fuzz_lock "$1"
 }
 for v in 0.1.0-alpha.1 1.0.0-rc.1 1.0.0; do
   set_version "$v"
@@ -197,6 +225,7 @@ day_before=$(date -u +%Y-%m-%d)
 expect_ok "bump succeeds with fragments" "$r" "$here/bump.sh" 0.2.0-alpha.1
 expect_eq "bump sets both version surfaces" "0.2.0-alpha.1" "$(cd "$r" && "$here/check-versions.sh")"
 expect_eq "bump refreshes Cargo.lock" "1" "$(grep -c '^version = "0.2.0-alpha.1"' "$r/Cargo.lock")"
+expect_eq "bump refreshes fuzz/Cargo.lock" "1" "$(grep -c '^version = "0.2.0-alpha.1"' "$r/fuzz/Cargo.lock")"
 today=$(date -u +%Y-%m-%d)
 ! grep -qxF "## 0.2.0-alpha.1 - $day_before" "$r/CHANGELOG.md" || today=$day_before
 expected="# Changelog
@@ -227,7 +256,7 @@ Intro.
 ."
 expect_eq "bump assembles fragments and stamps the changelog" "$expected" "$(cat "$r/CHANGELOG.md"; echo .)"
 expect_eq "bump stages exactly the release files" \
-  "CHANGELOG.md Cargo.lock Cargo.toml changes/feature.md changes/tweak.md changes/zfix.md plugins/claude/.claude-plugin/plugin.json" \
+  "CHANGELOG.md Cargo.lock Cargo.toml changes/feature.md changes/tweak.md changes/zfix.md fuzz/Cargo.lock plugins/claude/.claude-plugin/plugin.json" \
   "$(git -C "$r" diff --cached --name-only | sort | tr '\n' ' ' | sed 's/ $//')"
 expect_eq "bump leaves no unstaged changes" "" "$(git -C "$r" diff --name-only)"
 expect_eq "bump keeps changes/README.md" "# Fragments" "$(cat "$r/changes/README.md")"
@@ -263,6 +292,17 @@ printf '#!/bin/sh\necho "cargo: simulated failure" >&2\nexit 101\n' >"$tmp/fakec
 chmod +x "$tmp/fakecargo/cargo"
 expect_fail "bump fails when cargo update fails" "simulated failure" "$r" env PATH="$tmp/fakecargo:$PATH" "$here/bump.sh" 0.2.0
 expect_eq "bump restores every file when cargo update fails" "" "$(git -C "$r" status --porcelain)"
+# The root lock update succeeds, then the fuzz lock update fails.
+mkdir -p "$tmp/fakecargo-fuzz"
+cat >"$tmp/fakecargo-fuzz/cargo" <<EOF
+#!/bin/sh
+case " \$* " in *" fuzz/Cargo.toml "*) echo "cargo: simulated fuzz failure" >&2; exit 101 ;; esac
+exec "$(command -v cargo)" "\$@"
+EOF
+chmod +x "$tmp/fakecargo-fuzz/cargo"
+expect_fail "bump fails when the fuzz lock update fails" "simulated fuzz failure" "$r" env PATH="$tmp/fakecargo-fuzz:$PATH" "$here/bump.sh" 0.2.0
+expect_eq "bump restores both lock files when the fuzz lock update fails" "" "$(git -C "$r" status --porcelain)"
+expect_fail "bump names the fuzz fetch prerequisite when the fuzz lock update fails" "cargo fetch --manifest-path fuzz/Cargo.toml" "$r" env PATH="$tmp/fakecargo-fuzz:$PATH" "$here/bump.sh" 0.2.0
 
 # --- extract-notes.sh --------------------------------------------------------
 r=$tmp/notes; mkdir -p "$r"
@@ -367,6 +407,96 @@ FAKE_VIEW_ERR='error connecting to api.github.com' expect_fail "release-state fa
 expect_eq "release-state skips a complete release" skip "$(FAKE_VIEW_ASSETS=$'a.tar.gz\nb.tar.gz\nSHA256SUMS\n' state 2>/dev/null)"
 expect_eq "release-state uploads into an empty release" upload "$(FAKE_VIEW_ASSETS='' state 2>/dev/null)"
 FAKE_VIEW_ASSETS=$'a.tar.gz\n' expect_fail "release-state fails on a partial release" "partial \(missing: b.tar.gz SHA256SUMS\)" "$tmp" state
+
+# --- publish.sh --------------------------------------------------------------
+# A stateful fake `gh release`: release <tag> is the directory
+# $FAKE_RELEASES/<tag>, and its assets are the files in it. create and upload
+# refuse an existing asset name, like gh without --clobber, and check every
+# name before they copy any file. Every call is appended to $FAKE_GH_LOG.
+mkdir -p "$tmp/pubbin"
+cat >"$tmp/pubbin/gh" <<'EOF'
+#!/usr/bin/env bash
+echo "$*" >>"$FAKE_GH_LOG"
+sub=$2 rel=$FAKE_RELEASES/$3; shift 3
+assets=()
+for a; do case $a in -*) break ;; *) assets+=("$a") ;; esac; done
+case $sub in
+  view)
+    [ -z "${FAKE_VIEW_ERR:-}" ] || { echo "$FAKE_VIEW_ERR" >&2; exit 1; }
+    [ -d "$rel" ] || { echo "release not found" >&2; exit 1; }
+    ls "$rel" ;;
+  create|upload)
+    [ -z "${FAKE_WRITE_ERR:-}" ] || { echo "$FAKE_WRITE_ERR" >&2; exit 1; }
+    if [ "$sub" = create ] && [ -d "$rel" ]; then echo "release already exists" >&2; exit 1; fi
+    if [ "$sub" = upload ] && [ ! -d "$rel" ]; then echo "release not found" >&2; exit 1; fi
+    for a in "${assets[@]}"; do
+      [ ! -e "$rel/${a##*/}" ] || { echo "asset under the same name already exists: ${a##*/}" >&2; exit 1; }
+    done
+    mkdir -p "$rel" && cp "${assets[@]}" "$rel/" ;;
+  *) echo "fake gh: unexpected release $sub" >&2; exit 2 ;;
+esac
+EOF
+chmod +x "$tmp/pubbin/gh"
+r=$tmp/publish; mkdir -p "$r/dist"
+for f in a.tar.gz b.tar.gz SHA256SUMS; do echo "built $f" >"$r/dist/$f"; done
+echo "Notes." >"$r/release-notes.md"
+export FAKE_RELEASES=$tmp/releases FAKE_GH_LOG=$tmp/gh.log
+mkdir -p "$FAKE_RELEASES"
+# run_release <version>: the publish job, release-state.sh then publish.sh,
+# both given the one asset list.
+run_release() {
+  local action assets=(dist/*.tar.gz dist/SHA256SUMS)
+  action=$(PATH="$tmp/pubbin:$PATH" "$here/release-state.sh" "v$1" "${assets[@]}")
+  PATH="$tmp/pubbin:$PATH" "$here/publish.sh" "$1" "$action" "${assets[@]}"
+}
+assets_of() { (cd "$FAKE_RELEASES/$1" && echo *); }
+snapshot() { (cd "$FAKE_RELEASES" && find . -type f -exec cksum {} + | sort); }
+writes() { grep -cE '^release (create|upload)' "$FAKE_GH_LOG" || true; }
+
+: >"$FAKE_GH_LOG"
+expect_ok "publish creates a missing release" "$r" run_release 1.0.0-rc.1
+expect_eq "publish creates the release with every asset" "SHA256SUMS a.tar.gz b.tar.gz" "$(assets_of v1.0.0-rc.1)"
+expect_eq "publish creates a prerelease with the notes" \
+  "release create v1.0.0-rc.1 dist/a.tar.gz dist/b.tar.gz dist/SHA256SUMS --verify-tag --title v1.0.0-rc.1 --notes-file release-notes.md --prerelease" \
+  "$(grep '^release create' "$FAKE_GH_LOG")"
+: >"$FAKE_GH_LOG"
+expect_ok "publish creates a stable release" "$r" run_release 1.0.0
+expect_eq "publish does not mark a stable release as a prerelease" \
+  "release create v1.0.0 dist/a.tar.gz dist/b.tar.gz dist/SHA256SUMS --verify-tag --title v1.0.0 --notes-file release-notes.md" \
+  "$(grep '^release create' "$FAKE_GH_LOG")"
+
+: >"$FAKE_GH_LOG"; before=$(snapshot)
+expect_ok "publish re-run on a complete release succeeds" "$r" run_release 1.0.0
+expect_eq "publish re-run on a complete release calls no write" 0 "$(writes)"
+expect_eq "publish re-run on a complete release changes nothing" "$before" "$(snapshot)"
+
+mkdir "$FAKE_RELEASES/v2.0.0"; : >"$FAKE_GH_LOG"
+expect_ok "publish re-run on an empty release succeeds" "$r" run_release 2.0.0
+expect_eq "publish re-run on an empty release uploads every asset" "SHA256SUMS a.tar.gz b.tar.gz" "$(assets_of v2.0.0)"
+expect_eq "publish re-run on an empty release only uploads" \
+  "release upload v2.0.0 dist/a.tar.gz dist/b.tar.gz dist/SHA256SUMS" "$(grep -E '^release (create|upload)' "$FAKE_GH_LOG")"
+
+mkdir "$FAKE_RELEASES/v3.0.0"; echo "published a.tar.gz" >"$FAKE_RELEASES/v3.0.0/a.tar.gz"
+: >"$FAKE_GH_LOG"; before=$(snapshot)
+expect_fail "publish re-run on a partial release fails" "partial \(missing: b.tar.gz SHA256SUMS\)" "$r" run_release 3.0.0
+expect_eq "publish re-run on a partial release calls no write" 0 "$(writes)"
+expect_eq "publish re-run on a partial release keeps the published asset" "$before" "$(snapshot)"
+: >"$FAKE_GH_LOG"
+expect_fail "publish upload never replaces an asset" "already exists: a.tar.gz" "$r" env PATH="$tmp/pubbin:$PATH" "$here/publish.sh" 3.0.0 upload dist/a.tar.gz dist/b.tar.gz dist/SHA256SUMS
+expect_eq "publish upload keeps the published asset" "$before" "$(snapshot)"
+
+: >"$FAKE_GH_LOG"; before=$(snapshot)
+FAKE_VIEW_ERR='HTTP 502: Bad Gateway' expect_fail "publish fails on an unexpected gh lookup error" "could not look up" "$r" run_release 4.0.0
+expect_eq "publish calls no write after a gh lookup error" 0 "$(writes)"
+expect_eq "publish creates no release after a gh lookup error" "$before" "$(snapshot)"
+FAKE_WRITE_ERR='HTTP 500: Internal Server Error' expect_fail "publish fails when gh release create fails" "HTTP 500" "$r" run_release 4.0.0
+expect_eq "publish leaves no release after a failed create" "$before" "$(snapshot)"
+: >"$FAKE_GH_LOG"
+expect_fail "publish rejects an unknown action" "unknown action" "$r" env PATH="$tmp/pubbin:$PATH" "$here/publish.sh" 4.0.0 replace dist/a.tar.gz
+expect_eq "publish calls no gh on an unknown action" "" "$(cat "$FAKE_GH_LOG")"
+expect_fail "publish fails without assets" "no assets given" "$r" env PATH="$tmp/pubbin:$PATH" "$here/publish.sh" 4.0.0 create
+expect_fail "publish fails without archives" "asset not found: dist/\*.tar.gz" "$tmp" env PATH="$tmp/pubbin:$PATH" "$here/publish.sh" 4.0.0 create "dist/*.tar.gz" dist/SHA256SUMS
+expect_eq "publish calls no gh without archives" "" "$(cat "$FAKE_GH_LOG")"
 
 if [ "$failures" -ne 0 ]; then echo "$failures test(s) failed" >&2; exit 1; fi
 echo "all release script tests passed"
