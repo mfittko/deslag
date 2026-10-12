@@ -223,6 +223,56 @@ fn a_decision_that_is_not_an_object_is_corrupt() {
 }
 
 #[test]
+fn decision_digest_forms_are_validated() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let c = [candidate("toolu_1", "x")];
+    store.replay("s", "m", &c, |_| true).unwrap();
+    let base = manifest(&dir, "s");
+    let other = "0".repeat(64);
+    for (digest, mismatch) in [
+        (None, false),
+        (Some(json!(null)), false),
+        (Some(json!(123)), false),
+        (Some(json!(other)), true),
+    ] {
+        let mut m = base.clone();
+        let mut decision = json!({"unchanged": true});
+        if let Some(d) = &digest {
+            decision["digest"] = d.clone();
+        }
+        m["decisions"]["toolu_1"] = decision;
+        fs::write(manifest_path(&dir, "s"), m.to_string()).unwrap();
+        let got = store.replay("s", "m", &c, |_| unreachable!());
+        let ok = match &got {
+            Err(ReplayError::DigestMismatch(id)) => mismatch && id == "toolu_1",
+            Err(ReplayError::CorruptDecision(id)) => !mismatch && id == "toolu_1",
+            _ => false,
+        };
+        assert!(ok, "{digest:?}: {got:?}");
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn a_corrupt_manifest_is_never_overwritten_without_tool_results() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    let path = manifest_path(&dir, "s");
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let mut v2 = manifest(&dir, "s");
+    v2["version"] = json!(2);
+    for bytes in [b"{ not json".to_vec(), v2.to_string().into_bytes()] {
+        fs::write(&path, &bytes).unwrap();
+        let got = store.replay("s", "m", &[], |_| unreachable!());
+        assert!(matches!(&got, Ok(v) if v.is_empty()), "{got:?}");
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn pinned_decision_forms_are_validated() {
     let dir = temp_dir();
     let store = store(&dir);

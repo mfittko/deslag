@@ -232,7 +232,9 @@ impl Store {
         for c in candidates {
             let source = text_digest(&c.texts);
             let pinned = match decisions.get(c.id) {
-                Some(d) if !d.is_object() => {
+                // A non-object decision or one without a string digest is
+                // invalid state, never a changed result.
+                Some(d) if !d.is_object() || !d["digest"].is_string() => {
                     return Err(ReplayError::CorruptDecision(c.id.into()));
                 }
                 Some(d) if d["digest"] != source.as_str() => {
