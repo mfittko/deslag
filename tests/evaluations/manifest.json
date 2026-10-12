@@ -19,6 +19,15 @@
       "arms": ["json-minify"]
     },
     {
+      "id": "api-search-email",
+      "category": "api_query",
+      "input": "inputs/api_query_search.json",
+      "question": "In the search results, what is the email address of the user with login tvoss?",
+      "answers": ["t.voss@example.test"],
+      "rule": "exact_ci",
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
+    },
+    {
       "id": "code-defines-fn",
       "category": "code_search",
       "input": "inputs/code_search_matches.json",
