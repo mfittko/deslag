@@ -137,7 +137,7 @@ fn claude_hook(mut input: impl Read, minify_json: bool) -> Result<Option<Value>,
         .get("stdout")
         .and_then(Value::as_str)
         .and_then(|s| {
-            // A hook process exits after one result, so a failed send is lost uncounted.
+            // ponytail: a hook process exits after one result, so a failed send is lost uncounted.
             report::compress_reported(
                 s,
                 &FIRST_SLICE_JSON_MINIFY_CONTEXT,
