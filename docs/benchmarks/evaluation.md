@@ -12,7 +12,7 @@ No live model results exist yet. This file holds the pending live run, a two-cal
 | Mock dry run | below, plumbing evidence only |
 | Corpus size per arm | 4 to 11 non-control pairs; the criterion needs at least 81, so every verdict is `not shown` by construction |
 | table-v1 CSV vs Markdown-KV | no model comparison yet; CSV cannot become a default before one exists |
-| Generated | 2026-10-12T00:29:22Z, commit d600cb1b15208199b48c1c1366e85345ea0c0e15 |
+| Generated | 2026-10-12T00:59:28Z, commit 87b78e3d6e3eb67654ab7aa0624e346d003a12cb |
 
 ## Pending live runs
 
@@ -116,7 +116,7 @@ Non-control tasks. Agresti-Min lower one-sided 95% bound; an arm passes when the
 
 ### Table format read-back
 
-Non-control tasks that ran both table arms in the same seed. Control tasks are excluded.
+Non-control tasks that ran both table arms. Control tasks are excluded.
 
 | Format | Arm | Runs | Success | Wrong | Abstain | Backend error |
 | --- | --- | --- | --- | --- | --- | --- |
