@@ -316,6 +316,10 @@ fn bench_concurrency(label: &str, threads: usize, exec: &BoundedExecutor, input:
     for w in workers {
         w.join().unwrap();
     }
+    // Expired jobs may still hold permits; the next row must start from an idle executor.
+    while exec.in_flight() != 0 {
+        std::thread::yield_now();
+    }
     let wall = start.elapsed();
     let total = (threads * CALLS_PER_THREAD) as f64;
     let rate = |n: &AtomicUsize| n.load(Relaxed) as f64 / total * 100.0;
@@ -334,11 +338,11 @@ fn main() {
     println!("### deslag-core stages (concurrency 1, warmup {WARMUP})\n");
     println!(
         "Corpus `{CORPUS_VERSION}`. Tokenizer: method `estimate`, `{}`. Samples per row: 64 MiB divided by the input size, clamped to 100..=2000. \
-         Allocations, bytes and peak heap come from one call after warmup.\n",
+         Allocations, bytes and peak heap come from one call after warmup. A growing realloc counts as one allocation of the added bytes.\n",
         EstimateCounter::TOKENIZER
     );
     println!(
-        "| stage | input | bytes | output bytes | samples | p50 | p95 | p99 | MiB/s at p50 | allocs/call | alloc bytes/call | peak heap bytes/call |"
+        "| stage | input | bytes | output (bytes; tokens for token estimate) | samples | p50 | p95 | p99 | MiB/s at p50 | allocs/call | alloc bytes/call | peak heap bytes/call |"
     );
     println!("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
     for stage in &STAGES {
