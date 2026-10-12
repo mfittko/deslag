@@ -10,7 +10,14 @@ fuzz_target!(|data: &[u8]| {
     let Ok(input) = std::str::from_utf8(data) else {
         return;
     };
-    let Ok(text) = encode(input, &TableOptions::default()) else {
+    let Ok(text) = encode(
+        input,
+        &TableOptions {
+            min_savings_permille: 0,
+            min_token_savings: 0,
+            ..Default::default()
+        },
+    ) else {
         return;
     };
     let minified = compress(input, &FIRST_SLICE_JSON_MINIFY_CONTEXT);
