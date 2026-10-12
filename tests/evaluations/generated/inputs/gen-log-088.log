@@ -1,0 +1,36 @@
+test billing::invoice::keen_koala ... ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+test billing::ledger::gentle_cedar ... ok
+test auth::session::eager_dingo ... ok
+test auth::token::hazy_lemur ... ok
+test search::index::dusty_iguana ... ok
+test search::query::dusty_lemur ... ok
+test billing::invoice::jolly_iguana ... ok
+test billing::ledger::eager_iguana ... ok
+test auth::session::gentle_dingo ... ok
+test auth::token::eager_lemur ... ok
+test search::index::eager_gecko ... ok
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+test search::query::brisk_badger ... ok
+test billing::invoice::jolly_heron ... ok
+test billing::ledger::dusty_egret ... ok
+test auth::session::eager_egret ... ok
+test auth::token::eager_falcon ... ok
+test search::index::fuzzy_falcon ... ok
+test search::index::keen_hero7 ... ok
+test billing::invoice::hazy_koala ... ok
+test search::index::keen_heron ... FAILED
+test auth::session::fuzzy_heron ... ok
+failures:
+    search::index::keen_heron
+test result: FAILED. 20 passed; 1 failed

@@ -1,0 +1,28 @@
+test auth::session::dusty_hero7 ... ok
+test billing::ledger::fuzzy_cedar ... ok
+test auth::session::brisk_falcon ... ok
+test auth::token::ivory_marmot ... ok
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+test search::index::lunar_gecko ... ok
+test search::query::gentle_heron ... ok
+test billing::invoice::fuzzy_marmot ... ok
+test billing::ledger::eager_lemur ... ok
+test auth::session::dusty_heron ... FAILED
+test auth::token::brisk_cedar ... ok
+test search::index::gentle_cedar ... ok
+test search::query::jolly_dingo ... ok
+failures:
+    auth::session::dusty_heron
+test result: FAILED. 11 passed; 1 failed

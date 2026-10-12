@@ -1,0 +1,35 @@
+2026-09-30T10:00:00Z INFO request_id=req-0fd947 status=404 upstream=alpha-team
+2026-09-30T10:00:07Z INFO request_id=req-24c606 status=201 upstream=beta-team
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+2026-09-30T10:00:14Z INFO request_id=req-df65a3 status=201 upstream=core-team
+2026-09-30T10:00:21Z INFO request_id=req-3966ad status=503 upstream=data-team
+2026-09-30T10:00:28Z INFO request_id=req-d8680d status=500 upstream=edge-team
+2026-09-30T10:00:35Z INFO request_id=req-3966a7 status=200 upstream=infra-team
+2026-09-30T10:00:42Z INFO request_id=req-53534d status=500 upstream=alpha-team
+2026-09-30T10:00:49Z INFO request_id=req-90ff83 status=500 upstream=beta-team
+2026-09-30T10:00:56Z INFO request_id=req-e53d21 status=200 upstream=core-team
+2026-09-30T10:01:03Z INFO request_id=req-dfa2d6 status=201 upstream=data-team
+2026-09-30T10:01:10Z INFO request_id=req-406f48 status=200 upstream=edge-team
+2026-09-30T10:01:17Z INFO request_id=req-164c19 status=201 upstream=infra-team
+2026-09-30T10:01:24Z INFO request_id=req-730685 status=200 upstream=alpha-team
+2026-09-30T10:01:31Z INFO request_id=req-e3fbf2 status=201 upstream=beta-team
+2026-09-30T10:01:38Z INFO request_id=req-2983fb status=200 upstream=core-team
+2026-09-30T10:01:45Z INFO request_id=req-cce938 status=500 upstream=data-team
+2026-09-30T10:01:52Z INFO request_id=req-2fe738 status=201 upstream=edge-team
+2026-09-30T10:01:59Z INFO request_id=req-b9426a status=500 upstream=infra-team
+2026-09-30T10:02:06Z INFO request_id=req-b460e1 status=200 upstream=alpha-team
+2026-09-30T10:02:13Z INFO request_id=req-07a5bf status=200 upstream=beta-team

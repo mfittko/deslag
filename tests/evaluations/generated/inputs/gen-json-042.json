@@ -1,0 +1,62 @@
+[
+  {
+    "user_id": "usr_FDM6VCFW",
+    "login": "brisk-lemur",
+    "role": "member",
+    "requests": 133.40
+  },
+  {
+    "user_id": "usr_YKB0WJ89",
+    "login": "calm-lemur",
+    "role": "member",
+    "requests": 136.38
+  },
+  {
+    "user_id": "usr_2DMRYN2H",
+    "login": "brisk-gecko",
+    "role": "owner",
+    "requests": 209.40
+  },
+  {
+    "user_id": "usr_5Q8TEKVC",
+    "login": "eager-marmot",
+    "role": "member",
+    "requests": 144.08
+  },
+  {
+    "user_id": "usr_HMQ03RHA",
+    "login": "calm-falcon",
+    "role": "member",
+    "requests": 126.60
+  },
+  {
+    "user_id": "usr_HT31XK9H",
+    "login": "lunar-egret",
+    "role": "member",
+    "requests": 167.18
+  },
+  {
+    "user_id": "usr_6D6TAVYM",
+    "login": "ivory-iguana",
+    "role": "member",
+    "requests": 115.53
+  },
+  {
+    "user_id": "usr_ZPJCWRH9",
+    "login": "lunar-gecko",
+    "role": "member",
+    "requests": 161.60
+  },
+  {
+    "user_id": "usr_6BJAY992",
+    "login": "fuzzy-heron",
+    "role": "member",
+    "requests": 149.34
+  },
+  {
+    "user_id": "usr_2DMRYN27",
+    "login": "brisk-gecko-2",
+    "role": "member",
+    "requests": 192.80
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "issue_id": "iss_ZFZ38Y25",
+    "title": "ivory-marmot",
+    "state": "stale",
+    "comments": 110.78
+  },
+  {
+    "issue_id": "iss_K7567CMV",
+    "title": "amber-badger",
+    "state": "closed",
+    "comments": 163.09
+  },
+  {
+    "issue_id": "iss_CH13VETT",
+    "title": "gentle-cedar",
+    "state": "closed",
+    "comments": 140.10
+  },
+  {
+    "issue_id": "iss_QKSYQ5BR",
+    "title": "jolly-lemur",
+    "state": "closed",
+    "comments": 132.53
+  },
+  {
+    "issue_id": "iss_X8DF5QJJ",
+    "title": "keen-lemur",
+    "state": "closed",
+    "comments": 149.69
+  },
+  {
+    "issue_id": "iss_QFMB12SS",
+    "title": "fuzzy-koala",
+    "state": "stale",
+    "comments": 114.91
+  },
+  {
+    "issue_id": "iss_MFN1XMFF",
+    "title": "gentle-badger",
+    "state": "stale",
+    "comments": 101.13
+  },
+  {
+    "issue_id": "iss_MFN1XMF7",
+    "title": "gentle-badger-2",
+    "state": "closed",
+    "comments": 121.97
+  },
+  {
+    "issue_id": "iss_DBDRSZCV",
+    "title": "eager-koala",
+    "state": "closed",
+    "comments": 142.62
+  },
+  {
+    "issue_id": "iss_G854VTS3",
+    "title": "amber-iguana",
+    "state": "closed",
+    "comments": 156.32
+  }
+]

@@ -1,0 +1,29 @@
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+test billing::invoice::eager_lemur ... ok
+test billing::ledger::gentle_koala ... ok
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+test auth::session::hazy_lemur ... FAILED
+test auth::token::fuzzy_lemur ... ok
+test search::index::keen_koala ... ok
+test search::query::keen_dingo ... ok
+test billing::invoice::amber_dingo ... ok
+test billing::ledger::fuzzy_gecko ... ok
+test auth::session::calm_badger ... ok
+test auth::token::dusty_lemur ... ok
+test search::index::gentle_jackal ... ok
+test auth::session::hazy_lemu7 ... ok
+test billing::invoice::brisk_falcon ... ok
+test billing::ledger::amber_iguana ... ok
+test auth::session::lunar_marmot ... ok
+failures:
+    auth::session::hazy_lemur
+test result: FAILED. 14 passed; 1 failed

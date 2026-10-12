@@ -1,0 +1,29 @@
+test billing::invoice::lunar_gecko ... ok
+test billing::ledger::jolly_koala ... ok
+test auth::session::gentle_lemur ... ok
+test auth::token::ivory_egret ... ok
+test search::index::brisk_iguana ... ok
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+test search::query::hazy_gecko ... ok
+test search::query::ivory_lemur ... FAILED
+test billing::ledger::keen_falcon ... ok
+test search::query::ivory_lemu7 ... ok
+test auth::token::hazy_jackal ... ok
+test search::index::fuzzy_iguana ... ok
+test search::query::keen_iguana ... ok
+test billing::invoice::fuzzy_lemur ... ok
+failures:
+    search::query::ivory_lemur
+test result: FAILED. 12 passed; 1 failed

@@ -1,0 +1,28 @@
+test billing::invoice::keen_marmot ... ok
+test billing::ledger::ivory_falcon ... ok
+test auth::session::calm_cedar ... ok
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+test auth::token::eager_falcon ... ok
+test auth::session::brisk_marmo7 ... ok
+test search::query::jolly_lemur ... ok
+test billing::invoice::amber_marmot ... ok
+test billing::ledger::gentle_marmot ... ok
+test auth::session::keen_iguana ... ok
+test auth::session::brisk_marmot ... FAILED
+test search::index::jolly_badger ... ok
+test search::query::calm_egret ... ok
+test billing::invoice::dusty_iguana ... ok
+test billing::ledger::jolly_heron ... ok
+test auth::session::jolly_cedar ... ok
+failures:
+    auth::session::brisk_marmot
+test result: FAILED. 14 passed; 1 failed

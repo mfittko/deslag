@@ -1,0 +1,30 @@
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+test billing::invoice::keen_badger ... ok
+test billing::ledger::gentle_jackal ... ok
+test auth::session::gentle_cedar ... ok
+test auth::token::gentle_heron ... FAILED
+test search::index::lunar_koala ... ok
+test search::query::hazy_iguana ... ok
+test auth::token::gentle_hero7 ... ok
+test billing::ledger::eager_falcon ... ok
+test auth::session::eager_dingo ... ok
+test auth::token::ivory_jackal ... ok
+test search::index::brisk_heron ... ok
+test search::query::eager_cedar ... ok
+test billing::invoice::ivory_egret ... ok
+failures:
+    auth::token::gentle_heron
+test result: FAILED. 12 passed; 1 failed

@@ -1,0 +1,29 @@
+test auth::token::keen_ceda7 ... ok
+test billing::ledger::keen_badger ... ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+test auth::session::keen_iguana ... ok
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+test auth::token::brisk_marmot ... ok
+test search::index::lunar_lemur ... ok
+test search::query::hazy_koala ... ok
+test billing::invoice::eager_gecko ... ok
+test billing::ledger::ivory_iguana ... ok
+test auth::session::hazy_egret ... ok
+test auth::token::ivory_cedar ... ok
+test search::index::calm_egret ... ok
+test search::query::keen_falcon ... ok
+test billing::invoice::gentle_cedar ... ok
+test billing::ledger::gentle_badger ... ok
+test auth::token::keen_cedar ... FAILED
+test auth::token::brisk_cedar ... ok
+test search::index::eager_heron ... ok
+failures:
+    auth::token::keen_cedar
+test result: FAILED. 16 passed; 1 failed

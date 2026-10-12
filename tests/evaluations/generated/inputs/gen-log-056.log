@@ -1,0 +1,34 @@
+test billing::invoice::keen_marmot ... ok
+test billing::ledger::brisk_jackal ... ok
+test auth::session::dusty_cedar ... ok
+test auth::token::fuzzy_marmot ... ok
+test search::index::lunar_iguana ... ok
+test search::query::keen_egret ... ok
+test billing::invoice::dusty_jackal ... ok
+test billing::ledger::jolly_cedar ... ok
+test auth::session::fuzzy_cedar ... ok
+test auth::token::lunar_dingo ... ok
+test search::index::hazy_dingo ... ok
+test search::query::calm_gecko ... ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+test billing::invoice::keen_dingo ... ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+test billing::ledger::brisk_egret ... ok
+test auth::session::gentle_cedar ... ok
+test auth::token::gentle_iguana ... ok
+test search::index::brisk_lemur ... ok
+test search::query::eager_falcon ... ok
+test billing::invoice::brisk_koal7 ... ok
+test billing::ledger::dusty_marmot ... ok
+test billing::invoice::brisk_koala ... FAILED
+failures:
+    billing::invoice::brisk_koala
+test result: FAILED. 20 passed; 1 failed

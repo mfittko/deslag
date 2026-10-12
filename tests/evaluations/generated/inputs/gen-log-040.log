@@ -1,0 +1,27 @@
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+flushing buffered writes
+test billing::invoice::fuzzy_koala ... ok
+test billing::ledger::keen_marmot ... ok
+test auth::session::jolly_dingo ... ok
+test auth::token::fuzzy_heron ... ok
+test search::index::calm_marmot ... ok
+test billing::ledger::keen_cedar ... FAILED
+test billing::invoice::ivory_badger ... ok
+test billing::ledger::ivory_heron ... ok
+test auth::session::eager_iguana ... ok
+test auth::token::lunar_iguana ... ok
+test billing::ledger::keen_ceda7 ... ok
+test search::query::ivory_koala ... ok
+failures:
+    billing::ledger::keen_cedar
+test result: FAILED. 11 passed; 1 failed

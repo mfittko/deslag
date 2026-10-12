@@ -1,0 +1,25 @@
+test billing::invoice::gentle_gecko ... ok
+test billing::ledger::jolly_gecko ... ok
+test auth::session::eager_cedar ... ok
+test auth::token::fuzzy_cedar ... ok
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+test search::index::jolly_jackal ... ok
+test search::query::gentle_jackal ... ok
+test billing::invoice::amber_koala ... ok
+test billing::ledger::lunar_egret ... ok
+test auth::session::gentle_iguana ... ok
+test auth::session::dusty_koal7 ... ok
+test search::index::jolly_cedar ... ok
+test auth::session::dusty_koala ... FAILED
+failures:
+    auth::session::dusty_koala
+test result: FAILED. 11 passed; 1 failed

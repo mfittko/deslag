@@ -1,0 +1,23 @@
+flushing buffered writes
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+2026-09-30T10:00:00Z INFO request_id=req-6087a0 status=200 upstream=alpha-team
+2026-09-30T10:00:07Z INFO request_id=req-76baa4 status=503 upstream=beta-team
+2026-09-30T10:00:14Z INFO request_id=req-76baa7 status=200 upstream=core-team
+2026-09-30T10:00:21Z INFO request_id=req-52fb15 status=201 upstream=data-team
+2026-09-30T10:00:28Z INFO request_id=req-e39f55 status=500 upstream=edge-team
+2026-09-30T10:00:35Z INFO request_id=req-1445b2 status=200 upstream=infra-team
+2026-09-30T10:00:42Z INFO request_id=req-a29362 status=200 upstream=alpha-team
+2026-09-30T10:00:49Z INFO request_id=req-fcaa19 status=200 upstream=beta-team
+2026-09-30T10:00:56Z INFO request_id=req-89b59b status=200 upstream=core-team
+2026-09-30T10:01:03Z INFO request_id=req-51d310 status=404 upstream=data-team
+2026-09-30T10:01:10Z INFO request_id=req-9af636 status=200 upstream=edge-team
+2026-09-30T10:01:17Z INFO request_id=req-010ebf status=200 upstream=infra-team

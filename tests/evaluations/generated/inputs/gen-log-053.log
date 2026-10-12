@@ -1,0 +1,33 @@
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+test billing::invoice::jolly_egret ... ok
+test billing::ledger::keen_badger ... ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+test auth::session::lunar_gecko ... ok
+test search::index::keen_jackal ... FAILED
+test search::index::gentle_badger ... ok
+test search::query::gentle_lemur ... ok
+test billing::invoice::gentle_heron ... ok
+test billing::ledger::fuzzy_falcon ... ok
+test auth::session::hazy_heron ... ok
+test auth::token::hazy_iguana ... ok
+test search::index::eager_koala ... ok
+test search::query::dusty_heron ... ok
+test billing::invoice::dusty_cedar ... ok
+test billing::ledger::calm_gecko ... ok
+test search::index::keen_jacka7 ... ok
+failures:
+    search::index::keen_jackal
+test result: FAILED. 14 passed; 1 failed

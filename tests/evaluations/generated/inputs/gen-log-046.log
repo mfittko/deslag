@@ -1,0 +1,34 @@
+test billing::invoice::eager_koala ... ok
+test billing::ledger::hazy_egret ... ok
+test auth::session::gentle_dingo ... ok
+test auth::token::ivory_jackal ... ok
+test search::index::brisk_cedar ... ok
+test search::query::amber_falcon ... ok
+test billing::invoice::eager_jackal ... ok
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+test billing::ledger::calm_lemur ... ok
+test auth::session::lunar_cedar ... ok
+test auth::token::lunar_geck7 ... ok
+test search::index::hazy_heron ... ok
+test search::query::ivory_heron ... ok
+test billing::invoice::eager_gecko ... ok
+test billing::ledger::calm_jackal ... ok
+test auth::session::hazy_iguana ... ok
+test auth::token::lunar_gecko ... FAILED
+test search::index::keen_lemur ... ok
+test search::query::fuzzy_cedar ... ok
+failures:
+    auth::token::lunar_gecko
+test result: FAILED. 17 passed; 1 failed

@@ -1,0 +1,76 @@
+[
+  {
+    "user_id": "usr_2YZ6K70P",
+    "login": "jolly-iguana",
+    "role": "member",
+    "requests": 125,
+    "team": null
+  },
+  {
+    "user_id": "usr_H56V5V4N",
+    "login": "brisk-heron",
+    "role": "member",
+    "requests": 160,
+    "team": null
+  },
+  {
+    "user_id": "usr_R8V0TF67",
+    "login": "calm-gecko-2",
+    "role": "member",
+    "requests": 107,
+    "team": null
+  },
+  {
+    "user_id": "usr_9ZRBX08S",
+    "login": "jolly-jackal",
+    "role": "member",
+    "requests": 130
+  },
+  {
+    "user_id": "usr_RFXYJJBA",
+    "login": "keen-jackal",
+    "role": "member",
+    "requests": 142,
+    "team": "alpha-team"
+  },
+  {
+    "user_id": "usr_R8V0TF6Q",
+    "login": "calm-gecko",
+    "role": "owner",
+    "requests": 200,
+    "team": "data-team"
+  },
+  {
+    "user_id": "usr_GHDY3TA6",
+    "login": "keen-badger",
+    "role": "member",
+    "requests": 119,
+    "team": "infra-team"
+  },
+  {
+    "user_id": "usr_S9BVB9KF",
+    "login": "lunar-dingo",
+    "role": "member",
+    "requests": 150,
+    "team": "edge-team"
+  },
+  {
+    "user_id": "usr_DMFBTA8C",
+    "login": "lunar-koala",
+    "role": "member",
+    "requests": 168,
+    "team": "data-team"
+  },
+  {
+    "user_id": "usr_8T7QDCDT",
+    "login": "ivory-dingo",
+    "role": "member",
+    "requests": 135
+  },
+  {
+    "user_id": "usr_XM9VF11K",
+    "login": "gentle-gecko",
+    "role": "member",
+    "requests": 172
+  }
+]

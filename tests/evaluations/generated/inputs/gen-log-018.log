@@ -1,0 +1,29 @@
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+test billing::invoice::lunar_iguana ... FAILED
+test billing::ledger::calm_jackal ... ok
+test auth::session::calm_badger ... ok
+test auth::token::eager_cedar ... ok
+test search::index::eager_badger ... ok
+test search::query::brisk_egret ... ok
+test billing::invoice::brisk_heron ... ok
+test billing::ledger::eager_heron ... ok
+test billing::invoice::lunar_iguan7 ... ok
+test auth::token::keen_lemur ... ok
+test search::index::ivory_badger ... ok
+test search::query::gentle_cedar ... ok
+failures:
+    billing::invoice::lunar_iguana
+test result: FAILED. 11 passed; 1 failed

@@ -1,0 +1,71 @@
+[
+  {
+    "issue_id": "iss_RKZGYGSM",
+    "title": "hazy-jackal",
+    "state": "closed",
+    "comments": 141.40,
+    "assignee": "beta-team"
+  },
+  {
+    "issue_id": "iss_F8GTM59E",
+    "title": "ivory-egret",
+    "state": "closed",
+    "comments": 166.63,
+    "assignee": null
+  },
+  {
+    "issue_id": "iss_HQMHX9B7",
+    "title": "gentle-cedar-2",
+    "state": "closed",
+    "comments": 107.13,
+    "assignee": null
+  },
+  {
+    "issue_id": "iss_AYKKC90Z",
+    "title": "brisk-egret",
+    "state": "closed",
+    "comments": 155.05,
+    "assignee": "infra-team"
+  },
+  {
+    "issue_id": "iss_PN79G6HH",
+    "title": "amber-badger",
+    "state": "closed",
+    "comments": 128.14,
+    "assignee": "edge-team"
+  },
+  {
+    "issue_id": "iss_HQMHX9B1",
+    "title": "gentle-cedar",
+    "state": "blocked",
+    "comments": 195.30,
+    "assignee": null
+  },
+  {
+    "issue_id": "iss_8Z0B9EN8",
+    "title": "eager-iguana",
+    "state": "closed",
+    "comments": 146.97,
+    "assignee": "core-team"
+  },
+  {
+    "issue_id": "iss_T11E2QB3",
+    "title": "lunar-egret",
+    "state": "closed",
+    "comments": 116.55
+  },
+  {
+    "issue_id": "iss_WXT5BA0M",
+    "title": "lunar-iguana",
+    "state": "closed",
+    "comments": 162.66,
+    "assignee": "data-team"
+  },
+  {
+    "issue_id": "iss_2Y48PVBK",
+    "title": "jolly-cedar",
+    "state": "closed",
+    "comments": 121.94,
+    "assignee": "infra-team"
+  }
+]

@@ -1,0 +1,3012 @@
+{
+  "generator": "deslag-eval generate",
+  "seed": 7700,
+  "tasks": [
+    {
+      "answers": [
+        "gentle-lemur"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "gen-json-000",
+      "input": "inputs/gen-json-000.json",
+      "question": "What is the login of the user with user_id usr_6NDR43SK?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_BWJGNE99,mat_MBAAAKZT,mat_S0KCEHGG"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "gen-json-001",
+      "input": "inputs/gen-json-001.json",
+      "question": "List the match_id values of all matchs with kind const, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "lunar-marmot"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-json-002",
+      "input": "inputs/gen-json-002.json",
+      "question": "Which CI job has the highest duration_s? Answer with its name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "dusty-iguana"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "gen-json-003",
+      "input": "inputs/gen-json-003.json",
+      "question": "Which issue has the highest comments? Answer with its title.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "calm-falcon"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "gen-json-004",
+      "input": "inputs/gen-json-004.json",
+      "question": "What is the service of the service with service_id svc_EDV3BFNS?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_5D0A1FZH"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "gen-json-005",
+      "input": "inputs/gen-json-005.json",
+      "question": "What is the order_id of the order whose customer is calm-jackal?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "calm-lemur"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "gen-json-006",
+      "input": "inputs/gen-json-006.json",
+      "question": "What is the target of the audit event with event_id evt_046DRQFY?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "usr_72H8HR63,usr_FQQP4EJJ,usr_K6YFNWAJ"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "gen-json-007",
+      "input": "inputs/gen-json-007.json",
+      "question": "List the user_id values of all users with role auditor, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "193"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "gen-json-008",
+      "input": "inputs/gen-json-008.json",
+      "question": "What is the highest line among matchs with kind fn?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "206.30"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-json-009",
+      "input": "inputs/gen-json-009.json",
+      "question": "What is the highest duration_s among CI jobs with conclusion success?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "224"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "gen-json-010",
+      "input": "inputs/gen-json-010.json",
+      "question": "What is the highest comments among issues with state closed?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "brisk-jackal"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "gen-json-011",
+      "input": "inputs/gen-json-011.json",
+      "question": "Which service has the highest error_count? Answer with its service.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_5AVA2RJP,ord_G8A6W317,ord_J70JHAVN"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "gen-json-012",
+      "input": "inputs/gen-json-012.json",
+      "question": "List the order_id values of all orders with status disputed, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "mat_WGTQ47N4"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "gen-json-013",
+      "input": "inputs/gen-json-013.json",
+      "question": "What is the match_id of the match whose symbol is calm-heron?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "205.10"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "gen-json-014",
+      "input": "inputs/gen-json-014.json",
+      "question": "What is the highest requests among users with role member?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "mat_03V72JGM"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "gen-json-015",
+      "input": "inputs/gen-json-015.json",
+      "question": "What is the match_id of the match whose symbol is gentle-marmot?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "jolly-lemur"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-json-016",
+      "input": "inputs/gen-json-016.json",
+      "question": "What is the name of the CI job with job_id job_8R6V03Z3?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "calm-jackal"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "gen-json-017",
+      "input": "inputs/gen-json-017.json",
+      "question": "What is the title of the issue with issue_id iss_T9ZFHWZ6?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "214.50"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "gen-json-018",
+      "input": "inputs/gen-json-018.json",
+      "question": "What is the highest error_count among services with tier bronze?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "eager-dingo"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "gen-json-019",
+      "input": "inputs/gen-json-019.json",
+      "question": "What is the customer of the order with order_id ord_Z6TH2XJP?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "job_V8CCRDWG"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-json-020",
+      "input": "inputs/gen-json-020.json",
+      "question": "What is the job_id of the CI job whose name is calm-jackal?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "hazy-cedar"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "gen-json-021",
+      "input": "inputs/gen-json-021.json",
+      "question": "What is the login of the user with user_id usr_Y3K2M7ST?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "215"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "gen-json-022",
+      "input": "inputs/gen-json-022.json",
+      "question": "What is the highest line among matchs with kind fn?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "job_JBKKZ5JA"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-json-023",
+      "input": "inputs/gen-json-023.json",
+      "question": "What is the job_id of the CI job with duration_s 213?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "calm-iguana"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "gen-json-024",
+      "input": "inputs/gen-json-024.json",
+      "question": "What is the title of the issue with issue_id iss_VX0A1RQF?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "eager-iguana"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "gen-json-025",
+      "input": "inputs/gen-json-025.json",
+      "question": "What is the service of the service with service_id svc_9XMPB42C?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "jolly-heron"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "gen-json-026",
+      "input": "inputs/gen-json-026.json",
+      "question": "What is the customer of the order with order_id ord_0G2BRKQ6?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "iss_0FYY4XKQ"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "gen-json-027",
+      "input": "inputs/gen-json-027.json",
+      "question": "What is the issue_id of the issue whose title is dusty-falcon?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "usr_GB9EPAF8"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "gen-json-028",
+      "input": "inputs/gen-json-028.json",
+      "question": "What is the user_id of the user whose login is eager-dingo?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_CM5FHXGZ,mat_D7P9XWY2,mat_RK27F7W2"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "gen-json-029",
+      "input": "inputs/gen-json-029.json",
+      "question": "List the match_id values of all matchs with kind const, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "ivory-lemur"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-json-030",
+      "input": "inputs/gen-json-030.json",
+      "question": "What is the name of the CI job with job_id job_0P051ZHM?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "iss_9RRAW45S"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "gen-json-031",
+      "input": "inputs/gen-json-031.json",
+      "question": "What is the issue_id of the issue with comments 196?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc_MSCJNM5D"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "gen-json-032",
+      "input": "inputs/gen-json-032.json",
+      "question": "What is the service_id of the service whose service is calm-falcon?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "202.10"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "gen-json-033",
+      "input": "inputs/gen-json-033.json",
+      "question": "What is the highest amount_cents among orders with status paid?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "823.40"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "gen-json-034",
+      "input": "inputs/gen-json-034.json",
+      "question": "What is the highest seq among audit events with action read?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "brisk-jackal"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "gen-json-035",
+      "input": "inputs/gen-json-035.json",
+      "question": "What is the login of the user with user_id usr_6Q1JMAMY?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "fuzzy-falcon"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "gen-json-036",
+      "input": "inputs/gen-json-036.json",
+      "question": "What is the symbol of the match with match_id mat_B6AZGAD2?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "amber-iguana"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-json-037",
+      "input": "inputs/gen-json-037.json",
+      "question": "Which CI job has the highest duration_s? Answer with its name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "fuzzy-jackal"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "gen-json-038",
+      "input": "inputs/gen-json-038.json",
+      "question": "What is the title of the issue with issue_id iss_9RQR2SR8?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "hazy-marmot"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "gen-json-039",
+      "input": "inputs/gen-json-039.json",
+      "question": "What is the service of the service with service_id svc_6J46C36P?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_7QBBQ1YW"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "gen-json-040",
+      "input": "inputs/gen-json-040.json",
+      "question": "What is the order_id of the order with amount_cents 199.70?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "brisk-jackal"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "gen-json-041",
+      "input": "inputs/gen-json-041.json",
+      "question": "Which order has the highest amount_cents? Answer with its customer.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "192.80"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "gen-json-042",
+      "input": "inputs/gen-json-042.json",
+      "question": "What is the highest requests among users with role member?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "mat_Z1DFAS8Z"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "gen-json-043",
+      "input": "inputs/gen-json-043.json",
+      "question": "What is the match_id of the match with line 223?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "keen-dingo"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-json-044",
+      "input": "inputs/gen-json-044.json",
+      "question": "Which CI job has the highest duration_s? Answer with its name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "iss_8HP114E6"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "gen-json-045",
+      "input": "inputs/gen-json-045.json",
+      "question": "What is the issue_id of the issue whose title is dusty-heron?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc_C03R399B,svc_G5E0NN5D,svc_ZCMW4589"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "gen-json-046",
+      "input": "inputs/gen-json-046.json",
+      "question": "List the service_id values of all services with tier silver, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "221.30"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "gen-json-047",
+      "input": "inputs/gen-json-047.json",
+      "question": "What is the highest amount_cents among orders with status paid?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "lunar-marmot"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "gen-json-048",
+      "input": "inputs/gen-json-048.json",
+      "question": "What is the login of the user with user_id usr_YCCFC2QM?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "lunar-falcon"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "gen-json-049",
+      "input": "inputs/gen-json-049.json",
+      "question": "What is the login of the user with user_id usr_HM13KQ1W?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "jolly-badger"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "gen-json-050",
+      "input": "inputs/gen-json-050.json",
+      "question": "What is the symbol of the match with match_id mat_RGVFNVMF?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "job_XPKF2FPQ"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-json-051",
+      "input": "inputs/gen-json-051.json",
+      "question": "What is the job_id of the CI job with duration_s 225?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "iss_MFN1XMFF,iss_QFMB12SS,iss_ZFZ38Y25"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "gen-json-052",
+      "input": "inputs/gen-json-052.json",
+      "question": "List the issue_id values of all issues with state stale, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "ivory-jackal"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "gen-json-053",
+      "input": "inputs/gen-json-053.json",
+      "question": "What is the service of the service with service_id svc_JPEHE642?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "fuzzy-heron"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "gen-json-054",
+      "input": "inputs/gen-json-054.json",
+      "question": "Which order has the highest amount_cents? Answer with its customer.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_Y3NRVMPP"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "gen-json-055",
+      "input": "inputs/gen-json-055.json",
+      "question": "What is the match_id of the match whose symbol is ivory-gecko?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "usr_2RR4MNR3,usr_J4GCPD0W,usr_J64E75B9"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "gen-json-056",
+      "input": "inputs/gen-json-056.json",
+      "question": "List the user_id values of all users with role auditor, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "mat_V0TG69TW"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "gen-json-057",
+      "input": "inputs/gen-json-057.json",
+      "question": "What is the match_id of the match whose symbol is lunar-jackal?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "jolly-iguana"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-json-058",
+      "input": "inputs/gen-json-058.json",
+      "question": "Which CI job has the highest duration_s? Answer with its name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "amber-iguana"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "gen-json-059",
+      "input": "inputs/gen-json-059.json",
+      "question": "What is the title of the issue with issue_id iss_10PSQM9C?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "lunar-marmot"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "gen-json-060",
+      "input": "inputs/gen-json-060.json",
+      "question": "What is the service of the service with service_id svc_ZC7D4XFY?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "eager-lemur"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "gen-json-061",
+      "input": "inputs/gen-json-061.json",
+      "question": "What is the customer of the order with order_id ord_VS4NY67X?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "839.90"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "gen-json-062",
+      "input": "inputs/gen-json-062.json",
+      "question": "What is the highest seq among audit events with action read?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "brisk-dingo"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "gen-json-063",
+      "input": "inputs/gen-json-063.json",
+      "question": "What is the login of the user with user_id usr_03ZY9ZJN?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_PQTBDBK8"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "gen-json-064",
+      "input": "inputs/gen-json-064.json",
+      "question": "What is the match_id of the match whose symbol is ivory-cedar?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "217.20"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-json-065",
+      "input": "inputs/gen-json-065.json",
+      "question": "What is the highest duration_s among CI jobs with conclusion success?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "iss_J0ZG12Q2,iss_M8STP7R5,iss_N1NREV05"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "gen-json-066",
+      "input": "inputs/gen-json-066.json",
+      "question": "List the issue_id values of all issues with state stale, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "svc_390QQ119,svc_8DGJEM6A,svc_R1ART6R8"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "gen-json-067",
+      "input": "inputs/gen-json-067.json",
+      "question": "List the service_id values of all services with tier silver, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "hazy-koala"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "gen-json-068",
+      "input": "inputs/gen-json-068.json",
+      "question": "Which order has the highest amount_cents? Answer with its customer.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "211.40"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "gen-json-069",
+      "input": "inputs/gen-json-069.json",
+      "question": "What is the highest comments among issues with state closed?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "usr_9GDNECDB,usr_KK07CJM7,usr_STFSX1E5"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "gen-json-070",
+      "input": "inputs/gen-json-070.json",
+      "question": "List the user_id values of all users with role auditor, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "mat_2NWZK1GW,mat_SC3VJW7K,mat_V67MZMAW"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "gen-json-071",
+      "input": "inputs/gen-json-071.json",
+      "question": "List the match_id values of all matchs with kind const, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "197"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-json-072",
+      "input": "inputs/gen-json-072.json",
+      "question": "What is the highest duration_s among CI jobs with conclusion success?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "gentle-cedar"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "gen-json-073",
+      "input": "inputs/gen-json-073.json",
+      "question": "Which issue has the highest comments? Answer with its title.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc_14QB9T6H"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "gen-json-074",
+      "input": "inputs/gen-json-074.json",
+      "question": "What is the service_id of the service whose service is ivory-badger?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_8XWSJ84B"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "gen-json-075",
+      "input": "inputs/gen-json-075.json",
+      "question": "What is the order_id of the order with amount_cents 217?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "keen-koala"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "gen-json-076",
+      "input": "inputs/gen-json-076.json",
+      "question": "Which service has the highest error_count? Answer with its service.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "usr_R8V0TF6Q"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "gen-json-077",
+      "input": "inputs/gen-json-077.json",
+      "question": "What is the user_id of the user with requests 200?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_8Z61X01J,mat_BR0EFKFP,mat_VDV9SF5X"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "gen-json-078",
+      "input": "inputs/gen-json-078.json",
+      "question": "List the match_id values of all matchs with kind const, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "dusty-dingo"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-json-079",
+      "input": "inputs/gen-json-079.json",
+      "question": "Which CI job has the highest duration_s? Answer with its name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "iss_E093JZHN"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "gen-json-080",
+      "input": "inputs/gen-json-080.json",
+      "question": "What is the issue_id of the issue whose title is ivory-gecko?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "eager-lemur"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "gen-json-081",
+      "input": "inputs/gen-json-081.json",
+      "question": "Which service has the highest error_count? Answer with its service.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "jolly-lemur"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "gen-json-082",
+      "input": "inputs/gen-json-082.json",
+      "question": "What is the customer of the order with order_id ord_PK8KR7HR?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_M01M946M,ord_V5JVZ0P7,ord_YAX2W2N0"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "gen-json-083",
+      "input": "inputs/gen-json-083.json",
+      "question": "List the order_id values of all orders with status disputed, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "209.90"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "gen-json-084",
+      "input": "inputs/gen-json-084.json",
+      "question": "What is the highest requests among users with role member?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "hazy-gecko"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "gen-json-085",
+      "input": "inputs/gen-json-085.json",
+      "question": "Which match has the highest line? Answer with its symbol.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "job_B6K61H1T"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-json-086",
+      "input": "inputs/gen-json-086.json",
+      "question": "What is the job_id of the CI job whose name is amber-egret?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ivory-cedar"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "gen-json-087",
+      "input": "inputs/gen-json-087.json",
+      "question": "What is the title of the issue with issue_id iss_CSWXSXEE?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc_5HZESTQR,svc_DD4EZ553,svc_N4H5PJMR"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "gen-json-088",
+      "input": "inputs/gen-json-088.json",
+      "question": "List the service_id values of all services with tier silver, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "ord_05JRCN44"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "gen-json-089",
+      "input": "inputs/gen-json-089.json",
+      "question": "What is the order_id of the order with amount_cents 197.80?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-cfb6a2"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-000",
+      "input": "inputs/gen-log-000.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.176"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-001",
+      "input": "inputs/gen-log-001.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "search::query::calm_koala"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-002",
+      "input": "inputs/gen-log-002.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-03e582"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-003",
+      "input": "inputs/gen-log-003.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.117"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-004",
+      "input": "inputs/gen-log-004.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "billing::ledger::calm_badger"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-005",
+      "input": "inputs/gen-log-005.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-7c601e"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-006",
+      "input": "inputs/gen-log-006.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.30"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-007",
+      "input": "inputs/gen-log-007.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "search::query::eager_badger"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-008",
+      "input": "inputs/gen-log-008.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-e8d0b2"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-009",
+      "input": "inputs/gen-log-009.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.37"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-010",
+      "input": "inputs/gen-log-010.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "auth::token::gentle_heron"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-011",
+      "input": "inputs/gen-log-011.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-3966ad"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-012",
+      "input": "inputs/gen-log-012.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.18"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-013",
+      "input": "inputs/gen-log-013.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "billing::ledger::calm_heron"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-014",
+      "input": "inputs/gen-log-014.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "1cc5a91cb0f92c464f4bd79337c0e3f80a15158355894527e4af50d6c485573f"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "gen-log-015",
+      "input": "inputs/gen-log-015.log",
+      "question": "What sha256 checksum is reported for the artifact deslag-amber-iguana.tar.gz?",
+      "rule": "exact_ci"
+    },
+    {
+      "answers": [
+        "req-f93879"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-016",
+      "input": "inputs/gen-log-016.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.193"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-017",
+      "input": "inputs/gen-log-017.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "billing::invoice::lunar_iguana"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-018",
+      "input": "inputs/gen-log-018.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-76baa4"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-019",
+      "input": "inputs/gen-log-019.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.28"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-020",
+      "input": "inputs/gen-log-020.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "search::index::jolly_falcon"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-021",
+      "input": "inputs/gen-log-021.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-9afae6"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-022",
+      "input": "inputs/gen-log-022.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.70"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-023",
+      "input": "inputs/gen-log-023.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "search::index::calm_iguana"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-024",
+      "input": "inputs/gen-log-024.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-eac6a2"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-025",
+      "input": "inputs/gen-log-025.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.31"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-026",
+      "input": "inputs/gen-log-026.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "auth::session::dusty_heron"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-027",
+      "input": "inputs/gen-log-027.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-c83ebc"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-028",
+      "input": "inputs/gen-log-028.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.107"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-029",
+      "input": "inputs/gen-log-029.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "search::query::dusty_marmot"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-030",
+      "input": "inputs/gen-log-030.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "e52ea2e9af9e5f337873436faa3f0f87c4ee41c84eb6f102c7497cac3ccb0823"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "gen-log-031",
+      "input": "inputs/gen-log-031.log",
+      "question": "What sha256 checksum is reported for the artifact deslag-dusty-falcon.tar.gz?",
+      "rule": "exact_ci"
+    },
+    {
+      "answers": [
+        "req-414929"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-032",
+      "input": "inputs/gen-log-032.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.18"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-033",
+      "input": "inputs/gen-log-033.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "auth::token::gentle_koala"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-034",
+      "input": "inputs/gen-log-034.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-845f15"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-035",
+      "input": "inputs/gen-log-035.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.55"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-036",
+      "input": "inputs/gen-log-036.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "billing::invoice::dusty_egret"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-037",
+      "input": "inputs/gen-log-037.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-b1b7c6"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-038",
+      "input": "inputs/gen-log-038.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.44"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-039",
+      "input": "inputs/gen-log-039.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "billing::ledger::keen_cedar"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-040",
+      "input": "inputs/gen-log-040.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-97866c"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-041",
+      "input": "inputs/gen-log-041.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.165"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-042",
+      "input": "inputs/gen-log-042.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "billing::ledger::lunar_lemur"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-043",
+      "input": "inputs/gen-log-043.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-55351e"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-044",
+      "input": "inputs/gen-log-044.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.134"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-045",
+      "input": "inputs/gen-log-045.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "auth::token::lunar_gecko"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-046",
+      "input": "inputs/gen-log-046.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "8cce3e1bb565ef2dabae6d7c06d717f1ed9a149665c2050b0903624ec92095c4"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "gen-log-047",
+      "input": "inputs/gen-log-047.log",
+      "question": "What sha256 checksum is reported for the artifact deslag-fuzzy-iguana.tar.gz?",
+      "rule": "exact_ci"
+    },
+    {
+      "answers": [
+        "req-d1bc98"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-048",
+      "input": "inputs/gen-log-048.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.203"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-049",
+      "input": "inputs/gen-log-049.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "auth::session::hazy_lemur"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-050",
+      "input": "inputs/gen-log-050.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-b7f9c6"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-051",
+      "input": "inputs/gen-log-051.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.8"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-052",
+      "input": "inputs/gen-log-052.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "search::index::keen_jackal"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-053",
+      "input": "inputs/gen-log-053.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-eb61e3"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-054",
+      "input": "inputs/gen-log-054.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.93"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-055",
+      "input": "inputs/gen-log-055.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "billing::invoice::brisk_koala"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-056",
+      "input": "inputs/gen-log-056.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-a5509b"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-057",
+      "input": "inputs/gen-log-057.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.158"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-058",
+      "input": "inputs/gen-log-058.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "auth::session::hazy_jackal"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-059",
+      "input": "inputs/gen-log-059.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-f9d487"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-060",
+      "input": "inputs/gen-log-060.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.153"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-061",
+      "input": "inputs/gen-log-061.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "auth::session::ivory_badger"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-062",
+      "input": "inputs/gen-log-062.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "c10814ea52069a77a9357142a58730ed9abe05d2f3adaa22ae2e37726e189a6d"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "gen-log-063",
+      "input": "inputs/gen-log-063.log",
+      "question": "What sha256 checksum is reported for the artifact deslag-keen-jackal.tar.gz?",
+      "rule": "exact_ci"
+    },
+    {
+      "answers": [
+        "req-b95497"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-064",
+      "input": "inputs/gen-log-064.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.101"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-065",
+      "input": "inputs/gen-log-065.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "billing::invoice::hazy_koala"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-066",
+      "input": "inputs/gen-log-066.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-58fb69"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-067",
+      "input": "inputs/gen-log-067.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.61"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-068",
+      "input": "inputs/gen-log-068.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "auth::session::dusty_koala"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-069",
+      "input": "inputs/gen-log-069.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-62d039"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-070",
+      "input": "inputs/gen-log-070.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.115"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-071",
+      "input": "inputs/gen-log-071.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "search::query::fuzzy_lemur"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-072",
+      "input": "inputs/gen-log-072.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-ec01ed"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-073",
+      "input": "inputs/gen-log-073.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.196"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-074",
+      "input": "inputs/gen-log-074.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "search::query::ivory_lemur"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-075",
+      "input": "inputs/gen-log-075.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-450192"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-076",
+      "input": "inputs/gen-log-076.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.70"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-077",
+      "input": "inputs/gen-log-077.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "auth::token::keen_cedar"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-078",
+      "input": "inputs/gen-log-078.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "0be5f04dd9422e21ed4b83a7b6641ff85bd8651338daabdb6adda14a123fa60a"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "gen-log-079",
+      "input": "inputs/gen-log-079.log",
+      "question": "What sha256 checksum is reported for the artifact deslag-fuzzy-marmot.tar.gz?",
+      "rule": "exact_ci"
+    },
+    {
+      "answers": [
+        "req-2dec8c"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-080",
+      "input": "inputs/gen-log-080.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.160"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-081",
+      "input": "inputs/gen-log-081.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "auth::session::hazy_iguana"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-082",
+      "input": "inputs/gen-log-082.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-79de88"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-083",
+      "input": "inputs/gen-log-083.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.104"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-084",
+      "input": "inputs/gen-log-084.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "billing::invoice::dusty_gecko"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-085",
+      "input": "inputs/gen-log-085.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-36e4ed"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-086",
+      "input": "inputs/gen-log-086.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.140"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-087",
+      "input": "inputs/gen-log-087.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "search::index::keen_heron"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-088",
+      "input": "inputs/gen-log-088.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-ebb312"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-089",
+      "input": "inputs/gen-log-089.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.215"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-090",
+      "input": "inputs/gen-log-090.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "search::index::gentle_marmot"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-091",
+      "input": "inputs/gen-log-091.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "req-7ce50c"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-092",
+      "input": "inputs/gen-log-092.log",
+      "question": "Which request_id failed with status 503?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "203.0.113.21"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "logs",
+      "id": "gen-log-093",
+      "input": "inputs/gen-log-093.log",
+      "question": "Which client IP address received the only 403 response?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "auth::session::brisk_marmot"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "gen-log-094",
+      "input": "inputs/gen-log-094.log",
+      "question": "Which test failed? Answer with the full test path.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "46fdfc72a82baf810da92f33a1a49c0b701c4b22c3b21b932344e7ef26a1fd30"
+      ],
+      "arms": [
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "gen-log-095",
+      "input": "inputs/gen-log-095.log",
+      "question": "What sha256 checksum is reported for the artifact deslag-amber-lemur.tar.gz?",
+      "rule": "exact_ci"
+    },
+    {
+      "answers": [
+        "Reka Lindqvist"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2",
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "incompressible",
+      "control": "incompressible",
+      "id": "gen-ctl-incompressible-00",
+      "input": "inputs/gen-ctl-incompressible-00.txt",
+      "question": "Who is the on-call engineer for the week of 2026-10-17?",
+      "rule": "exact_ci"
+    },
+    {
+      "answers": [
+        "32010"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2",
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "incompressible",
+      "control": "incompressible",
+      "id": "gen-ctl-incompressible-01",
+      "input": "inputs/gen-ctl-incompressible-01.json",
+      "question": "How many rows did the dusty-badger job write?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "Joran Moreau"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2",
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "incompressible",
+      "control": "incompressible",
+      "id": "gen-ctl-incompressible-02",
+      "input": "inputs/gen-ctl-incompressible-02.txt",
+      "question": "Who is the on-call engineer for the week of 2026-11-28?",
+      "rule": "exact_ci"
+    },
+    {
+      "answers": [
+        "43001"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2",
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "incompressible",
+      "control": "incompressible",
+      "id": "gen-ctl-incompressible-03",
+      "input": "inputs/gen-ctl-incompressible-03.json",
+      "question": "How many rows did the calm-heron job write?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "Reka Haddad"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2",
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "incompressible",
+      "control": "incompressible",
+      "id": "gen-ctl-incompressible-04",
+      "input": "inputs/gen-ctl-incompressible-04.txt",
+      "question": "Who is the on-call engineer for the week of 2026-10-19?",
+      "rule": "exact_ci"
+    },
+    {
+      "answers": [
+        "59953"
+      ],
+      "arms": [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2",
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "incompressible",
+      "control": "incompressible",
+      "id": "gen-ctl-incompressible-05",
+      "input": "inputs/gen-ctl-incompressible-05.json",
+      "question": "How many rows did the gentle-koala job write?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "svc-brisk-egret"
+      ],
+      "arms": [
+        "drop-evidence",
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "evidence_drop",
+      "control": "evidence_drop",
+      "evidence": "\"revoked_by\": \"svc-brisk-egret\"",
+      "id": "gen-ctl-evidence-drop-00",
+      "input": "inputs/gen-ctl-evidence-drop-00.json",
+      "question": "Who revoked session sess_k22?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "dusty-latency-p99"
+      ],
+      "arms": [
+        "drop-evidence",
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "evidence_drop",
+      "control": "evidence_drop",
+      "evidence": "rollback triggered by",
+      "id": "gen-ctl-evidence-drop-01",
+      "input": "inputs/gen-ctl-evidence-drop-01.log",
+      "question": "Which alert triggered the rollback?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc-gentle-marmot"
+      ],
+      "arms": [
+        "drop-evidence",
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "evidence_drop",
+      "control": "evidence_drop",
+      "evidence": "\"revoked_by\": \"svc-gentle-marmot\"",
+      "id": "gen-ctl-evidence-drop-02",
+      "input": "inputs/gen-ctl-evidence-drop-02.json",
+      "question": "Who revoked session sess_k5?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "fuzzy-latency-p99"
+      ],
+      "arms": [
+        "drop-evidence",
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "evidence_drop",
+      "control": "evidence_drop",
+      "evidence": "rollback triggered by",
+      "id": "gen-ctl-evidence-drop-03",
+      "input": "inputs/gen-ctl-evidence-drop-03.log",
+      "question": "Which alert triggered the rollback?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc-amber-marmot"
+      ],
+      "arms": [
+        "drop-evidence",
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2"
+      ],
+      "category": "evidence_drop",
+      "control": "evidence_drop",
+      "evidence": "\"revoked_by\": \"svc-amber-marmot\"",
+      "id": "gen-ctl-evidence-drop-04",
+      "input": "inputs/gen-ctl-evidence-drop-04.json",
+      "question": "Who revoked session sess_k9?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "brisk-latency-p99"
+      ],
+      "arms": [
+        "drop-evidence",
+        "lines-v1",
+        "lines-v2"
+      ],
+      "category": "evidence_drop",
+      "control": "evidence_drop",
+      "evidence": "rollback triggered by",
+      "id": "gen-ctl-evidence-drop-05",
+      "input": "inputs/gen-ctl-evidence-drop-05.log",
+      "question": "Which alert triggered the rollback?",
+      "rule": "exact"
+    }
+  ]
+}

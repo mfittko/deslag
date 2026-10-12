@@ -1,0 +1,26 @@
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+198.51.100.131 - - [30/Sep/2026:10:00:00 +0000] "GET /api/v2/items/0 HTTP/1.1" 304 794
+198.51.100.154 - - [30/Sep/2026:10:00:07 +0000] "GET /api/v2/items/37 HTTP/1.1" 200 990
+198.51.100.122 - - [30/Sep/2026:10:00:14 +0000] "GET /api/v2/items/74 HTTP/1.1" 200 589
+198.51.100.45 - - [30/Sep/2026:10:00:21 +0000] "GET /api/v2/items/111 HTTP/1.1" 404 464
+198.51.100.245 - - [30/Sep/2026:10:00:28 +0000] "GET /api/v2/items/148 HTTP/1.1" 200 163
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+203.0.113.193 - - [30/Sep/2026:10:00:35 +0000] "GET /api/v2/items/185 HTTP/1.1" 403 376
+198.51.100.67 - - [30/Sep/2026:10:00:42 +0000] "GET /api/v2/items/222 HTTP/1.1" 304 397
+198.51.100.127 - - [30/Sep/2026:10:00:49 +0000] "GET /api/v2/items/259 HTTP/1.1" 304 820
+198.51.100.180 - - [30/Sep/2026:10:00:56 +0000] "GET /api/v2/items/296 HTTP/1.1" 304 229
+198.51.100.171 - - [30/Sep/2026:10:01:03 +0000] "GET /api/v2/items/333 HTTP/1.1" 200 712
+203.0.113.197 - - [30/Sep/2026:10:01:10 +0000] "GET /api/v2/items/370 HTTP/1.1" 200 198
+198.51.100.75 - - [30/Sep/2026:10:01:17 +0000] "GET /api/v2/items/407 HTTP/1.1" 404 725

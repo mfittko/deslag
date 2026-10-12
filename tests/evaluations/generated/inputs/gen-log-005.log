@@ -1,0 +1,35 @@
+test billing::invoice::jolly_cedar ... ok
+test billing::ledger::brisk_marmot ... ok
+test auth::session::amber_cedar ... ok
+test auth::token::eager_jackal ... ok
+test search::index::ivory_iguana ... ok
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+test search::query::lunar_dingo ... ok
+test billing::invoice::brisk_cedar ... ok
+test billing::ledger::calm_koala ... ok
+test auth::session::amber_heron ... ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+test auth::token::amber_badger ... ok
+test search::index::hazy_dingo ... ok
+test search::query::keen_egret ... ok
+test billing::invoice::eager_cedar ... ok
+test billing::ledger::calm_badge7 ... ok
+test billing::ledger::calm_badger ... FAILED
+test auth::token::calm_jackal ... ok
+test search::index::fuzzy_jackal ... ok
+test search::query::ivory_heron ... ok
+test billing::invoice::ivory_koala ... ok
+test billing::ledger::gentle_heron ... ok
+test auth::session::hazy_marmot ... ok
+test auth::token::lunar_cedar ... ok
+failures:
+    billing::ledger::calm_badger
+test result: FAILED. 21 passed; 1 failed

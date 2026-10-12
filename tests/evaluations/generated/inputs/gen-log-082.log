@@ -1,0 +1,31 @@
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+retrying after a transient error
+retrying after a transient error
+test billing::invoice::dusty_heron ... ok
+test billing::ledger::amber_koala ... ok
+test auth::session::hazy_iguan7 ... ok
+test auth::token::dusty_cedar ... ok
+test search::index::calm_dingo ... ok
+test search::query::ivory_dingo ... ok
+test billing::invoice::ivory_iguana ... ok
+test auth::session::hazy_iguana ... FAILED
+test auth::session::keen_badger ... ok
+test auth::token::fuzzy_lemur ... ok
+test search::index::calm_egret ... ok
+test search::query::dusty_dingo ... ok
+test billing::invoice::fuzzy_badger ... ok
+test billing::ledger::hazy_marmot ... ok
+failures:
+    auth::session::hazy_iguana
+test result: FAILED. 13 passed; 1 failed

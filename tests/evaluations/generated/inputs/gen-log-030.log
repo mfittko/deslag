@@ -1,0 +1,30 @@
+test billing::invoice::ivory_jackal ... ok
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+test search::query::dusty_marmot ... FAILED
+test auth::session::gentle_heron ... ok
+test auth::token::jolly_gecko ... ok
+test search::index::jolly_falcon ... ok
+test search::query::gentle_jackal ... ok
+test billing::invoice::calm_iguana ... ok
+test billing::ledger::lunar_cedar ... ok
+test auth::session::eager_egret ... ok
+test auth::token::fuzzy_lemur ... ok
+test search::index::dusty_cedar ... ok
+test search::query::fuzzy_koala ... ok
+test search::query::dusty_marmo7 ... ok
+test billing::ledger::ivory_badger ... ok
+failures:
+    search::query::dusty_marmot
+test result: FAILED. 13 passed; 1 failed

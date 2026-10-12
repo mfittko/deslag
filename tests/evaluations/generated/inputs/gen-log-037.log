@@ -1,0 +1,31 @@
+test billing::invoice::eager_heron ... ok
+test billing::ledger::eager_cedar ... ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+test auth::session::gentle_iguana ... ok
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+test billing::invoice::dusty_egret ... FAILED
+test billing::invoice::dusty_egre7 ... ok
+test search::query::lunar_iguana ... ok
+test billing::invoice::gentle_cedar ... ok
+test billing::ledger::fuzzy_heron ... ok
+test auth::session::jolly_koala ... ok
+test auth::token::dusty_heron ... ok
+test search::index::fuzzy_gecko ... ok
+test search::query::jolly_marmot ... ok
+test billing::invoice::amber_heron ... ok
+failures:
+    billing::invoice::dusty_egret
+test result: FAILED. 12 passed; 1 failed
