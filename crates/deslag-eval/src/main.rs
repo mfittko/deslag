@@ -322,17 +322,23 @@ fn live_dir() -> Result<PathBuf, String> {
     let mut builder = fs::DirBuilder::new();
     #[cfg(unix)]
     std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
-    for d in [&dir, &settings] {
-        builder
-            .create(d)
-            .map_err(|e| format!("{}: {e}", d.display()))?;
+    builder
+        .create(&dir)
+        .map_err(|e| format!("{}: {e}", dir.display()))?;
+    let made = builder
+        .create(&settings)
+        .and_then(|()| {
+            fs::write(
+                settings.join("settings.json"),
+                "{\"disableAllHooks\": true}\n",
+            )
+        })
+        .map_err(|e| format!("{}: {e}", settings.display()));
+    // `run` registers the directory for cleanup only on success, so a failed setup removes it here.
+    if made.is_err() {
+        let _ = fs::remove_dir_all(&dir);
     }
-    fs::write(
-        settings.join("settings.json"),
-        "{\"disableAllHooks\": true}\n",
-    )
-    .map_err(|e| format!("settings: {e}"))?;
-    Ok(dir)
+    made.map(|()| dir)
 }
 
 fn run(args: &[String]) -> Result<(), String> {
