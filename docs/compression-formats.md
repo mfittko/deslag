@@ -506,7 +506,7 @@ A sub-block is one of these:
 
 The decoder decodes the sub-block to JSON text `t`, which must be valid minified JSON. The cell's value is `t` written as a JSON string with the canonical string escape from table-v1 Lexeme preservation.
 
-Nesting is bounded. A top-level block, its bucket tables and the blocks of top-level holes have level 0. A sub-block of a table at level `d` has level `d + 1`. A skeleton block's hole blocks share its level. The maximum level is 4. Each level escapes the decoded text once more, which at most doubles its length. So nested content decodes to at most 2^4 = 16 times the size it would have at level 0.
+Nesting is bounded. A top-level block, its bucket tables and the blocks of top-level holes have level 0. A sub-block of a table at level `d` has level `d + 1`. A skeleton block's hole blocks share its level. The maximum level is 4. Each level escapes the decoded text once more. Escaping at most doubles the length and adds two quote bytes, so text of `m` bytes becomes at most `2m + 2` bytes. So nested content of `n` bytes at level 0 decodes to at most `16n + 30` bytes.
 
 The decoder returns no value for a sub-table with any of these:
 
@@ -546,7 +546,7 @@ The decoder returns no value for any of these:
 
 Encoder output is canonical. The decoder also accepts some non-canonical texts that the encoder does not emit. A hole may stand anywhere a JSON value can stand, for example a whole skeleton such as `table-v2 @0`, or a hole inside an array or a nested object. A table block in a hole may have zero rows; a bucket table may not. Such texts decode, but encoding the result does not reproduce them.
 
-Decoding is linear in the text length. Sub-tables multiply the decoded size of nested content by at most 16, as Sub-tables describes.
+Decoding is linear in the text length. Sub-tables bound the decoded size of nested content of `n` bytes at level 0 by `16n + 30` bytes, as Sub-tables describes.
 
 ### Encoder
 

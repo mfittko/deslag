@@ -12,9 +12,9 @@ use super::{
 use crate::{MAX_JSON_DEPTH_CEILING, minify};
 
 /// Sub-blocks nest at most this many levels below a top-level block. Each
-/// level escapes the decoded text once more, which at most doubles its
-/// length, so nested content decodes to at most 2^4 = 16 times the size it
-/// would have at level 0.
+/// level escapes the decoded text once more: text of `m` bytes becomes at
+/// most `2m + 2` bytes (doubled escapes plus two quotes). So nested content
+/// of `n` bytes at level 0 decodes to at most `16n + 30` bytes.
 pub(super) const MAX_NESTING: usize = 4;
 
 /// The label of block `n` under `label`: `@n` at the top level, else `label.n`.
