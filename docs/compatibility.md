@@ -52,7 +52,7 @@ Status: experimental. The proxy rewrite is stateless and keeps no replay manifes
 
 ### Hook field routing
 
-With `--minify-json`, `deslag hook claude` passes only these fields through the core. Each field is compressed on its own. Everything else stays byte-identical.
+With `--minify-json`, `deslag hook claude` passes only these fields through the core. Each field is compressed on its own. Other fields keep their values. The hook re-serializes the whole `tool_response`, so key order and number formatting can change, and an integer outside the 64-bit range in another field is re-emitted as a float.
 
 | Tool | Routed field | Unchanged |
 | --- | --- | --- |
@@ -79,9 +79,11 @@ Before it emits a replacement, the hook looks for another `PostToolUse` hook tha
 - project settings: `.claude/settings.json` and `.claude/settings.local.json` under `$CLAUDE_PROJECT_DIR`, else under the event `cwd`
 - `hooks/hooks.json` of each plugin set to `true` in `enabledPlugins` of those files, located through `<config dir>/plugins/installed_plugins.json`
 
-A missing, empty, `""` or `"*"` matcher matches every tool. A matcher made only of letters, digits, `_` and `|` matches when one `|`-separated name equals the tool name. Any other matcher is a regex. The hook does not evaluate it and treats it as matching. Hooks whose `command` contains `deslag` and plugins whose key starts with `deslag@` are ignored. Missing, unreadable and malformed files are ignored.
+An empty `CLAUDE_CONFIG_DIR`, `HOME` or `CLAUDE_PROJECT_DIR` counts as unset, so the lookup falls through to the next source.
 
-Limits: plugins loaded with `--plugin-dir`, managed settings, hooks declared inline in `plugin.json` and the content of regex matchers are not evaluated. A conflict with these sources goes unreported. The hook cannot see which setting sources the client loaded. It reads user settings even when the client runs with `--setting-sources project,local`, so a user-level hook that the client does not run still reports a conflict (run L2).
+A missing, `""` or `"*"` matcher matches every tool. A matcher made only of letters, digits, `_` and `|` matches when one `|`-separated name equals the tool name. Any other matcher is a regex. The hook does not evaluate it and treats it as matching. A hook counts as deslag's own, and is ignored, only when its `command` contains `deslag hook claude`, `deslag" hook claude` (a quoted binary path) or `deslag-hook.sh` (the plugin wrapper). Any other command that mentions `deslag` still counts as a conflict. Missing, unreadable and malformed files are ignored. A file that is not a regular file or is larger than 1 MiB is ignored too.
+
+Limits: plugins loaded with `--plugin-dir`, managed settings, hooks declared inline in `plugin.json` and the content of regex matchers are not evaluated. A conflict with these sources goes unreported. The hook cannot see which setting sources the client loaded. It reads user settings even when the client runs with `--setting-sources project,local`, so a user-level hook that the client does not run still reports a conflict (run L2). `enabledPlugins` is the union of `true` values across the files, so a project or local `false` does not override a user `true`. That case can report a false conflict, which is the safe direction.
 
 ### Hook routing live runs
 

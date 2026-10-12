@@ -1,8 +1,20 @@
 //! Finds other Claude Code `PostToolUse` hooks that may also replace a tool's output.
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
+
+/// Settings and plugin hooks files larger than this are ignored.
+const MAX_SETTINGS_BYTES: u64 = 1024 * 1024;
+
+/// Command fragments that mark a hook as deslag's own: the CLI, a quoted path to
+/// the binary, and the plugin wrapper script.
+const OWN_COMMANDS: [&str; 3] = [
+    "deslag hook claude",
+    "deslag\" hook claude",
+    "deslag-hook.sh",
+];
 
 /// Returns a diagnostic naming the first settings or plugin hooks file with a
 /// `PostToolUse` hook, other than deslag's own, whose matcher may match `tool`.
@@ -27,7 +39,7 @@ pub fn find(tool: &str, config_dir: Option<&Path>, project_dir: Option<&Path>) -
             .iter()
             .filter_map(|(_, settings)| settings.get("enabledPlugins")?.as_object())
             .flatten()
-            .filter(|(key, on)| on.as_bool() == Some(true) && !key.starts_with("deslag@"))
+            .filter(|(_, on)| on.as_bool() == Some(true))
             .map(|(key, _)| key.clone())
             .collect();
         for key in enabled {
@@ -49,8 +61,25 @@ pub fn find(tool: &str, config_dir: Option<&Path>, project_dir: Option<&Path>) -
     ))
 }
 
+/// Reads a regular file of at most `MAX_SETTINGS_BYTES` as JSON. The path is
+/// checked before opening so a FIFO or device never blocks the hook, and the open
+/// file is checked again in case the path changed in between.
 fn read_json(path: &Path) -> Option<Value> {
-    serde_json::from_slice(&std::fs::read(path).ok()?).ok()
+    if !std::fs::metadata(path).ok()?.is_file() {
+        return None;
+    }
+    let file = std::fs::File::open(path).ok()?;
+    if !file.metadata().ok()?.is_file() {
+        return None;
+    }
+    let mut buf = Vec::new();
+    file.take(MAX_SETTINGS_BYTES + 1)
+        .read_to_end(&mut buf)
+        .ok()?;
+    if buf.len() as u64 > MAX_SETTINGS_BYTES {
+        return None;
+    }
+    serde_json::from_slice(&buf).ok()
 }
 
 /// A matcher group counts when its matcher may match `tool` and it holds any
@@ -66,7 +95,7 @@ fn has_matching_hook(file: &Value, tool: &str) -> bool {
         .any(|hook| {
             !hook["command"]
                 .as_str()
-                .is_some_and(|c| c.contains("deslag"))
+                .is_some_and(|c| OWN_COMMANDS.iter().any(|own| c.contains(own)))
         })
 }
 
@@ -147,14 +176,16 @@ mod tests {
 
     #[test]
     fn own_hook_and_other_events_are_ignored() {
-        assert_eq!(
-            user_settings(
-                "own",
-                "Bash",
-                "\"${CLAUDE_PLUGIN_ROOT}/bin/deslag\" hook claude"
-            ),
-            None
-        );
+        for (command, conflict) in [
+            ("\"${CLAUDE_PLUGIN_ROOT}/bin/deslag\" hook claude", false),
+            ("/x/deslag hook claude --minify-json", false),
+            (PLUGIN_WRAPPER, false),
+            ("~/github/deslag/scripts/fmt.sh", true),
+            ("jq . # deslag-safe", true),
+        ] {
+            let found = user_settings("own", "Bash", command).is_some();
+            assert_eq!(found, conflict, "{command:?}");
+        }
         let dir = temp_dir("pre");
         let settings = serde_json::json!({"hooks": {"PreToolUse": [
             {"matcher": "Bash", "hooks": [{"type": "command", "command": "jq ."}]}
@@ -174,10 +205,12 @@ mod tests {
         }
     }
 
-    fn plugin_setup(name: &str, key: &str, enabled: bool) -> PathBuf {
+    const PLUGIN_WRAPPER: &str = "\"${CLAUDE_PLUGIN_ROOT}/hooks/deslag-hook.sh\"";
+
+    fn plugin_setup(name: &str, key: &str, enabled: bool, command: &str) -> PathBuf {
         let dir = temp_dir(name);
         let install = dir.join("plugins/cache/other");
-        write(&install.join("hooks/hooks.json"), &hooks("Bash", "jq ."));
+        write(&install.join("hooks/hooks.json"), &hooks("Bash", command));
         write(
             &dir.join("plugins/installed_plugins.json"),
             &serde_json::json!({"version": 2, "plugins": {
@@ -193,16 +226,43 @@ mod tests {
 
     #[test]
     fn enabled_plugin_hooks_are_reported() {
-        let dir = plugin_setup("plugin-on", "other@market", true);
+        let dir = plugin_setup("plugin-on", "other@market", true, "jq .");
         let message = find("Bash", Some(&dir), None).unwrap();
         assert!(message.contains("hooks.json"), "{message}");
     }
 
     #[test]
     fn disabled_and_own_plugins_are_ignored() {
-        let dir = plugin_setup("plugin-off", "other@market", false);
+        let dir = plugin_setup("plugin-off", "other@market", false, "jq .");
         assert_eq!(find("Bash", Some(&dir), None), None);
-        let dir = plugin_setup("plugin-own", "deslag@deslag", true);
+        let dir = plugin_setup("plugin-own", "deslag@deslag", true, PLUGIN_WRAPPER);
+        assert_eq!(find("Bash", Some(&dir), None), None);
+        // The plugin key alone does not mark a hook as deslag's own.
+        let dir = plugin_setup("plugin-named", "deslag@deslag", true, "jq .");
+        assert!(find("Bash", Some(&dir), None).is_some());
+    }
+
+    #[test]
+    fn oversize_and_non_regular_files_are_ignored() {
+        let dir = temp_dir("oversize");
+        let settings = hooks("Bash", "jq .").to_string();
+        let padding = MAX_SETTINGS_BYTES as usize - settings.len();
+        fs::write(
+            dir.join("settings.json"),
+            settings.clone() + &" ".repeat(padding),
+        )
+        .unwrap();
+        assert!(find("Bash", Some(&dir), None).is_some());
+        fs::write(
+            dir.join("settings.json"),
+            settings + &" ".repeat(padding + 1),
+        )
+        .unwrap();
+        assert_eq!(find("Bash", Some(&dir), None), None);
+
+        let dir = temp_dir("directory");
+        fs::create_dir_all(dir.join("settings.json")).unwrap();
+        assert_eq!(read_json(&dir.join("settings.json")), None);
         assert_eq!(find("Bash", Some(&dir), None), None);
     }
 

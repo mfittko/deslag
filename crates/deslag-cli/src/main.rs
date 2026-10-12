@@ -155,6 +155,8 @@ fn claude_hook(
     let Some(output) = updated.and_then(|updated| replacement(&event, updated)) else {
         return Ok(None);
     };
+    // An empty variable counts as unset, so the lookup falls through to the next source.
+    let env = |key: &str| env(key).filter(|value| !value.is_empty());
     let config_dir = env("CLAUDE_CONFIG_DIR")
         .map(PathBuf::from)
         .or_else(|| env("HOME").map(|home| PathBuf::from(home).join(".claude")));
@@ -432,12 +434,7 @@ mod tests {
             .push(json!({"type": "resource", "text": PRETTY}));
         let mut expected = event["tool_response"].clone();
         expected[1]["text"] = COMPACT.into();
-        let updated = minified(&event).unwrap();
-        assert_eq!(updated, expected);
-        assert_eq!(
-            serde_json::to_string(&updated[0]).unwrap(),
-            serde_json::to_string(&event["tool_response"][0]).unwrap()
-        );
+        assert_eq!(minified(&event), Some(expected));
     }
 
     #[test]
@@ -490,5 +487,66 @@ mod tests {
             ),
             Ok(None)
         );
+    }
+
+    /// A pretty Bash event with `cwd` set, and a settings file with a matching hook.
+    fn conflict_setup(name: &str) -> (std::path::PathBuf, Vec<u8>) {
+        let dir = temp_dir(name);
+        let settings = json!({"hooks": {"PostToolUse": [
+            {"matcher": "Bash", "hooks": [{"type": "command", "command": "jq ."}]}
+        ]}});
+        std::fs::create_dir_all(dir.join(".claude")).unwrap();
+        std::fs::write(dir.join(".claude/settings.json"), settings.to_string()).unwrap();
+        let mut event = fixture("posttooluse-bash.json");
+        event["tool_response"]["stdout"] = PRETTY.into();
+        event["cwd"] = dir.to_str().unwrap().into();
+        (dir, serde_json::to_vec(&event).unwrap())
+    }
+
+    #[test]
+    fn home_and_cwd_fallbacks_are_scanned() {
+        let (home, _) = conflict_setup("home");
+        let (cwd, bytes) = conflict_setup("cwd");
+        let missing = temp_dir("fallback-none");
+        // No CLAUDE_CONFIG_DIR: user settings come from $HOME/.claude. The project dir
+        // points away from the event cwd, so only the HOME file can match.
+        let message = claude_hook(bytes.as_slice(), true, |key| match key {
+            "HOME" => Some(home.as_os_str().to_owned()),
+            "CLAUDE_PROJECT_DIR" => Some(missing.as_os_str().to_owned()),
+            _ => None,
+        })
+        .unwrap_err();
+        assert!(message.contains(home.to_str().unwrap()), "{message}");
+        // No CLAUDE_PROJECT_DIR: the project settings come from the event cwd.
+        let message = claude_hook(bytes.as_slice(), true, |key| {
+            (key == "CLAUDE_CONFIG_DIR").then(|| missing.as_os_str().to_owned())
+        })
+        .unwrap_err();
+        assert!(message.contains(cwd.to_str().unwrap()), "{message}");
+    }
+
+    #[test]
+    fn empty_env_values_count_as_unset() {
+        let (home, bytes) = conflict_setup("empty-env");
+        let missing = temp_dir("empty-env-none");
+        // Empty CLAUDE_CONFIG_DIR falls through to HOME; empty CLAUDE_PROJECT_DIR to cwd.
+        for (empty, other) in [
+            ("CLAUDE_CONFIG_DIR", "CLAUDE_PROJECT_DIR"),
+            ("CLAUDE_PROJECT_DIR", "CLAUDE_CONFIG_DIR"),
+        ] {
+            let result = claude_hook(bytes.as_slice(), true, |key| match key {
+                "HOME" => Some(home.as_os_str().to_owned()),
+                k if k == empty => Some(OsString::new()),
+                k if k == other => Some(missing.as_os_str().to_owned()),
+                _ => None,
+            });
+            assert!(result.is_err(), "{empty}");
+        }
+        // Empty everywhere and no cwd: nothing to scan, so the replacement goes out.
+        let mut event: Value = serde_json::from_slice(&bytes).unwrap();
+        event.as_object_mut().unwrap().remove("cwd");
+        let bytes = serde_json::to_vec(&event).unwrap();
+        let output = claude_hook(bytes.as_slice(), true, |_| Some(OsString::new()));
+        assert!(matches!(output, Ok(Some(_))), "{output:?}");
     }
 }
