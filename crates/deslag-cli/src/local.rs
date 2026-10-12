@@ -7,6 +7,10 @@
 //! hour: a killed service loses that hour, and its stale socket file stays
 //! until the next `run` removes it. A failed write is logged to stderr, and its
 //! buckets stay in memory for the next attempt.
+//!
+//! The service answers `ping`, `flush` and `stop` with `ok`. When the write
+//! fails, `flush` and `stop` answer `flush failed: <error>` instead, and the
+//! service keeps running.
 
 use std::{
     collections::BTreeMap,
@@ -150,14 +154,21 @@ fn serve(
             }
         };
         let reply = |text: &[u8]| drop(socket.send_to_addr(text, &addr));
-        let mut flushed = || service.flush(now).map_err(|e| format!("flush failed: {e}"));
+        let mut flushed = || {
+            service.flush(now).map_err(|e| {
+                let text = format!("flush failed: {e}");
+                log(e);
+                text
+            })
+        };
         match &buf[..n] {
             b"ping" => reply(b"ok"),
             b"flush" => match flushed() {
                 Ok(()) => reply(b"ok"),
                 Err(e) => reply(e.as_bytes()),
             },
-            // On a failed flush the service keeps running with its buckets.
+            // On a failed flush the service logs the error, answers
+            // `flush failed: <error>` and keeps running with its buckets.
             b"stop" => match flushed() {
                 Ok(()) => {
                     let _ = fs::remove_file(socket_path);
@@ -398,8 +409,8 @@ impl Service {
 
     /// Appends all buckets of hours before `before`, plus a service line for
     /// every uncovered hour inside the retention window. On a write error the
-    /// buckets stay in memory for the next call.
-    // ponytail: a partial write followed by a retry duplicates those lines.
+    /// buckets stay in memory for the next call, and the file is truncated back
+    /// to its old length, so the retry starts on a clean line boundary.
     fn close(&mut self, before: u64) -> io::Result<()> {
         let first = self
             .covered
@@ -410,13 +421,27 @@ impl Service {
             closed.entry(Key::service(hour)).or_default();
         }
         let text: String = closed.iter().map(|(k, b)| line(k, b) + "\n").collect();
-        if let Err(e) = open_private(&self.path).and_then(|mut f| f.write_all(text.as_bytes())) {
+        let written = open_private(&self.path)
+            .and_then(|f| append_or_truncate(&f, |mut f| f.write_all(text.as_bytes())));
+        if let Err(e) = written {
             self.buckets.append(&mut closed);
             return Err(e);
         }
         self.covered = self.covered.max(before);
         Ok(())
     }
+}
+
+/// Runs `write` on `file` and truncates `file` back to its old length when
+/// `write` fails, so a torn append leaves no partial line.
+fn append_or_truncate(
+    file: &fs::File,
+    write: impl FnOnce(&fs::File) -> io::Result<()>,
+) -> io::Result<()> {
+    let len = file.metadata()?.len();
+    write(file).inspect_err(|_| {
+        let _ = file.set_len(len);
+    })
 }
 
 // ponytail: check-then-open race; O_NOFOLLOW needs per-platform constants (libc).
@@ -601,6 +626,19 @@ mod tests {
         fs::create_dir_all(&dir.0).unwrap();
         s.tick(T0 + HOUR + 1).unwrap();
         assert_eq!(lines(&path).len(), 2, "one report and one service line");
+    }
+
+    #[test]
+    fn a_torn_append_is_truncated_back() {
+        let (_dir, path) = temp_file("torn");
+        fs::write(&path, "{}\n").unwrap();
+        let file = open_private(&path).unwrap();
+        let torn = append_or_truncate(&file, |mut f| {
+            f.write_all(b"{\"half")?;
+            Err(io::Error::other("disk full"))
+        });
+        assert!(torn.is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "{}\n");
     }
 
     #[test]

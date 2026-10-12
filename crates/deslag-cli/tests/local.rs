@@ -206,6 +206,16 @@ fn hook_output_is_unchanged_with_a_stale_socket() {
 }
 
 #[test]
+fn run_replaces_a_stale_socket() {
+    let dir = state_dir("stalerun");
+    let _cleanup = RemoveOnDrop(dir.clone());
+    fs::create_dir_all(&dir).unwrap();
+    drop(UnixDatagram::bind(dir.join("local.sock")).unwrap());
+    // `run` waits for a `ping` answer, which the stale socket never gives.
+    run(&dir).stop();
+}
+
+#[test]
 fn bad_local_arguments_print_usage_and_exit_64() {
     let dir = state_dir("usage");
     for args in [
