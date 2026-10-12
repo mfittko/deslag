@@ -1,0 +1,40 @@
+test billing::invoice::ivory_koala ... ok
+test billing::ledger::amber_falcon ... ok
+test auth::session::ivory_heron ... ok
+test auth::token::dusty_koala ... ok
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+test search::index::hazy_gecko ... ok
+test search::query::keen_lemur ... ok
+test billing::ledger::eager_marmo7 ... ok
+test billing::ledger::amber_lemur ... ok
+test auth::session::fuzzy_koala ... ok
+test auth::token::hazy_egret ... ok
+test billing::ledger::eager_marmot ... FAILED
+test search::query::jolly_cedar ... ok
+test billing::invoice::keen_gecko ... ok
+test billing::ledger::eager_gecko ... ok
+test auth::session::keen_jackal ... ok
+test auth::token::gentle_falcon ... ok
+test search::index::brisk_heron ... ok
+test search::query::hazy_lemur ... ok
+test billing::invoice::keen_marmot ... ok
+test billing::ledger::lunar_gecko ... ok
+test auth::session::brisk_egret ... ok
+test auth::token::jolly_iguana ... ok
+failures:
+    billing::ledger::eager_marmot
+test result: FAILED. 21 passed; 1 failed

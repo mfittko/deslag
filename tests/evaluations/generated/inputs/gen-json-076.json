@@ -1,0 +1,99 @@
+[
+  {
+    "service_id": "svc_SQ3CDJ4Y",
+    "service_name": "fuzzy-dingo",
+    "tier": "bronze",
+    "error_rate": 117.36,
+    "owner": "beta-team"
+  },
+  {
+    "service_id": "svc_M44ERMB1",
+    "service_name": "brisk-heron",
+    "tier": "bronze",
+    "error_rate": 191.06
+  },
+  {
+    "service_id": "svc_G8R3Y6FY",
+    "service_name": "fuzzy-cedar",
+    "tier": "bronze",
+    "error_rate": 129.82,
+    "owner": "core-team"
+  },
+  {
+    "service_id": "svc_403CZCZN",
+    "service_name": "brisk-badger",
+    "tier": "bronze",
+    "error_rate": 156.66,
+    "owner": "data-team"
+  },
+  {
+    "service_id": "svc_8PW0CMQ7",
+    "service_name": "dusty-dingo-2",
+    "tier": "bronze",
+    "error_rate": 225.50,
+    "owner": "core-team"
+  },
+  {
+    "service_id": "svc_25CXAJA2",
+    "service_name": "hazy-dingo",
+    "tier": "bronze",
+    "error_rate": 172.32,
+    "owner": "alpha-team"
+  },
+  {
+    "service_id": "svc_M507Z5R1",
+    "service_name": "ivory-marmot",
+    "tier": "bronze",
+    "error_rate": 155.80,
+    "owner": null
+  },
+  {
+    "service_id": "svc_797B5HMF",
+    "service_name": "jolly-lemur",
+    "tier": "bronze",
+    "error_rate": 144.63,
+    "owner": null
+  },
+  {
+    "service_id": "svc_6QV8745J",
+    "service_name": "ivory-iguana",
+    "tier": "bronze",
+    "error_rate": 180.91,
+    "owner": "data-team"
+  },
+  {
+    "service_id": "svc_9AGPT9JE",
+    "service_name": "fuzzy-heron",
+    "tier": "bronze",
+    "error_rate": 166.56,
+    "owner": null
+  },
+  {
+    "service_id": "svc_ZH5DCE4K",
+    "service_name": "brisk-cedar",
+    "tier": "bronze",
+    "error_rate": 125.69,
+    "owner": "beta-team"
+  },
+  {
+    "service_id": "svc_ZV6MVVZ2",
+    "service_name": "amber-heron",
+    "tier": "bronze",
+    "error_rate": 186.06,
+    "owner": null
+  },
+  {
+    "service_id": "svc_VP6FAHKY",
+    "service_name": "jolly-badger",
+    "tier": "bronze",
+    "error_rate": 141.90,
+    "owner": null
+  },
+  {
+    "service_id": "svc_8PW0CMQS",
+    "service_name": "dusty-dingo",
+    "tier": "gold",
+    "error_rate": 235.70,
+    "owner": "edge-team"
+  }
+]

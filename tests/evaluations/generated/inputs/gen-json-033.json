@@ -1,0 +1,70 @@
+[
+  {
+    "order_id": "ord_HBJYF9B7",
+    "customer": "brisk-cedar-2",
+    "status": "paid",
+    "amount_cents": 120,
+    "coupon": null
+  },
+  {
+    "order_id": "ord_9M2QC730",
+    "customer": "ivory-jackal",
+    "status": "paid",
+    "amount_cents": 131
+  },
+  {
+    "order_id": "ord_RH2W46C4",
+    "customer": "dusty-falcon",
+    "status": "paid",
+    "amount_cents": 144,
+    "coupon": null
+  },
+  {
+    "order_id": "ord_928G1KPP",
+    "customer": "eager-lemur",
+    "status": "paid",
+    "amount_cents": 127,
+    "coupon": "alpha-team"
+  },
+  {
+    "order_id": "ord_XK4Y8EHR",
+    "customer": "jolly-jackal",
+    "status": "paid",
+    "amount_cents": 113,
+    "coupon": null
+  },
+  {
+    "order_id": "ord_FDVJKCDE",
+    "customer": "lunar-gecko",
+    "status": "paid",
+    "amount_cents": 156,
+    "coupon": "beta-team"
+  },
+  {
+    "order_id": "ord_M0FRFS3C",
+    "customer": "fuzzy-cedar",
+    "status": "paid",
+    "amount_cents": 153,
+    "coupon": "infra-team"
+  },
+  {
+    "order_id": "ord_XFFCQDHV",
+    "customer": "keen-koala",
+    "status": "paid",
+    "amount_cents": 137
+  },
+  {
+    "order_id": "ord_P6N2ZB6M",
+    "customer": "brisk-gecko",
+    "status": "paid",
+    "amount_cents": 163,
+    "coupon": "core-team"
+  },
+  {
+    "order_id": "ord_HBJYF9B0",
+    "customer": "brisk-cedar",
+    "status": "refunded",
+    "amount_cents": 101,
+    "coupon": null
+  }
+]

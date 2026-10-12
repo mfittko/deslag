@@ -18,7 +18,7 @@ use deslag_core::{
 use serde_json::{Value, json};
 
 use deslag_eval::{
-    ARMS, report,
+    ARMS, generate, report,
     score::{self, ErrorKind, Rule},
 };
 
@@ -26,6 +26,7 @@ const USAGE: &str = "usage:
   deslag-eval variants <manifest>
   deslag-eval run --manifest <path> --backend mock|claude --seed <u64> --out <results.jsonl>
                   [--model <id>] [--budget-usd <f>] [--per-run-usd <f>]
+  deslag-eval generate --seed <u64> --out <dir>
   deslag-eval report <results.jsonl>
   deslag-eval estimate --manifest <path> [--input-usd-per-mtok <f>] [--output-usd-per-mtok <f>]
                   [--overhead-tokens <n>] [--output-tokens <n>] [--per-run-usd <f>]
@@ -56,6 +57,7 @@ fn main() -> ExitCode {
         Some("report") if args.len() == 2 => read(Path::new(&args[1]))
             .and_then(|text| report::render(&text))
             .map(|md| print!("{md}")),
+        Some("generate") => generate(&args[1..]),
         Some("run") => run(&args[1..]),
         Some("estimate") => estimate(&args[1..]),
         _ => Err(USAGE.to_string()),
@@ -106,21 +108,50 @@ fn read(path: &Path) -> Result<String, String> {
     fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))
 }
 
+/// The manifest's tasks, then the tasks of each file in its `include` list (one level only).
 fn load_manifest(path: &Path) -> Result<Vec<Task>, String> {
+    let mut ids = std::collections::HashSet::new();
+    let (mut tasks, includes) = load_file(path, &mut ids)?;
+    let dir = path.parent().unwrap_or(Path::new("."));
+    for rel in includes {
+        let inc = dir.join(rel);
+        let (more, nested) = load_file(&inc, &mut ids)?;
+        if !nested.is_empty() {
+            return Err(format!(
+                "{}: an included manifest cannot include",
+                inc.display()
+            ));
+        }
+        tasks.extend(more);
+    }
+    Ok(tasks)
+}
+
+/// One manifest file's tasks and its `include` paths. Ids are unique across `ids`.
+fn load_file(
+    path: &Path,
+    ids: &mut std::collections::HashSet<String>,
+) -> Result<(Vec<Task>, Vec<String>), String> {
     let text = read(path)?;
     let doc: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
     let dir = path.parent().unwrap_or(Path::new("."));
-    let tasks = doc["tasks"].as_array().ok_or("manifest: no tasks array")?;
+    let tasks = doc["tasks"]
+        .as_array()
+        .ok_or_else(|| format!("{}: no tasks array", path.display()))?;
     if tasks.is_empty() {
-        return Err("manifest: empty tasks array".to_string());
+        return Err(format!("{}: empty tasks array", path.display()));
     }
-    let mut ids = std::collections::HashSet::new();
-    tasks
+    let includes = match &doc["include"] {
+        Value::Null => vec![],
+        v => serde_json::from_value(v.clone())
+            .map_err(|e| format!("{}: include: {e}", path.display()))?,
+    };
+    let tasks = tasks
         .iter()
         .map(|t| {
             let s = |k: &str| t[k].as_str().map(str::to_string);
-            let id = s("id").ok_or("task without id")?;
-            let err = |m: &str| format!("task {id}: {m}");
+            let id = s("id").ok_or_else(|| format!("{}: task without id", path.display()))?;
+            let err = |m: &str| format!("{}: task {id}: {m}", path.display());
             if !ids.insert(id.clone()) {
                 return Err(err("duplicate id"));
             }
@@ -190,7 +221,18 @@ fn load_manifest(path: &Path) -> Result<Vec<Task>, String> {
                 id,
             })
         })
-        .collect()
+        .collect::<Result<Vec<Task>, String>>()?;
+    Ok((tasks, includes))
+}
+
+fn generate(args: &[String]) -> Result<(), String> {
+    let f = flags(args, "seed out")?;
+    let out: String = parsed(&f, "out", None)?;
+    // An empty path resolves to the current directory and would overwrite its manifest.json.
+    if out.trim().is_empty() {
+        return Err(format!("--out needs a non-empty path\n{USAGE}"));
+    }
+    generate::run(parsed(&f, "seed", None)?, Path::new(&out))
 }
 
 /// The arm's payload. `None` when the transform declines, so the payload is

@@ -1,8 +1,8 @@
 # Paired task evaluation
 
-The method, the scoring rules and the non-inferiority criterion are predeclared in [benchmark-methodology.md](../benchmark-methodology.md). The corpus is `tests/evaluations/manifest.json`: 21 synthetic tasks, 17 of them in the PLAN §14.4 categories, 2 incompressible controls and 2 evidence-drop controls.
+The method, the scoring rules and the non-inferiority criterion are predeclared in [benchmark-methodology.md](../benchmark-methodology.md). The corpus is `tests/evaluations/manifest.json`, which includes the generated corpus `tests/evaluations/generated/manifest.json` (seed 7700). It holds 228 synthetic tasks: the 21 pilot tasks (17 in the PLAN §14.4 categories, 2 incompressible controls, 2 evidence-drop controls) and 207 generated tasks (195 in the categories, 6 incompressible controls, 6 evidence-drop controls). It has 935 (task, arm) runs.
 
-This file holds live run 1, a two-call live plumbing smoke check and the offline mock dry run.
+This file holds live run 1 (pilot corpus), the predeclared live run 2, a two-call live plumbing smoke check and the offline mock dry run (full corpus).
 
 ## Status
 
@@ -10,18 +10,21 @@ This file holds live run 1, a two-call live plumbing smoke check and the offline
 | --- | --- |
 | Live model results | live run 1: `claude-haiku-5-5`, seed 16, Claude Code 2.1.296, 90 runs, reported total USD 0.0443 |
 | Live run 1 verdicts | every arm is `not shown`; no arm is `inferior`; no arm passed |
-| Corpus size per arm | 4 to 12 non-control pairs; with zero discordant pairs an arm needs at least 81 to pass; below that an arm passes only when discordance favors it, and the observed favorable discordance (`lines-v1`, b = 0, c = 1) was insufficient |
+| Corpus size per arm | live run 1 (pilot): 4 to 12 non-control pairs; with zero discordant pairs an arm needs at least 81 to pass; below that an arm passes only when discordance favors it, and the observed favorable discordance (`lines-v1`, b = 0, c = 1) was insufficient |
 | Live run 1 failures | the only transform-arm failure, `lines-v2` on `buried-artifact-sha`, also failed in baseline |
 | Live run 1 controls | `drop-evidence` lost the evidence on both evidence-drop tasks; every arm left both incompressible tasks unchanged |
 | table-v1 CSV vs Markdown-KV | live run 1: 11/11 for both formats; one run on one model cannot rank them, and CSV does not become a default from it |
-| Mock dry run | below, plumbing evidence only |
-| Generated | live run 1 at commit 2627754 (v0.1.0-alpha.2), 2026-10-12; mock output reproduced at commit 4c8b38e9ec326a404549cb98494a86b9ebeca30e |
+| Corpus size per arm (full corpus) | non-control pairs: json-minify 106, table-csv 105, table-mdkv 105, table-v2 105, lines-v1 106, lines-v2 105; changed non-control pairs (the transform changed the payload): json-minify 106, table-csv 104, table-mdkv 104, table-v2 105, lines-v1 104, lines-v2 105; 935 runs |
+| Live run 2 | predeclared in Live runs; pending |
+| Mock dry run | below, full corpus, plumbing evidence only |
+| Generated | live run 1 at commit 2627754 (v0.1.0-alpha.2), 2026-10-12; mock output reproduced on the full corpus generated with seed 7700 at commit e159c9d (`tests/evaluations/generated/manifest.json` sha256 `e620eeec695f7a909b58eb4e087d22e21241286f2681c5b824a820588171d848`) |
 
 ## Live runs
 
-Run 1: one model, one seed, every (task, arm) pair. Its report is in [Live run 1](#live-run-1). The command needs authorized Claude credentials and spends money. CI never runs it.
+Run 1: one model, one seed, every (task, arm) pair of the 21-task pilot corpus (the manifest before the generated corpus was included). Its numbers stay as recorded. Its report is in [Live run 1](#live-run-1). The command needs authorized Claude credentials and spends money. CI never runs it. The command checks out commit 2627754 first, because the current manifest includes the generated corpus.
 
 ```sh
+git checkout 2627754
 mkdir -p tmp/eval
 DESLAG_EVAL_LIVE=1 cargo run -q -p deslag-eval --locked -- run \
   --manifest tests/evaluations/manifest.json \
@@ -31,7 +34,7 @@ DESLAG_EVAL_LIVE=1 cargo run -q -p deslag-eval --locked -- run \
 cargo run -q -p deslag-eval --locked -- report tmp/eval/live-claude-haiku-5-5-seed16.jsonl
 ```
 
-Estimated cost from `cargo run -q -p deslag-eval --locked -- estimate --manifest tests/evaluations/manifest.json` (default assumptions). The estimate rests on estimated tokens, assumed output tokens and conservative assumed prices that may exceed the published price of the model. Runs times `--per-run-usd` is a cap only if every call stays within `--per-run-usd`. Before each call, the runner stops when the spent amount plus the per-run cap of USD 0.30 would exceed `--budget-usd 3.00`. Each call passes `--max-budget-usd 0.30`, but the client checks it only after a turn. One call can therefore exceed its cap, and the total can exceed USD 3.00 by that excess. The runner stops with exit 2 after any call that reports more than USD 0.30 and keeps the partial results file. `run` refuses an existing `--out` path.
+Estimated cost of run 1 (pilot corpus, 90 runs) as recorded before the run, with default assumptions. The estimate rests on estimated tokens, assumed output tokens and conservative assumed prices that may exceed the published price of the model. Runs times `--per-run-usd` is a cap only if every call stays within `--per-run-usd`. Before each call, the runner stops when the spent amount plus the per-run cap of USD 0.30 would exceed `--budget-usd 3.00`. Each call passes `--max-budget-usd 0.30`, but the client checks it only after a turn. One call can therefore exceed its cap, and the total can exceed USD 3.00 by that excess. The runner stops with exit 2 after any call that reports more than USD 0.30 and keeps the partial results file. `run` refuses an existing `--out` path.
 
 | Field | Value |
 | --- | --- |
@@ -41,6 +44,46 @@ Estimated cost from `cargo run -q -p deslag-eval --locked -- estimate --manifest
 | Assumed prices, USD per Mtok | input 3 (x1.25 cache write), output 15 |
 | Estimated cost | USD 1.61 |
 | Cap if every call stays within --per-run-usd (90 runs at 0.3) | USD 27.00 |
+
+### Live run 2 (predeclared)
+
+Run 2 is predeclared here before any live call on the full corpus. It uses the full corpus: the 21 pilot tasks plus 207 generated tasks (94 JSON, 101 log, 6 incompressible controls and 6 evidence-drop controls), 228 tasks and 935 runs. The generated corpus (seed 7700), the generator and the manifest are committed and frozen before this run. No task is changed after live results. The scoring rules and the criterion are those of the methodology. The paired Claude prompt-token savings are a secondary measure and never decide pass or fail.
+
+```sh
+mkdir -p tmp/eval
+DESLAG_EVAL_LIVE=1 cargo run -q -p deslag-eval --locked -- run \
+  --manifest tests/evaluations/manifest.json \
+  --backend claude --model claude-haiku-5-5 --seed 77 \
+  --budget-usd 3.00 --per-run-usd 0.30 \
+  --out tmp/eval/live-claude-haiku-5-5-seed77.jsonl
+cargo run -q -p deslag-eval --locked -- report tmp/eval/live-claude-haiku-5-5-seed77.jsonl
+```
+
+The run-1 defaults cost more than USD 3.00 on this corpus. Run 2 therefore states its own assumptions. Each is above the live run 1 measurement: about 740 overhead tokens per call (1000 assumed), about 70 output tokens per run (128 assumed), and an effective price of about 1/19 of the default price (prices of 1 and 5 USD per Mtok assumed, about 6 times the observed effective price). The defaults stay unchanged.
+
+Estimate with the run-2 assumptions, from `cargo run -q -p deslag-eval --locked -- estimate --manifest tests/evaluations/manifest.json --input-usd-per-mtok 1 --output-usd-per-mtok 5 --overhead-tokens 1000 --output-tokens 128`:
+
+| Field | Value |
+| --- | --- |
+| Runs (task, arm) | 935 |
+| Estimated input tokens (deslag-estimate-v1, incl. 1000 overhead per run) | 1590323 |
+| Assumed output tokens per run | 128 |
+| Assumed prices, USD per Mtok | input 1 (x1.25 cache write), output 5 |
+| Estimated cost | USD 2.59 |
+| Cap if every call stays within --per-run-usd (935 runs at 0.3) | USD 280.50 |
+
+Estimate with the default assumptions, from the same command without the assumption flags:
+
+| Field | Value |
+| --- | --- |
+| Runs (task, arm) | 935 |
+| Estimated input tokens (deslag-estimate-v1, incl. 2000 overhead per run) | 2525323 |
+| Assumed output tokens per run | 256 |
+| Assumed prices, USD per Mtok | input 3 (x1.25 cache write), output 15 |
+| Estimated cost | USD 13.06 |
+| Cap if every call stays within --per-run-usd (935 runs at 0.3) | USD 280.50 |
+
+The default estimate exceeds `--budget-usd 3.00`. The run-2 estimate of USD 2.59 is below USD 2.70, the point at which the runner stops (the budget minus the per-run cap). Before each call, the runner stops when the spent amount plus the per-run cap would exceed the budget.
 
 After a run, add its report as a new section above the mock dry run, with the client version and the total spend, and update the Status table.
 
@@ -186,7 +229,7 @@ jq -rs '(map(select(.arm=="baseline"))|map({key:.task,value:.payload_tokens_est}
 
 ## Mock dry run
 
-The mock backend answers with the accepted answer when it occurs verbatim in the payload, else `NOT_FOUND`. It measures evidence presence only. Its results show that the harness pairs runs, scores them, detects evidence loss and keeps the incompressible controls unchanged.
+The mock backend answers with the accepted answer when it occurs verbatim in the payload, else `NOT_FOUND`. It measures evidence presence only. Its results show that the harness pairs runs, scores them, detects evidence loss and keeps the incompressible controls unchanged. The run covers the full corpus (228 tasks, 935 runs). The output was reproduced on the corpus generated with seed 7700 at commit e159c9d (`tests/evaluations/generated/manifest.json` sha256 `e620eeec695f7a909b58eb4e087d22e21241286f2681c5b824a820588171d848`). The mock reports no usage, so the Claude columns of the paired savings table show `n/a`. The verdicts below describe the mock backend only.
 
 ```sh
 mkdir -p tmp/eval
@@ -196,15 +239,17 @@ cargo run -q -p deslag-eval --locked -- run --manifest tests/evaluations/manifes
 cargo run -q -p deslag-eval --locked -- report tmp/eval/mock-seed16.jsonl
 ```
 
+Report output, verbatim:
+
 ### Run
 
 | Field | Value |
 | --- | --- |
 | backend | mock |
 | model | n/a |
-| client version | deslag-eval 0.1.0-alpha.1 |
+| client version | deslag-eval 0.1.0-alpha.2 |
 | seed | 16 |
-| result lines | 90 |
+| result lines | 935 |
 | runs without a baseline partner | 0 |
 | reported cost, USD | n/a |
 
@@ -214,52 +259,52 @@ Non-control tasks. Agresti-Min lower one-sided 95% bound; an arm passes when the
 
 | Arm | Pairs | Unchanged | b | c | Baseline success | Arm success | Difference pp | Lower bound pp | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| json-minify | 12 | 0 | 0 | 0 | 12/12 (100.0%) | 12/12 (100.0%) | +0.0 | -11.7 | not shown |
-| lines-v1 | 5 | 2 | 0 | 0 | 5/5 (100.0%) | 5/5 (100.0%) | +0.0 | -23.5 | not shown |
-| lines-v2 | 4 | 0 | 0 | 0 | 4/4 (100.0%) | 4/4 (100.0%) | +0.0 | -27.4 | not shown |
-| table-csv | 11 | 1 | 0 | 0 | 11/11 (100.0%) | 11/11 (100.0%) | +0.0 | -12.7 | not shown |
-| table-mdkv | 11 | 1 | 0 | 0 | 11/11 (100.0%) | 11/11 (100.0%) | +0.0 | -12.7 | not shown |
-| table-v2 | 11 | 0 | 0 | 0 | 11/11 (100.0%) | 11/11 (100.0%) | +0.0 | -12.7 | not shown |
+| json-minify | 106 | 0 | 0 | 0 | 106/106 (100.0%) | 106/106 (100.0%) | +0.0 | -1.5 | passes |
+| lines-v1 | 106 | 2 | 0 | 0 | 106/106 (100.0%) | 106/106 (100.0%) | +0.0 | -1.5 | passes |
+| lines-v2 | 105 | 0 | 0 | 0 | 105/105 (100.0%) | 105/105 (100.0%) | +0.0 | -1.5 | passes |
+| table-csv | 105 | 1 | 0 | 0 | 105/105 (100.0%) | 105/105 (100.0%) | +0.0 | -1.5 | passes |
+| table-mdkv | 105 | 1 | 0 | 0 | 105/105 (100.0%) | 105/105 (100.0%) | +0.0 | -1.5 | passes |
+| table-v2 | 105 | 0 | 0 | 0 | 105/105 (100.0%) | 105/105 (100.0%) | +0.0 | -1.5 | passes |
 
 ### Per category
 
 | Category | Arm | Pairs | Baseline success | Arm success | Difference pp | Lower bound pp | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| aggregation | json-minify | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
-| aggregation | table-csv | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
-| aggregation | table-mdkv | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
-| aggregation | table-v2 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
-| api_query | json-minify | 3 | 3/3 (100.0%) | 3/3 (100.0%) | +0.0 | -32.9 | not shown |
-| api_query | table-csv | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
-| api_query | table-mdkv | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
-| api_query | table-v2 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
-| buried_evidence | json-minify | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
-| buried_evidence | lines-v1 | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
-| buried_evidence | lines-v2 | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
-| buried_evidence | table-csv | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
-| buried_evidence | table-mdkv | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
-| buried_evidence | table-v2 | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
-| code_search | json-minify | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
+| aggregation | json-minify | 17 | 17/17 (100.0%) | 17/17 (100.0%) | +0.0 | -8.7 | not shown |
+| aggregation | table-csv | 17 | 17/17 (100.0%) | 17/17 (100.0%) | +0.0 | -8.7 | not shown |
+| aggregation | table-mdkv | 17 | 17/17 (100.0%) | 17/17 (100.0%) | +0.0 | -8.7 | not shown |
+| aggregation | table-v2 | 17 | 17/17 (100.0%) | 17/17 (100.0%) | +0.0 | -8.7 | not shown |
+| api_query | json-minify | 17 | 17/17 (100.0%) | 17/17 (100.0%) | +0.0 | -8.7 | not shown |
+| api_query | table-csv | 16 | 16/16 (100.0%) | 16/16 (100.0%) | +0.0 | -9.1 | not shown |
+| api_query | table-mdkv | 16 | 16/16 (100.0%) | 16/16 (100.0%) | +0.0 | -9.1 | not shown |
+| api_query | table-v2 | 16 | 16/16 (100.0%) | 16/16 (100.0%) | +0.0 | -9.1 | not shown |
+| buried_evidence | json-minify | 6 | 6/6 (100.0%) | 6/6 (100.0%) | +0.0 | -20.6 | not shown |
+| buried_evidence | lines-v1 | 7 | 7/7 (100.0%) | 7/7 (100.0%) | +0.0 | -18.3 | not shown |
+| buried_evidence | lines-v2 | 7 | 7/7 (100.0%) | 7/7 (100.0%) | +0.0 | -18.3 | not shown |
+| buried_evidence | table-csv | 6 | 6/6 (100.0%) | 6/6 (100.0%) | +0.0 | -20.6 | not shown |
+| buried_evidence | table-mdkv | 6 | 6/6 (100.0%) | 6/6 (100.0%) | +0.0 | -20.6 | not shown |
+| buried_evidence | table-v2 | 6 | 6/6 (100.0%) | 6/6 (100.0%) | +0.0 | -20.6 | not shown |
+| code_search | json-minify | 17 | 17/17 (100.0%) | 17/17 (100.0%) | +0.0 | -8.7 | not shown |
 | code_search | lines-v1 | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
-| code_search | table-csv | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
-| code_search | table-mdkv | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
-| code_search | table-v2 | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
-| exact_id | json-minify | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
-| exact_id | table-csv | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
-| exact_id | table-mdkv | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
-| exact_id | table-v2 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
-| failure_diagnosis | json-minify | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
-| failure_diagnosis | lines-v1 | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
-| failure_diagnosis | lines-v2 | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
-| failure_diagnosis | table-csv | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
-| failure_diagnosis | table-mdkv | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
-| failure_diagnosis | table-v2 | 1 | 1/1 (100.0%) | 1/1 (100.0%) | +0.0 | -54.8 | not shown |
-| issue_triage | json-minify | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
-| issue_triage | table-csv | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
-| issue_triage | table-mdkv | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
-| issue_triage | table-v2 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
-| logs | lines-v1 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
-| logs | lines-v2 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | +0.0 | -41.1 | not shown |
+| code_search | table-csv | 17 | 17/17 (100.0%) | 17/17 (100.0%) | +0.0 | -8.7 | not shown |
+| code_search | table-mdkv | 17 | 17/17 (100.0%) | 17/17 (100.0%) | +0.0 | -8.7 | not shown |
+| code_search | table-v2 | 17 | 17/17 (100.0%) | 17/17 (100.0%) | +0.0 | -8.7 | not shown |
+| exact_id | json-minify | 17 | 17/17 (100.0%) | 17/17 (100.0%) | +0.0 | -8.7 | not shown |
+| exact_id | table-csv | 17 | 17/17 (100.0%) | 17/17 (100.0%) | +0.0 | -8.7 | not shown |
+| exact_id | table-mdkv | 17 | 17/17 (100.0%) | 17/17 (100.0%) | +0.0 | -8.7 | not shown |
+| exact_id | table-v2 | 17 | 17/17 (100.0%) | 17/17 (100.0%) | +0.0 | -8.7 | not shown |
+| failure_diagnosis | json-minify | 17 | 17/17 (100.0%) | 17/17 (100.0%) | +0.0 | -8.7 | not shown |
+| failure_diagnosis | lines-v1 | 32 | 32/32 (100.0%) | 32/32 (100.0%) | +0.0 | -4.8 | not shown |
+| failure_diagnosis | lines-v2 | 32 | 32/32 (100.0%) | 32/32 (100.0%) | +0.0 | -4.8 | not shown |
+| failure_diagnosis | table-csv | 17 | 17/17 (100.0%) | 17/17 (100.0%) | +0.0 | -8.7 | not shown |
+| failure_diagnosis | table-mdkv | 17 | 17/17 (100.0%) | 17/17 (100.0%) | +0.0 | -8.7 | not shown |
+| failure_diagnosis | table-v2 | 17 | 17/17 (100.0%) | 17/17 (100.0%) | +0.0 | -8.7 | not shown |
+| issue_triage | json-minify | 15 | 15/15 (100.0%) | 15/15 (100.0%) | +0.0 | -9.7 | not shown |
+| issue_triage | table-csv | 15 | 15/15 (100.0%) | 15/15 (100.0%) | +0.0 | -9.7 | not shown |
+| issue_triage | table-mdkv | 15 | 15/15 (100.0%) | 15/15 (100.0%) | +0.0 | -9.7 | not shown |
+| issue_triage | table-v2 | 15 | 15/15 (100.0%) | 15/15 (100.0%) | +0.0 | -9.7 | not shown |
+| logs | lines-v1 | 66 | 66/66 (100.0%) | 66/66 (100.0%) | +0.0 | -2.4 | not shown |
+| logs | lines-v2 | 66 | 66/66 (100.0%) | 66/66 (100.0%) | +0.0 | -2.4 | not shown |
 
 ### Table format read-back
 
@@ -267,21 +312,26 @@ Non-control tasks that ran both table arms. Control tasks are excluded.
 
 | Format | Arm | Runs | Success | Wrong | Abstain | Backend error |
 | --- | --- | --- | --- | --- | --- | --- |
-| table-v1 CSV | table-csv | 11 | 11/11 (100.0%) | 0 | 0 | 0 |
-| Markdown-KV | table-mdkv | 11 | 11/11 (100.0%) | 0 | 0 | 0 |
+| table-v1 CSV | table-csv | 105 | 105/105 (100.0%) | 0 | 0 | 0 |
+| Markdown-KV | table-mdkv | 105 | 105/105 (100.0%) | 0 | 0 | 0 |
 
 ### Controls
 
 | Control | Arm | Pairs | Baseline success | Arm success | Unchanged | Discordant | Result |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| evidence_drop | drop-evidence | 2 | 2/2 (100.0%) | 0/2 (0.0%) | 0 | 2 | evidence loss detected |
-| evidence_drop | lines-v2 | 1 | 1/1 (100.0%) | 1/1 (100.0%) | 0 | 0 | evidence kept |
-| incompressible | json-minify | 2 | 2/2 (100.0%) | 2/2 (100.0%) | 2 | 0 | all variants unchanged |
-| incompressible | lines-v1 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | 2 | 0 | all variants unchanged |
-| incompressible | lines-v2 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | 2 | 0 | all variants unchanged |
-| incompressible | table-csv | 2 | 2/2 (100.0%) | 2/2 (100.0%) | 2 | 0 | all variants unchanged |
-| incompressible | table-mdkv | 2 | 2/2 (100.0%) | 2/2 (100.0%) | 2 | 0 | all variants unchanged |
-| incompressible | table-v2 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | 2 | 0 | all variants unchanged |
+| evidence_drop | drop-evidence | 8 | 8/8 (100.0%) | 0/8 (0.0%) | 0 | 8 | evidence loss detected |
+| evidence_drop | json-minify | 3 | 3/3 (100.0%) | 3/3 (100.0%) | 0 | 0 | evidence kept |
+| evidence_drop | lines-v1 | 3 | 3/3 (100.0%) | 3/3 (100.0%) | 3 | 0 | evidence kept |
+| evidence_drop | lines-v2 | 4 | 4/4 (100.0%) | 4/4 (100.0%) | 0 | 0 | evidence kept |
+| evidence_drop | table-csv | 3 | 3/3 (100.0%) | 3/3 (100.0%) | 0 | 0 | evidence kept |
+| evidence_drop | table-mdkv | 3 | 3/3 (100.0%) | 3/3 (100.0%) | 0 | 0 | evidence kept |
+| evidence_drop | table-v2 | 3 | 3/3 (100.0%) | 3/3 (100.0%) | 0 | 0 | evidence kept |
+| incompressible | json-minify | 8 | 8/8 (100.0%) | 8/8 (100.0%) | 8 | 0 | all variants unchanged |
+| incompressible | lines-v1 | 8 | 8/8 (100.0%) | 8/8 (100.0%) | 8 | 0 | all variants unchanged |
+| incompressible | lines-v2 | 8 | 8/8 (100.0%) | 8/8 (100.0%) | 8 | 0 | all variants unchanged |
+| incompressible | table-csv | 8 | 8/8 (100.0%) | 8/8 (100.0%) | 8 | 0 | all variants unchanged |
+| incompressible | table-mdkv | 8 | 8/8 (100.0%) | 8/8 (100.0%) | 8 | 0 | all variants unchanged |
+| incompressible | table-v2 | 8 | 8/8 (100.0%) | 8/8 (100.0%) | 8 | 0 | all variants unchanged |
 
 ### Per arm
 
@@ -289,18 +339,47 @@ All tasks, controls included. Payload tokens are estimates (deslag-estimate-v1).
 
 | Arm | Runs | Success | Wrong | Abstain | Backend error | Payload tokens (estimate) | Input tokens | Output tokens | Cache read | Cache creation | Cost USD | Duration ms | Turns | Wall ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| baseline | 21 | 21/21 (100.0%) | 0 | 0 | 0 | 47482 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
-| json-minify | 14 | 14/14 (100.0%) | 0 | 0 | 0 | 24326 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
-| table-csv | 13 | 13/13 (100.0%) | 0 | 0 | 0 | 16654 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
-| table-mdkv | 13 | 13/13 (100.0%) | 0 | 0 | 0 | 24794 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
-| table-v2 | 13 | 13/13 (100.0%) | 0 | 0 | 0 | 15473 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
-| lines-v1 | 7 | 7/7 (100.0%) | 0 | 0 | 0 | 11834 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
-| lines-v2 | 7 | 7/7 (100.0%) | 0 | 0 | 0 | 9079 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
-| drop-evidence | 2 | 0/2 (0.0%) | 0 | 2 | 0 | 1136 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| baseline | 228 | 228/228 (100.0%) | 0 | 0 | 0 | 190626 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| json-minify | 117 | 117/117 (100.0%) | 0 | 0 | 0 | 73653 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| table-csv | 116 | 116/116 (100.0%) | 0 | 0 | 0 | 47094 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| table-mdkv | 116 | 116/116 (100.0%) | 0 | 0 | 0 | 76653 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| table-v2 | 116 | 116/116 (100.0%) | 0 | 0 | 0 | 45913 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| lines-v1 | 117 | 117/117 (100.0%) | 0 | 0 | 0 | 78242 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| lines-v2 | 117 | 117/117 (100.0%) | 0 | 0 | 0 | 67536 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| drop-evidence | 8 | 0/8 (0.0%) | 0 | 8 | 0 | 4506 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+
+### Paired savings
+
+Secondary measure; it never decides pass or fail. Non-control tasks; drop-evidence is a control arm and has no row. Saved is baseline minus arm, summed over the pairs. The estimate columns sum payload tokens (deslag-estimate-v1) over all pairs. The Claude columns sum backend-reported input, cache read and cache creation tokens over the pairs where both runs report all three; they include the system prompt and client overhead, which cancel in the difference but dilute the percentage. Estimate error % is the estimate saved on those same pairs minus the Claude saved, over the absolute Claude saved; positive means the estimate overstates the saving. A pair whose baseline or arm payload estimate is not a finite number of at least 0 is dropped from the whole row.
+
+| Arm | Pairs | Saved tokens (estimate) | Saved % (estimate) | Pairs with Claude tokens | Baseline prompt tokens (Claude) | Arm prompt tokens (Claude) | Saved tokens (Claude) | Saved % (Claude) | Estimate error % |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| json-minify | 106 | 31643 | 30.5 | 0 | n/a | n/a | n/a | n/a | n/a |
+| lines-v1 | 106 | 5552 | 6.8 | 0 | n/a | n/a | n/a | n/a | n/a |
+| lines-v2 | 105 | 15744 | 19.4 | 0 | n/a | n/a | n/a | n/a | n/a |
+| table-csv | 105 | 57472 | 55.5 | 0 | n/a | n/a | n/a | n/a | n/a |
+| table-mdkv | 105 | 28525 | 27.6 | 0 | n/a | n/a | n/a | n/a | n/a |
+| table-v2 | 105 | 58653 | 56.7 | 0 | n/a | n/a | n/a | n/a | n/a |
 
 ## Payload sizes
 
-From `cargo run -q -p deslag-eval --locked -- variants tests/evaluations/manifest.json`. Bytes and estimated tokens (`deslag-estimate-v1`) of each arm's payload. `Changed: no` means the transform declined and the arm sends the original.
+Per-arm summary for the full corpus (the pilot and the generated tasks), from `cargo run -q -p deslag-eval --locked -- variants tests/evaluations/manifest.json`. Tokens are `deslag-estimate-v1` estimates. Tasks is the number of tasks that list the arm, controls included. Changed is the number of those tasks where the transform changed the payload. Baseline tokens sum the baseline payload of the same tasks. Arm tokens sum the arm payload.
+
+| Arm | Tasks | Changed | Baseline tokens (estimate) | Arm tokens (estimate) |
+| --- | --- | --- | --- | --- |
+| json-minify | 117 | 109 | 105991 | 73653 |
+| table-csv | 116 | 107 | 105813 | 47094 |
+| table-mdkv | 116 | 107 | 105813 | 76653 |
+| table-v2 | 116 | 108 | 105813 | 45913 |
+| lines-v1 | 117 | 104 | 83794 | 78242 |
+| lines-v2 | 117 | 109 | 83523 | 67536 |
+| drop-evidence | 8 | 8 | 4665 | 4506 |
+
+The same command prints one row per (task, arm), 935 rows, with bytes, estimated tokens and the changed flag. Add `> tmp/eval/variants.md` to keep the rows.
+
+### Pilot payload sizes
+
+These are the rows of the 21 pilot tasks. They are unchanged from before the generated corpus was added.
 
 | Task | Arm | Bytes | Estimated tokens | Changed |
 | --- | --- | --- | --- | --- |

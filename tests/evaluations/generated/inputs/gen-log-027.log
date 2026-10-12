@@ -1,0 +1,28 @@
+test billing::invoice::keen_badger ... ok
+test billing::ledger::brisk_jackal ... ok
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+test auth::session::lunar_marmot ... ok
+test auth::token::calm_badger ... ok
+test search::index::lunar_dingo ... ok
+test search::query::jolly_dingo ... ok
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+test billing::invoice::lunar_falcon ... ok
+test billing::ledger::jolly_egret ... ok
+test billing::invoice::amber_lemu7 ... ok
+test billing::invoice::amber_lemur ... FAILED
+test search::index::amber_dingo ... ok
+test search::query::dusty_gecko ... ok
+test billing::invoice::ivory_badger ... ok
+failures:
+    billing::invoice::amber_lemur
+test result: FAILED. 12 passed; 1 failed

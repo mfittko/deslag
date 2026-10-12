@@ -13,7 +13,9 @@ The two adapters differ:
 - Hook mode replaces the result inside the client. The client then owns the history.
 - Proxy mode rewrites the request on the wire. The client keeps the original and resends it every turn, so the proxy must rebuild the same representation on every request.
 
-This ADR records the decision, a live hook-mode resume experiment, and an offline proxy-mode replay experiment. Production manifests and retention are out of scope. The first real transform is out of scope.
+This ADR records the decision, a live hook-mode resume experiment, and an offline proxy-mode replay experiment. The first real transform is out of scope.
+
+Status update (#18): `deslag_proxy::session` implements the production manifests, retention (`RETENTION` and `prune`) and store-level owner enforcement. `crates/deslag-proxy/tests/session.rs` tests them. Proxy wiring (#72) and the command that writes `owner` are still pending.
 
 ## Decision
 
@@ -33,9 +35,9 @@ Per session manifest:
 
 | Field | Purpose |
 | --- | --- |
-| Scope digest | Session identity; the raw session id is not stored in exported data |
-| Owner | `hook`, `proxy` or `none` |
-| Mode | `off`, `observe` or `safe`; a mode change applies to new sessions only. An `off` session transforms nothing and records no decisions. Its first request without tool results writes a manifest with mode `off` and no decisions. That manifest marks the session boundary, so the session keeps passing through after the configuration changes to `safe`. Configured `off` does not pass through a request that carries tool results under a scope with no manifest. It rejects that request with `MissingManifest`, as the other modes do |
+| Scope digest | Session identity; the raw session id is not stored in exported data. Stored as `scope_digest`, `sha256(scope)` in hex. A manifest whose scope digest is not that of the request scope is corrupt state |
+| Owner | Always `proxy`, because only the proxy writes a manifest; any other value is corrupt. The configured owner is read per request and is not pinned |
+| Mode | `off` or `safe`. `observe` is deferred: `deslag_proxy::session` does not implement it, so a manifest that names it is corrupt state. A mode change applies to new sessions only. An `off` session transforms nothing and records no decisions; an `off` manifest with decisions is corrupt state. Its first request without tool results writes a manifest with mode `off` and no decisions. That manifest marks the session boundary, so the session keeps passing through after the configuration changes to `safe`. Configured `off` does not pass through a request that carries tool results under a scope with no manifest. While the owner is `proxy`, it rejects that request with `MissingManifest`, as `safe` does |
 | Model profile | Model in use when the manifest was created; each decision records its own model profile |
 | Policy version | Policy in force when the manifest was created |
 
@@ -60,7 +62,7 @@ The per-result key is `(scope, tool_use_id)`. The source digest is a stored inte
 
 ### Ownership
 
-This is the decided design. One configuration value, `owner = hook | proxy | none`, selects the owner. The launcher and doctor workflow will write it; no launcher or doctor writes `owner` yet. Both adapters read it, and each adapter transforms only when it is the owner. The manifest records the owner. A session whose manifest names a different owner passes through. Tool-result content is never evidence of ownership. Unverifiable ownership means `none`. Owner selection and owner-mismatch passthrough are untested.
+This is the decided design. One configuration value, `owner = hook | proxy | none`, selects the owner. The launcher and doctor workflow will write it; no launcher or doctor writes `owner` yet. Both adapters read it, and each adapter transforms only when it is the owner. The configured owner file selects the deciding adapter and is read per request. Pinned decisions replay under any owner. The proxy decides new results only while the owner is `proxy`; under any other owner a new result is recorded `unchanged`. Only the proxy writes a manifest, and the manifest records owner `proxy`. A manifest whose owner and mode are not `proxy`/`safe` or `proxy`/`off` is corrupt state: it returns `MissingManifest` when the request carries tool results, and passes through otherwise. With no manifest, a request passes through without writes unless the configured owner is `proxy`; the missing-manifest error applies only under owner `proxy`. Tool-result content is never evidence of ownership. Unverifiable ownership means `none`. `crates/deslag-proxy/tests/session.rs` tests owner selection and the store-level owner checks.
 
 ### Behavior by event
 
@@ -75,8 +77,8 @@ This is the decided design. One configuration value, `owner = hook | proxy | non
 | Mode changed from `off` to `safe` | Not applicable | An existing `off` session keeps passing through; new sessions use `safe` (offline) |
 | Compression disabled | Stop replacing new results (design, untested) | Keep replaying pinned decisions; new results unchanged (design, untested) |
 | Proxy removed mid-session | Not applicable | The client resends originals. Content stays correct, the cached prefix is lost. Start a new session (design, untested) |
-| Manifest missing or corrupt | Not applicable | Explicit error when the request carries tool results, in every configured mode including `off`. A manifest that does not parse or has no `decisions` object counts as corrupt (offline) |
-| Proxy added to a session with existing history | Not applicable | The scope has no manifest and the request carries tool results. Explicit `MissingManifest` error in every configured mode including `off`; the request is not passed through. This covers sessions started before deslag was installed and sessions started without the proxy. Start a new session (offline, as a lost manifest) |
+| Manifest missing or corrupt | Not applicable | While the owner is `proxy`, explicit error when the request carries tool results, in every configured mode including `off`. Under owner `hook` or `none`, a missing manifest passes through without writes; a corrupt one is still an error. A manifest that does not parse, has no `version` or has no `decisions` object counts as corrupt (offline) |
+| Proxy added to a session with existing history | Not applicable | The scope has no manifest and the request carries tool results. While the owner is `proxy`, explicit `MissingManifest` error in every configured mode including `off`; the request is not passed through. This covers sessions started before deslag was installed and sessions started without the proxy. Start a new session (offline, as a lost manifest) |
 | Source digest mismatch | Not applicable | Explicit error; the known id gets no new decision (offline) |
 | Pinned transform id or version unknown to the binary | Not applicable | Explicit error (offline) |
 | Malformed pinned decision | Not applicable | Explicit error. Only `unchanged: true` or `encoded` with a transform id and an unsigned integer version is valid (offline) |
@@ -112,7 +114,7 @@ Transcript inspection (read only, `~/.claude/projects/<project>/<session>.jsonl`
 
 ## Offline proxy-mode experiment
 
-`crates/deslag-proxy/tests/replay_experiment.rs` holds an experiment-only replay layer over Messages request JSON. Each request goes through the real deslag proxy to a local mock upstream, and the test asserts the bytes the upstream saw. A minify-based toy transform with versions 1 and 2 stands in for real transforms. A temp directory holds the manifests. The layer is experiment-only; production manifests and retention come later.
+`crates/deslag-proxy/tests/replay_experiment.rs` holds an experiment-only replay layer over Messages request JSON. Each request goes through the real deslag proxy to a local mock upstream, and the test asserts the bytes the upstream saw. A minify-based toy transform with versions 1 and 2 stands in for real transforms. A temp directory holds the manifests. The layer is experiment-only; `deslag_proxy::session` holds the production manifests and retention.
 
 Scenarios:
 
@@ -162,16 +164,16 @@ A mutation that re-decides known results under the current policy fails the upgr
 - Tool results with block-array, image or other non-string content. The experiment passes them through undecided.
 - Manifest loss, corruption or expiry for a session with established history. Explicit error; there is no recovery path.
 - A `safe` session that loses its manifest before it records any decision, and then sends a request without tool results under configured `off`, looks like a fresh session. It gets an `off` marker. No decisions are lost.
-- Adding the proxy to a session with existing history, including sessions started before deslag was installed and sessions started without the proxy. A request whose scope has no manifest and that carries tool results gets an explicit `MissingManifest` error in every configured mode, including `off`. The proxy does not pass these requests through. The user starts a new session.
+- Adding the proxy to a session with existing history, including sessions started before deslag was installed and sessions started without the proxy. A request whose scope has no manifest and that carries tool results gets an explicit `MissingManifest` error while the owner is `proxy`, in every configured mode, including `off`. The proxy does not pass these requests through. The user starts a new session.
 - Removing the proxy from a session with encoded history. The client resends originals and the cached prefix is lost.
-- Changing `owner` or `mode` inside a running session. It applies to new sessions only.
-- Owner enforcement: owner selection, the `owner` configuration write, and owner-mismatch passthrough. Untested.
+- Changing `mode` inside a running session. It applies to new sessions only. The configured owner is read per request: pinned decisions replay under any owner, and new results are decided only while the owner is `proxy`.
+- Owner enforcement: the command that writes `owner` is pending. Store-level owner checks are tested in `crates/deslag-proxy/tests/session.rs`; proxy wiring (#72) is pending.
 - Proxy-mode compression-disabled replay. Untested. Model switch and the `off` session marker are covered offline only.
 - `--continue`, Linux and Windows clients, and client versions other than 2.1.296. Untested.
 
 ## Consequences
 
 - Hook mode is the simpler owner for Claude Code: the client keeps the replacement across resume and fork, so history needs no deslag state.
-- Proxy mode needs an atomic manifest write before it forwards any request that carries a new result, a retained transform version for every pinned decision, and an explicit error path. Production manifests, retention and the atomic-write cost are the next step for proxy replay.
+- Proxy mode needs an atomic manifest write before it forwards any request that carries a new result, a retained transform version for every pinned decision, and an explicit error path. `deslag_proxy::session` implements production manifests, retention and atomic commits; wiring them into the proxy (#72) is the next step for proxy replay.
 - Proxy-mode generic mutation stays limited to sessions with a trusted session id that are neither forked nor recovered without a manifest.
 - A canonicalizing JSON round trip is acceptable only in the experiment. Production replay must splice changed blocks into the original request bytes, so unknown fields and key order stay intact.

@@ -39,28 +39,22 @@ pub enum Mode {
     Safe,
 }
 
-/// Manifests unchanged for this long are removed by [`prune`].
+/// [`prune`] removes a manifest whose mtime is older than this. A replay that
+/// commits nothing refreshes the mtime at most once a day, so a manifest can
+/// be removed after `RETENTION` minus up to one day without use.
 pub const RETENTION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
+/// ponytail: a replay without a commit refreshes the mtime at most this often.
+const REFRESH: Duration = Duration::from_secs(24 * 60 * 60);
 const VERSION: u64 = 1;
 const POLICY_VERSION: u64 = 1;
 /// Pinned to deslag-core, so a core version bump retires old decisions.
 const TRANSFORM: &str = JSON_MINIFY_ID;
 const TRANSFORM_VERSION: u64 = JSON_MINIFY_VERSION as u64;
 
-/// `DESLAG_STATE_DIR`, else `$XDG_STATE_HOME/deslag`, else
-/// `$HOME/.local/state/deslag`. Empty and relative values count as unset, so
-/// the result does not depend on the current directory.
-pub fn state_dir() -> Option<PathBuf> {
-    let var = |k| {
-        std::env::var_os(k)
-            .map(PathBuf::from)
-            .filter(|p| p.is_absolute())
-    };
-    var("DESLAG_STATE_DIR")
-        .or_else(|| var("XDG_STATE_HOME").map(|d| d.join("deslag")))
-        .or_else(|| var("HOME").map(|d| d.join(".local/state/deslag")))
-}
+/// One state-dir rule for every adapter: owner, manifests and the telemetry
+/// socket resolve to the same directory.
+pub use deslag_telemetry::state_dir;
 
 /// Atomically records the compression owner.
 pub fn write_owner(dir: &Path, owner: Owner) -> io::Result<()> {
@@ -85,14 +79,21 @@ pub fn read_owner(dir: &Path) -> Owner {
 }
 
 pub fn manifest_path(dir: &Path, scope: &str) -> PathBuf {
-    let name = hex(digest(&SHA256, scope.as_bytes()).as_ref());
-    dir.join("sessions").join(format!("{name}.json"))
+    dir.join("sessions")
+        .join(format!("{}.json", scope_digest(scope)))
+}
+
+fn scope_digest(scope: &str) -> String {
+    hex(digest(&SHA256, scope.as_bytes()).as_ref())
 }
 
 /// Removes session manifests and leftover temp files last modified before
 /// `now - retention`. Returns how many files were removed. Entries that are
-/// not regular files or that vanish while pruning are skipped.
+/// not regular files or that vanish while pruning are skipped. Holds the
+/// replay lock, so a manifest that a replay in this process commits or
+/// refreshes is never removed after its age check.
 pub fn prune(dir: &Path, retention: Duration, now: SystemTime) -> io::Result<usize> {
+    let _guard = LOCK.lock().unwrap_or_else(PoisonError::into_inner);
     let cutoff = now.checked_sub(retention).unwrap_or(SystemTime::UNIX_EPOCH);
     let entries = match fs::read_dir(dir.join("sessions")) {
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(0),
@@ -170,9 +171,17 @@ impl Store {
     /// is otherwise `unchanged`. New decisions are committed before return.
     /// A session without a manifest passes through while the owner is not the
     /// proxy; once the owner is the proxy, its requests with tool results fail.
+    /// A manifest whose `scope_digest` is not `sha256(scope)`, or an `off`
+    /// manifest with decisions, is corrupt.
     /// The owner is read per request and pinned decisions replay under any
     /// owner, so after a change from `proxy` to `hook` earlier results keep
-    /// their pinned encoding.
+    /// their pinned encoding. Only `mode` is pinned per session. A manifest
+    /// whose owner or mode is not `proxy`/`safe` or `proxy`/`off` is corrupt:
+    /// it returns `MissingManifest` when the request carries tool results and
+    /// passes through otherwise. So is a manifest without a `version`. A
+    /// replay of a valid manifest that commits nothing refreshes its mtime at
+    /// most once a day, so [`prune`] keeps sessions in use and can remove an
+    /// idle one after [`RETENTION`] minus up to one day without use.
     pub fn replay(
         &self,
         scope: &str,
@@ -185,6 +194,7 @@ impl Store {
         let path = manifest_path(&self.dir, scope);
         let has_results = !candidates.is_empty();
         let pass = vec![false; candidates.len()];
+        let scope_digest = scope_digest(scope);
         let mut manifest = match fs::read(&path) {
             Err(e) if e.kind() == io::ErrorKind::NotFound => {
                 if owner != Owner::Proxy {
@@ -199,7 +209,8 @@ impl Store {
                 } else {
                     "safe"
                 };
-                let fresh = json!({"version": VERSION, "owner": "proxy", "mode": mode,
+                let fresh = json!({"version": VERSION, "scope_digest": scope_digest,
+                    "owner": "proxy", "mode": mode,
                     "model_profile": model, "policy_version": POLICY_VERSION, "decisions": {}});
                 write_manifest(&path, &fresh)?;
                 return Ok(pass);
@@ -207,7 +218,24 @@ impl Store {
             Err(e) => return Err(ReplayError::Io(e)),
             Ok(bytes) => {
                 let parsed = serde_json::from_slice::<Value>(&bytes).ok();
-                match parsed.filter(|m| m["decisions"].is_object()) {
+                // A future format may reshape `decisions`, so a present
+                // version decides before the shape check.
+                let skew = parsed.as_ref().and_then(|m| m.get("version"));
+                if skew.is_some_and(|v| *v != VERSION) {
+                    return if has_results {
+                        Err(ReplayError::UnsupportedManifest)
+                    } else {
+                        Ok(pass)
+                    };
+                }
+                // An absent version is corrupt state, never version skew. A
+                // manifest of another scope, for example one copied under
+                // this file name, is corrupt and never replays.
+                match parsed.filter(|m| {
+                    m["version"] == VERSION
+                        && m["scope_digest"] == scope_digest.as_str()
+                        && m["decisions"].is_object()
+                }) {
                     Some(m) => m,
                     None if has_results => return Err(ReplayError::MissingManifest),
                     // A corrupt manifest is never overwritten.
@@ -215,18 +243,19 @@ impl Store {
                 }
             }
         };
-        if manifest["version"] != VERSION {
-            return if has_results {
-                Err(ReplayError::UnsupportedManifest)
-            } else {
-                Ok(pass)
-            };
-        }
-        // Owner and mode are pinned per session. Only the proxy writes a
-        // manifest, so any other owner or mode, or a missing one, is corrupt.
+        // Mode is pinned per session; the configured owner is read per
+        // request. Only the proxy writes a manifest, so a manifest owner other
+        // than `proxy`, any other mode, or a missing one, is corrupt. An
+        // `off` session records no decisions, so `off` with decisions is too.
+        let no_decisions = manifest["decisions"]
+            .as_object()
+            .is_some_and(|d| d.is_empty());
         match (manifest["owner"].as_str(), manifest["mode"].as_str()) {
             (Some("proxy"), Some("safe")) => {}
-            (Some("proxy"), Some("off")) => return Ok(pass),
+            (Some("proxy"), Some("off")) if no_decisions => {
+                refresh(&path);
+                return Ok(pass);
+            }
             _ if has_results => return Err(ReplayError::MissingManifest),
             _ => return Ok(pass),
         }
@@ -265,6 +294,8 @@ impl Store {
         }
         if dirty {
             write_manifest(&path, &manifest)?;
+        } else {
+            refresh(&path);
         }
         Ok(encode)
     }
@@ -282,6 +313,19 @@ fn pinned(d: &Value, id: &str) -> Result<bool, ReplayError> {
             _ => Err(ReplayError::CorruptDecision(id.into())),
         },
         _ => Err(ReplayError::CorruptDecision(id.into())),
+    }
+}
+
+/// Sets the mtime of an existing manifest to now when it is older than
+/// `REFRESH`. Never creates the file or changes its bytes. Best-effort: a
+/// manifest that cannot be opened for write, or that a concurrent prune
+/// removed, still replays and only keeps its old retention age.
+fn refresh(path: &Path) {
+    let stale = fs::metadata(path)
+        .and_then(|m| m.modified())
+        .is_ok_and(|t| t.elapsed().is_ok_and(|age| age > REFRESH));
+    if stale && let Ok(file) = fs::File::options().write(true).open(path) {
+        let _ = file.set_modified(SystemTime::now());
     }
 }
 
@@ -305,7 +349,7 @@ fn create_dir(dir: &Path) -> io::Result<()> {
 
 /// Writes a sibling temp file, syncs it, renames it over `path` and syncs the
 /// directory, so a reader sees the old or the new content, never a mix. The
-/// temp name is `<name>.<pid>.<n>.tmp` with the first `n` that does not exist
+/// temp name is `<stem>.<pid>.<n>.tmp` (the file name without its extension) with the first `n` that does not exist
 /// yet, so a leftover of a crashed process with the same pid, or a concurrent
 /// commit, is skipped and never touched.
 fn commit(path: &Path, bytes: &[u8]) -> io::Result<()> {

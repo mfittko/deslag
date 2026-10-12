@@ -1,0 +1,100 @@
+[
+  {
+    "service_id": "svc_E18TKR9N",
+    "service_name": "eager-koala",
+    "tier": "bronze",
+    "error_rate": 131.18,
+    "owner": "core-team"
+  },
+  {
+    "service_id": "svc_C879HB45",
+    "service_name": "amber-heron",
+    "tier": "bronze",
+    "error_rate": 145.25,
+    "owner": null
+  },
+  {
+    "service_id": "svc_AHGW3HGZ",
+    "service_name": "amber-koala",
+    "tier": "bronze",
+    "error_rate": 186.33,
+    "owner": null
+  },
+  {
+    "service_id": "svc_HJ29NEQ4",
+    "service_name": "brisk-cedar",
+    "tier": "bronze",
+    "error_rate": 156.58,
+    "owner": null
+  },
+  {
+    "service_id": "svc_TEPD8XNA",
+    "service_name": "fuzzy-egret",
+    "tier": "bronze",
+    "error_rate": 154.24,
+    "owner": null
+  },
+  {
+    "service_id": "svc_M1Y851NR",
+    "service_name": "keen-badger",
+    "tier": "bronze",
+    "error_rate": 139.11,
+    "owner": null
+  },
+  {
+    "service_id": "svc_6Q6FZMAA",
+    "service_name": "amber-dingo",
+    "tier": "gold",
+    "error_rate": 225.60,
+    "owner": "core-team"
+  },
+  {
+    "service_id": "svc_FKDH8ZVP",
+    "service_name": "gentle-lemur",
+    "tier": "bronze",
+    "error_rate": 127.37,
+    "owner": null
+  },
+  {
+    "service_id": "svc_KWQ01BHV",
+    "service_name": "eager-dingo",
+    "tier": "bronze",
+    "error_rate": 163.28,
+    "owner": "beta-team"
+  },
+  {
+    "service_id": "svc_0HEFGXT5",
+    "service_name": "amber-falcon",
+    "tier": "bronze",
+    "error_rate": 114.31,
+    "owner": "core-team"
+  },
+  {
+    "service_id": "svc_VXQBVSMV",
+    "service_name": "hazy-cedar",
+    "tier": "bronze",
+    "error_rate": 172.68,
+    "owner": "beta-team"
+  },
+  {
+    "service_id": "svc_61STM01H",
+    "service_name": "brisk-egret",
+    "tier": "bronze",
+    "error_rate": 194.40,
+    "owner": null
+  },
+  {
+    "service_id": "svc_6Q6FZMA7",
+    "service_name": "amber-dingo-2",
+    "tier": "bronze",
+    "error_rate": 113.79,
+    "owner": null
+  },
+  {
+    "service_id": "svc_A92NE0VK",
+    "service_name": "fuzzy-gecko",
+    "tier": "bronze",
+    "error_rate": 182.66,
+    "owner": "data-team"
+  }
+]

@@ -6,7 +6,7 @@
 //! [`render_markdown_kv`] renders the same rows as Markdown-KV for evaluation
 //! only; nothing in the compression context selects it.
 
-use std::{collections::HashMap, fmt::Write, iter};
+use std::{collections::HashMap, fmt::Write, iter, ops::Range};
 
 use crate::{Limits, Reason, Scanner, TokenCounter, minify};
 
@@ -232,15 +232,18 @@ fn push_cell(out: &mut String, value: &Value) {
 pub fn decode(text: &str) -> Option<String> {
     let block = text.strip_prefix(MARKER)?.strip_prefix(' ')?;
     let mut i = 0;
-    let out = decode_block(block, &mut i)?;
+    let out = decode_block(block, &mut i, None)?;
     (i == block.len()).then_some(out)
 }
 
 /// Decodes the block at `*i` of `text` to a minified JSON array and moves
 /// `*i` to the end of its last record. A block is a `[count]{columns}` header
-/// line and `count` records, each after a `\n`.
-fn decode_block(text: &str, i: &mut usize) -> Option<String> {
-    Some(format!("[{}]", decode_rows(text, i, None)?.join(",")))
+/// line and `count` records, each after a `\n`. `sub` is as in [`decode_rows`].
+fn decode_block(text: &str, i: &mut usize, sub: Option<(&str, usize)>) -> Option<String> {
+    let mut out = String::from("[");
+    decode_rows(text, i, sub, &mut out)?;
+    out.push(']');
+    Some(out)
 }
 
 /// Parses `0` or `[1-9][0-9]*`: one canonical spelling per count or index.
@@ -254,10 +257,16 @@ fn parse_count(count: &str) -> Option<usize> {
     count.parse().ok()
 }
 
-/// Like [`decode_block`], but returns each row as a minified JSON object.
+/// Like [`decode_block`], but appends the rows to `out` as minified JSON
+/// objects separated by `,`, and returns the span of each row in `out`.
 /// `sub` is the block's label and nesting level in a table-v2 text, where
 /// `json` columns are allowed and their sub-blocks follow the records.
-fn decode_rows(text: &str, i: &mut usize, sub: Option<(&str, usize)>) -> Option<Vec<String>> {
+fn decode_rows(
+    text: &str,
+    i: &mut usize,
+    sub: Option<(&str, usize)>,
+    out: &mut String,
+) -> Option<Vec<Range<usize>>> {
     let header_end = text[*i..].find('\n').map_or(text.len(), |e| *i + e);
     let (count, specs) = text[*i..header_end].strip_prefix('[')?.split_once("]{")?;
     let count = parse_count(count)?;
@@ -284,7 +293,11 @@ fn decode_rows(text: &str, i: &mut usize, sub: Option<(&str, usize)>) -> Option<
     let mut refs = 0;
     let mut rows = Vec::new();
     for cells in &records {
-        let mut out = String::from("{");
+        if !rows.is_empty() {
+            out.push(',');
+        }
+        let row_start = out.len();
+        out.push('{');
         // True right after `{`, where the next member needs no comma.
         let mut opened = true;
         for (cell, col) in cells.iter().zip(&cols) {
@@ -300,11 +313,11 @@ fn decode_rows(text: &str, i: &mut usize, sub: Option<(&str, usize)>) -> Option<
                 continue;
             }
             for name in &col.open {
-                push_key(&mut out, opened, name);
+                push_key(out, opened, name);
                 out.push('{');
                 opened = true;
             }
-            push_key(&mut out, opened, col.leaf);
+            push_key(out, opened, col.leaf);
             match (cell, sub) {
                 (Cell::Bare(s), Some((label, level))) if col.ty == Ty::Json && sub::is_ref(s) => {
                     if parse_count(&s[1..])? != refs {
@@ -317,15 +330,15 @@ fn decode_rows(text: &str, i: &mut usize, sub: Option<(&str, usize)>) -> Option<
                     }
                     *i += start.len();
                     refs += 1;
-                    push_json_str(&mut out, &sub::decode(text, i, &child, level + 1)?);
+                    push_json_str(out, &sub::decode(text, i, &child, level + 1)?);
                 }
-                _ => push_json_value(&mut out, cell, col.ty)?,
+                _ => push_json_value(out, cell, col.ty)?,
             }
             opened = false;
         }
         out.extend(iter::repeat_n('}', cols.last().map_or(0, |c| c.depth)));
         out.push('}');
-        rows.push(out);
+        rows.push(row_start..out.len());
     }
     Some(rows)
 }

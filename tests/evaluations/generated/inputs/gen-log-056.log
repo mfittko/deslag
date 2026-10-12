@@ -1,0 +1,29 @@
+test billing::invoice::eager_jackal ... ok
+heartbeat ok
+heartbeat ok
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+test billing::ledger::calm_koala ... ok
+test billing::invoice::gentle_jacka7 ... ok
+test auth::token::fuzzy_jackal ... ok
+test search::index::eager_heron ... ok
+test search::query::keen_falcon ... ok
+test billing::invoice::calm_gecko ... ok
+test billing::ledger::dusty_egret ... ok
+test billing::invoice::gentle_jackal ... FAILED
+test auth::token::lunar_cedar ... ok
+test search::index::calm_egret ... ok
+test search::query::lunar_egret ... ok
+test billing::invoice::dusty_heron ... ok
+test billing::ledger::calm_jackal ... ok
+test auth::session::ivory_heron ... ok
+failures:
+    billing::invoice::gentle_jackal
+test result: FAILED. 14 passed; 1 failed

@@ -1,0 +1,27 @@
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+test search::index::brisk_koala ... FAILED
+test billing::ledger::jolly_cedar ... ok
+test auth::session::eager_lemur ... ok
+test auth::token::keen_badger ... ok
+test search::index::brisk_lemur ... ok
+test search::index::brisk_koal7 ... ok
+test billing::invoice::lunar_dingo ... ok
+test billing::ledger::brisk_cedar ... ok
+test auth::session::lunar_gecko ... ok
+test auth::token::keen_jackal ... ok
+test search::index::brisk_gecko ... ok
+test search::query::brisk_jackal ... ok
+test billing::invoice::eager_cedar ... ok
+failures:
+    search::index::brisk_koala
+test result: FAILED. 12 passed; 1 failed

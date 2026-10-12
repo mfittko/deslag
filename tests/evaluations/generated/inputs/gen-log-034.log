@@ -1,0 +1,35 @@
+test billing::invoice::lunar_koala ... ok
+test billing::ledger::calm_heron ... ok
+test auth::session::amber_dingo ... ok
+test auth::token::dusty_dingo ... ok
+test search::index::fuzzy_egret ... ok
+test search::query::hazy_heron ... ok
+test billing::invoice::fuzzy_jackal ... ok
+retrying after a transient error
+retrying after a transient error
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+test billing::ledger::amber_marmot ... ok
+test auth::session::ivory_marmot ... ok
+test auth::session::hazy_dingo ... FAILED
+test auth::session::hazy_ding7 ... ok
+test search::query::calm_badger ... ok
+test billing::invoice::fuzzy_dingo ... ok
+test billing::ledger::brisk_gecko ... ok
+test auth::session::hazy_marmot ... ok
+test auth::token::lunar_lemur ... ok
+test search::index::ivory_jackal ... ok
+failures:
+    auth::session::hazy_dingo
+test result: FAILED. 16 passed; 1 failed
