@@ -105,16 +105,23 @@ impl BoundedExecutor {
         let spawned = std::thread::Builder::new()
             .name("deslag-bounded".into())
             .spawn(move || {
-                let value = job();
-                // Release before sending, so a returned value implies a free permit.
-                drop(permit);
-                let _ = tx.send(value);
+                // The permit travels with the value. The caller drops it before
+                // returning, so a returned value implies a free permit.
+                if let Err(mpsc::SendError((value, permit))) = tx.send((job(), permit)) {
+                    // The caller timed out. Drop the value while the permit is
+                    // still held, so its destructor counts against the limit.
+                    drop(value);
+                    drop(permit);
+                }
             });
         if spawned.is_err() {
             return Err(Rejected::Busy);
         }
         match rx.recv_timeout(self.processing_budget) {
-            Ok(value) => Ok(value),
+            Ok((value, permit)) => {
+                drop(permit);
+                Ok(value)
+            }
             Err(mpsc::RecvTimeoutError::Timeout) => Err(Rejected::BudgetExceeded),
             Err(mpsc::RecvTimeoutError::Disconnected) => Err(Rejected::Panicked),
         }

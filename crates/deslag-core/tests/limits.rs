@@ -123,6 +123,39 @@ fn expired_job_holds_its_permit_until_it_ends() {
     assert_eq!(exec.run(|| 1), Ok(1));
 }
 
+/// Signals when its destructor starts, then blocks until released.
+struct SlowDrop {
+    dropping: mpsc::Sender<()>,
+    release: mpsc::Receiver<()>,
+}
+
+impl Drop for SlowDrop {
+    fn drop(&mut self) {
+        let _ = self.dropping.send(());
+        let _ = self.release.recv();
+    }
+}
+
+#[test]
+fn expired_job_holds_its_permit_while_its_value_drops() {
+    let exec = BoundedExecutor::new(1, BUDGET).unwrap();
+    let (start, gate) = mpsc::channel::<()>();
+    let (dropping, drop_started) = mpsc::channel::<()>();
+    let (release_drop, release) = mpsc::channel::<()>();
+    let result = exec.run(move || {
+        let _ = gate.recv();
+        SlowDrop { dropping, release }
+    });
+    assert!(matches!(result, Err(Rejected::BudgetExceeded)));
+    start.send(()).unwrap();
+    drop_started.recv().unwrap();
+    assert_eq!(exec.in_flight(), 1);
+    assert!(matches!(exec.run(|| ()), Err(Rejected::Busy)));
+    release_drop.send(()).unwrap();
+    wait_idle(&exec);
+    assert_eq!(exec.run(|| 1), Ok(1));
+}
+
 #[test]
 fn busy_executor_spawns_nothing() {
     let exec = BoundedExecutor::new(1, BUDGET).unwrap();
