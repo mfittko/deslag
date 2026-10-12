@@ -7,7 +7,7 @@
       "question": "What is the email address of the user with login kmarsh?",
       "answers": ["k.marsh@example.test"],
       "rule": "exact_ci",
-      "arms": ["json-minify", "table-csv", "table-mdkv"]
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
     },
     {
       "id": "api-repo-branch",
@@ -25,7 +25,7 @@
       "question": "Which file defines the function parse_retry_after? Answer with the file path.",
       "answers": ["src/net/backoff.rs"],
       "rule": "exact",
-      "arms": ["json-minify", "table-csv", "table-mdkv"]
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
     },
     {
       "id": "code-const-line",
@@ -52,7 +52,7 @@
       "question": "Which CI job concluded with failure? Answer with the job name.",
       "answers": ["integration (postgres-16)"],
       "rule": "exact",
-      "arms": ["json-minify", "table-csv", "table-mdkv"]
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
     },
     {
       "id": "triage-open-p0",
@@ -61,7 +61,7 @@
       "question": "What is the number of the open issue labeled p0?",
       "answers": ["4182"],
       "rule": "number",
-      "arms": ["json-minify", "table-csv", "table-mdkv"]
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
     },
     {
       "id": "triage-assignee-set",
@@ -70,7 +70,7 @@
       "question": "List the numbers of all open issues assigned to dkato, comma-separated.",
       "answers": ["5127,5133,5190"],
       "rule": "set",
-      "arms": ["json-minify", "table-csv", "table-mdkv"]
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
     },
     {
       "id": "logs-503-request",
@@ -97,7 +97,7 @@
       "question": "Which service has the highest error_count in a single row? Answer with the service name.",
       "answers": ["ledger-sync"],
       "rule": "exact",
-      "arms": ["json-minify", "table-csv", "table-mdkv"]
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
     },
     {
       "id": "agg-max-duration",
@@ -106,7 +106,7 @@
       "question": "What is the longest duration_s among builds with status success?",
       "answers": ["1873"],
       "rule": "number",
-      "arms": ["json-minify", "table-csv", "table-mdkv"]
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
     },
     {
       "id": "id-order-by-amount",
@@ -115,7 +115,7 @@
       "question": "What is the order_id of the order with amount_cents 48213?",
       "answers": ["ord_9KQ2M7XA"],
       "rule": "exact",
-      "arms": ["json-minify", "table-csv", "table-mdkv"]
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
     },
     {
       "id": "id-deploy-commit",
@@ -124,7 +124,7 @@
       "question": "Which commit SHA is deployed to production-eu for the service checkout? Answer with the full SHA.",
       "answers": ["4be1c09d7a3f5e2286c1d0b9f47a6e3c58d2b710"],
       "rule": "exact_ci",
-      "arms": ["json-minify", "table-csv", "table-mdkv"]
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
     },
     {
       "id": "buried-key-delete",
@@ -133,7 +133,7 @@
       "question": "Which actor deleted the API key key_q8Wm2?",
       "answers": ["svc-rotator-b"],
       "rule": "exact",
-      "arms": ["json-minify", "table-csv", "table-mdkv"]
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2"]
     },
     {
       "id": "buried-artifact-sha",
@@ -152,7 +152,7 @@
       "question": "Who is the on-call engineer for the week of 2026-09-28?",
       "answers": ["Priya Raman"],
       "rule": "exact_ci",
-      "arms": ["json-minify", "table-csv", "table-mdkv", "lines-v1", "lines-v2"]
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2", "lines-v1", "lines-v2"]
     },
     {
       "id": "control-minimal-json",
@@ -162,7 +162,7 @@
       "question": "How many rows did the nightly-export job write?",
       "answers": ["18342"],
       "rule": "number",
-      "arms": ["json-minify", "table-csv", "table-mdkv", "lines-v1", "lines-v2"]
+      "arms": ["json-minify", "table-csv", "table-mdkv", "table-v2", "lines-v1", "lines-v2"]
     },
     {
       "id": "control-drop-revoker",
