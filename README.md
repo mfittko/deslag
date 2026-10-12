@@ -4,7 +4,7 @@ A small, native, deterministic context-compression layer for AI agents.
 
 deslag reduces the representation overhead of tool results before a model sees them. It does not change executed tool calls, it does not silently drop evidence, and telemetry stays off the request path.
 
-> **Status:** early development. The M0 Claude Code plugin and a no-op `PostToolUse` hook adapter (`deslag hook claude`) exist. A first JSON-minification slice is available behind an opt-in `--minify-json` flag on `deslag hook claude` and `deslag proxy`; it applies to Bash results only and is untested against a live client. The [implementation plan](docs/PLAN.md) is the product brief and backlog. Progress is tracked in the [v0.1 epic](https://github.com/mfittko/deslag/issues/1).
+> **Status:** early development. The M0 Claude Code plugin and a no-op `PostToolUse` hook adapter (`deslag hook claude`) exist. A first JSON-minification slice is available behind an opt-in `--minify-json` flag on `deslag hook claude` and `deslag proxy`; it applies to Bash results only and is untested against a live client. One configured owner selects whether the hook or the proxy compresses, and the proxy pins its per-result decisions in local session manifests. The [implementation plan](docs/PLAN.md) is the product brief and backlog. Progress is tracked in the [v0.1 epic](https://github.com/mfittko/deslag/issues/1).
 
 ## Planned v0.1
 
@@ -39,6 +39,17 @@ With `--minify-json`, two more constants in `crates/deslag-proxy/src/minify.rs` 
 | `INSPECT_PERMITS` | 4 | At most 4 requests buffer and rewrite at once. Further eligible requests wait for a permit. `BODY_READ_TIMEOUT` bounds how long a permit holder can keep it. |
 
 No limit applies to a response body after the upstream has answered, so long streams are never cut. Other request bodies stream and are not time-bounded: a client that never finishes its body keeps its slot. Zero or out-of-range limit values are rejected at startup.
+
+## Compression owner and proxy replay
+
+Exactly one component compresses a session: the hook, the proxy or neither. The owner lives in `<state dir>/owner` as `hook`, `proxy` or `none`. The state dir is `DESLAG_STATE_DIR`, else `$XDG_STATE_HOME/deslag`, else `$HOME/.local/state/deslag`. A missing, unreadable or unknown owner means `none`, and the owner is never inferred from tool output. No deslag command writes the owner yet; create the file by hand, for example `mkdir -p ~/.local/state/deslag && echo proxy > ~/.local/state/deslag/owner`.
+
+- `deslag hook claude --minify-json` replaces a result only when the owner is `hook`. The hook keeps no replay state, because Claude Code stores the replacement and resends it on resume and fork.
+- `deslag proxy --minify-json` needs a state dir and fails at startup without one. It rewrites only requests that carry an `X-Claude-Code-Session-Id` header. Other requests pass through unchanged.
+
+In proxy mode, each session gets a manifest in `<state dir>/sessions/<sha256 of the session id>.json`. The proxy writes it on the first request of a session that carries no tool results, and only while the owner is `proxy`. The manifest pins one decision per tool result, `unchanged` or json-min v1, with a SHA-256 digest of the result text, the policy version and the request model. It holds no tool output. The proxy commits each new decision with a temp file, `fsync` and rename before it forwards the request. Resent history replays the pinned decision, so the bytes the upstream sees stay the same across resend, proxy restart and model switch. A session that was started under another owner passes through. When the owner changes away from `proxy` mid-session, pinned decisions keep replaying and new results are recorded as `unchanged`; they stay unchanged after the owner changes back. The state dir is created with mode `0700` and its files with `0600`.
+
+The proxy rejects a request with `400 invalid_request_error` and does not forward it when the replay state cannot reproduce the history: the request carries tool results and the session has no manifest (for example a session started before the proxy, a fork, or a pruned manifest), the manifest is corrupt or has an unsupported version, a pinned decision is invalid or names a transform this binary does not keep, a known result changed, or an older result was never recorded. Start a new session to recover. A failed commit returns `500 api_error`. At startup the proxy removes manifests not modified for 30 days (`RETENTION` in `crates/deslag-proxy/src/session.rs`); a later request in such a session gets the `400` error.
 
 ## Roadmap
 
