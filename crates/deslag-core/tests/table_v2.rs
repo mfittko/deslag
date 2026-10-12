@@ -33,7 +33,7 @@ fn rows(n: usize) -> String {
 
 #[test]
 fn identity_is_stable() {
-    assert_eq!(JSON_TABLE_VERSION, 2);
+    assert_eq!(JSON_TABLE_VERSION, 3);
     assert_eq!(JSON_TABLE_FORMAT_VERSION, 1);
     assert_eq!(JSON_TABLE_V2_FORMAT_VERSION, 2);
     assert_eq!(v2::MARKER, "table-v2");
