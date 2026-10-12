@@ -8,7 +8,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     process::{Command, ExitCode, Stdio},
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 use deslag_core::{
@@ -350,10 +350,20 @@ fn run(args: &[String]) -> Result<(), String> {
     } else {
         format!("deslag-eval {}", deslag_core::VERSION)
     };
+    // Opened before the live directory exists, so a refused path leaks nothing.
+    let mut out = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&out_path)
+        .map_err(|e| match e.kind() {
+            std::io::ErrorKind::AlreadyExists => {
+                format!("{out_path} exists; pass a new --out path")
+            }
+            _ => format!("{out_path}: {e}"),
+        })?;
     let dir = if live { Some(live_dir()?) } else { None };
     let mut order = pairs(&tasks);
     score::shuffle(&mut order, seed);
-    let mut out = fs::File::create(&out_path).map_err(|e| format!("{out_path}: {e}"))?;
     let mut spent = 0.0;
     let result = (|| {
         for (index, (task, arm)) in order.into_iter().enumerate() {
@@ -365,12 +375,15 @@ fn run(args: &[String]) -> Result<(), String> {
             let v = variant(arm, task);
             let payload = v.as_deref().unwrap_or(&task.input);
             let prompt = user_prompt(payload, &task.question);
-            let reply = match &dir {
+            let started = Instant::now();
+            let mut reply = match &dir {
                 Some(d) => ask_claude(d, model.as_deref().unwrap_or(""), per_run, &prompt)?,
                 None => ask_mock(task, payload),
             };
+            reply["wall_ms"] = json!(started.elapsed().as_millis() as u64);
+            let cost = reply["cost_usd"].as_f64();
             if live {
-                spent += reply["cost_usd"].as_f64().unwrap_or(per_run);
+                spent += cost.unwrap_or(per_run);
             }
             let answer = reply["answer"].as_str().unwrap_or("");
             let kind = if reply["backend_error"] == true {
@@ -388,6 +401,12 @@ fn run(args: &[String]) -> Result<(), String> {
                 l.extend(r);
             }
             writeln!(out, "{line}").map_err(|e| format!("{out_path}: {e}"))?;
+            // The client checks its cap only after a turn, so one call can exceed it.
+            if let Some(c) = cost.filter(|c| live && *c > per_run) {
+                return Err(format!(
+                    "cost stop after run {index}: it reported {c:.4} USD, above --per-run-usd {per_run}"
+                ));
+            }
         }
         Ok(())
     })();
