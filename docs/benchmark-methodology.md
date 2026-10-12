@@ -118,8 +118,11 @@ The report computes it per arm over non-control pairs. The `drop-evidence` arm i
 - A pair counts only when both of its runs report all three values as finite numbers that are at least 0.
 - Claude saved tokens are the sum of the baseline prompt tokens minus the sum of the arm prompt tokens, over the counted pairs.
 - Claude saved % is Claude saved tokens divided by the sum of the baseline prompt tokens.
-- The report shows these values next to the `deslag-estimate-v1` payload savings of the arm, which sum the baseline minus the arm payload tokens over all non-control pairs.
-- Estimate error % is the estimate saved tokens on the same counted pairs minus Claude saved tokens, divided by Claude saved tokens. It is `n/a` when Claude saved tokens are 0 or when no pair counts.
+- The report shows these values next to the `deslag-estimate-v1` payload savings of the arm. Saved tokens (estimate) sum the baseline minus the arm payload tokens over the counted pairs. Saved % (estimate) is that sum divided by the baseline estimate sum over the same pairs.
+- A pair is dropped from the whole row when the baseline or the arm payload estimate is not a finite number that is at least 0. Both estimate columns are `n/a` when no pair remains.
+- Each saved % is `n/a` when its baseline sum is 0. Percentages are rounded to one decimal.
+- Unchanged pairs and pairs with a backend error are included.
+- Estimate error % is the estimate saved tokens on the same Claude pairs minus Claude saved tokens, divided by the absolute value of Claude saved tokens. A positive value means the estimate overstates the saving. It is `n/a` when Claude saved tokens are 0 or when no pair counts.
 
 Prompt tokens include the system prompt and the client overhead. Both cancel in the per-pair difference, but they dilute the percentage. Cache status does not change the sum, because cache-read and cache-creation tokens count the same as input tokens. A mock results file reports no usage, so its Claude columns show `n/a`.
 

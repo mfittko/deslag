@@ -280,7 +280,8 @@ pub fn render(text: &str) -> Result<String, String> {
     let head = "Arm|Runs|Success|Wrong|Abstain|Backend error|Payload tokens (estimate)|Input tokens|Output tokens|Cache read|Cache creation|Cost USD|Duration ms|Turns|Wall ms";
     section(&mut md, "Per arm", note, head, per_arm.collect());
 
-    let est = |r: &Value| r["payload_tokens_est"].as_f64().unwrap_or(0.0);
+    let valid = |r: &Value, k: &str| r[k].as_f64().filter(|x| x.is_finite() && *x >= 0.0);
+    let est = |r: &Value| valid(r, "payload_tokens_est").unwrap_or(0.0);
     let pct = |part: f64, whole: f64| match whole {
         0.0 => "n/a".to_string(),
         _ => format!("{:.1}", part / whole * 100.0),
@@ -290,9 +291,19 @@ pub fn render(text: &str) -> Result<String, String> {
             .iter()
             .filter(|r| r["arm"] == arm.as_str() && r["control"].is_null())
             .filter_map(|r| base.get(&key(r)).map(|b| (*b, r)))
+            .filter(|(b, r)| {
+                [b, r]
+                    .iter()
+                    .all(|x| valid(x, "payload_tokens_est").is_some())
+            })
             .collect();
         let sum = |f: &dyn Fn(&(&Value, &Value)) -> f64| pairs.iter().map(f).sum::<f64>();
         let (est_base, est_saved) = (sum(&|p| est(p.0)), sum(&|p| est(p.0) - est(p.1)));
+        let est_saved_cell = if pairs.is_empty() {
+            "n/a".into()
+        } else {
+            est_saved.to_string()
+        };
         // (baseline, arm, baseline estimate, arm estimate) of pairs with Claude counts on both runs.
         let claude: Vec<[f64; 4]> = pairs
             .iter()
@@ -307,7 +318,7 @@ pub fn render(text: &str) -> Result<String, String> {
             let error = if saved == 0.0 {
                 na()
             } else {
-                pct(col(2) - col(3) - saved, saved)
+                pct(col(2) - col(3) - saved, saved.abs())
             };
             (
                 col(1).to_string(),
@@ -324,13 +335,13 @@ pub fn render(text: &str) -> Result<String, String> {
         let head = cells![
             arm,
             pairs.len(),
-            est_saved,
+            est_saved_cell,
             pct(est_saved, est_base),
             claude.len()
         ];
         [head, cells![base_tok, arm_tok, saved_tok, saved_pct, error]].concat()
     });
-    let note = "Secondary measure; it never decides pass or fail. Non-control tasks; drop-evidence is a control arm and has no row. Saved is baseline minus arm, summed over the pairs. The estimate columns sum payload tokens (deslag-estimate-v1) over all pairs. The Claude columns sum backend-reported input, cache read and cache creation tokens over the pairs where both runs report all three; they include the system prompt and client overhead, which cancel in the difference but dilute the percentage. Estimate error % is the estimate saved on those same pairs minus the Claude saved, over the Claude saved.\n\n";
+    let note = "Secondary measure; it never decides pass or fail. Non-control tasks; drop-evidence is a control arm and has no row. Saved is baseline minus arm, summed over the pairs. The estimate columns sum payload tokens (deslag-estimate-v1) over all pairs. The Claude columns sum backend-reported input, cache read and cache creation tokens over the pairs where both runs report all three; they include the system prompt and client overhead, which cancel in the difference but dilute the percentage. Estimate error % is the estimate saved on those same pairs minus the Claude saved, over the absolute Claude saved; positive means the estimate overstates the saving. A pair whose baseline or arm payload estimate is not a finite number of at least 0 is dropped from the whole row.\n\n";
     let head = "Arm|Pairs|Saved tokens (estimate)|Saved % (estimate)|Pairs with Claude tokens|Baseline prompt tokens (Claude)|Arm prompt tokens (Claude)|Saved tokens (Claude)|Saved % (Claude)|Estimate error %";
     section(&mut md, "Paired savings", note, head, savings.collect());
     Ok(md.trim_end().to_string() + "\n")

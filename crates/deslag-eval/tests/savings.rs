@@ -24,7 +24,7 @@ fn fresh_dir(name: &str) -> PathBuf {
     d
 }
 
-fn result(task: &str, arm: &str, control: Value, est: u64, usage: [Option<u64>; 3]) -> String {
+fn result(task: &str, arm: &str, control: Value, est: u64, usage: [Option<i64>; 3]) -> String {
     let mut line = json!({
         "task": task, "category": "api_query", "control": control, "arm": arm,
         "seed": 1, "backend": "claude", "model": "m", "client_version": "v",
@@ -42,7 +42,7 @@ fn result(task: &str, arm: &str, control: Value, est: u64, usage: [Option<u64>; 
 
 #[test]
 fn report_pairs_savings_per_arm() {
-    let u = |a, b, c| [Some(a), Some(b), Some(c)];
+    let u = |a: i64, b, c| [Some(a), Some(b), Some(c)];
     let none = [None; 3];
     let mut text = String::new();
     // json-minify: two pairs with Claude counts, one whose baseline lacks cache creation, one control.
@@ -60,6 +60,26 @@ fn report_pairs_savings_per_arm() {
     ] {
         text += &result(task, arm, Value::Null, est, usage);
     }
+    // table-v2: negative Claude saving (-50 on a baseline of 100), estimate saves 20; a bad estimate drops t7.
+    for (task, arm, est, usage) in [
+        ("t6", "baseline", 40, u(100, 0, 0)),
+        ("t6", "table-v2", 20, u(150, 0, 0)),
+        ("t7", "baseline", 40, u(1, 0, 0)),
+        ("t7", "table-v2", 0, u(1, 0, 0)),
+        ("t8", "baseline", 40, u(100, 0, 0)),
+        ("t8", "lines-v2", 10, u(-1, 0, 0)),
+    ] {
+        let mut line = result(task, arm, Value::Null, est, usage);
+        if task == "t7" && arm == "table-v2" {
+            line = line.replace("\"payload_tokens_est\":0", "\"payload_tokens_est\":null");
+        }
+        text += &line;
+    }
+    // Only a drop-evidence control with baseline partner reporting usage; and an arm row without partner.
+    for arm in ["baseline", "drop-evidence", "json-minify"] {
+        text += &result("e1", arm, json!("evidence_drop"), 7, u(1, 1, 1));
+    }
+    text += &result("t9", "table-mdkv", Value::Null, 5, none);
     for arm in ["baseline", "json-minify"] {
         text += &result("c1", arm, json!("incompressible"), 9, u(1, 1, 1));
     }
@@ -75,6 +95,12 @@ fn report_pairs_savings_per_arm() {
         // Zero Claude savings: the percentage is 0.0 and the estimate error is undefined.
         "| lines-v1 | 1 | 0 | 0.0 | 1 | 100 | 100 | 0 | 0.0 | n/a |",
         "| table-csv | 1 | 30 | 60.0 | 0 | n/a | n/a | n/a | n/a | n/a |",
+        // Negative Claude saving: (20 - -50) / |-50| = 140.0. t7 has an invalid estimate and is dropped.
+        "| table-v2 | 1 | 20 | 50.0 | 1 | 100 | 150 | -50 | -50.0 | 140.0 |",
+        // input_tokens -1 is not a Claude count.
+        "| lines-v2 | 1 | 30 | 75.0 | 0 | n/a | n/a | n/a | n/a | n/a |",
+        // No baseline partner: both estimate columns are n/a.
+        "| table-mdkv | 0 | n/a | n/a | 0 | n/a | n/a | n/a | n/a | n/a |",
     ] {
         assert!(section.contains(row), "{row}\n{section}");
     }
