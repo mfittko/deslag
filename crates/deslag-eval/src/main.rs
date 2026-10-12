@@ -79,7 +79,10 @@ fn flags(args: &[String], allowed: &str) -> Result<HashMap<String, String>, Stri
             .strip_prefix("--")
             .filter(|n| allowed.split(' ').any(|a| a == *n))
             .ok_or_else(|| format!("unknown argument {arg}\n{USAGE}"))?;
-        let value = it.next().ok_or_else(|| format!("{arg} needs a value"))?;
+        let value = it
+            .next()
+            .filter(|v| !v.starts_with("--"))
+            .ok_or_else(|| format!("{arg} needs a value"))?;
         out.insert(name.to_string(), value.clone());
     }
     Ok(out)
@@ -126,23 +129,35 @@ fn load_manifest(path: &Path) -> Result<Vec<Task>, String> {
                 return Err(err(&format!("unknown arm {a}")));
             }
             let evidence = s("evidence");
-            if arms.iter().any(|a| a == "drop-evidence")
-                && evidence.as_deref().is_none_or(str::is_empty)
-            {
-                return Err(err("drop-evidence needs a non-empty evidence string"));
+            let control = s("control");
+            if arms.iter().any(|a| a == "drop-evidence") {
+                if control.as_deref() != Some("evidence_drop") {
+                    return Err(err("drop-evidence needs control evidence_drop"));
+                }
+                if evidence.as_deref().is_none_or(str::is_empty) {
+                    return Err(err("drop-evidence needs a non-empty evidence string"));
+                }
             }
+            let tolerance = match &t["tolerance"] {
+                Value::Null => 0.0,
+                v => v
+                    .as_f64()
+                    .filter(|x| *x >= 0.0)
+                    .ok_or_else(|| err("tolerance must be a number >= 0"))?,
+            };
+            // ponytail: the manifest is trusted and committed, so an input may be absolute or leave its directory.
             let input_path = dir.join(s("input").ok_or_else(|| err("no input"))?);
             Ok(Task {
                 input: fs::read_to_string(&input_path)
                     .map_err(|e| err(&format!("{}: {e}", input_path.display())))?,
                 category: s("category").ok_or_else(|| err("no category"))?,
-                control: s("control"),
+                control,
                 question: s("question").ok_or_else(|| err("no question"))?,
                 rule: s("rule")
                     .as_deref()
                     .and_then(Rule::parse)
                     .ok_or_else(|| err("unknown rule"))?,
-                tolerance: t["tolerance"].as_f64().unwrap_or(0.0),
+                tolerance,
                 answers,
                 arms,
                 evidence,

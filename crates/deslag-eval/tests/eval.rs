@@ -266,3 +266,59 @@ fn report_pairs_within_each_seed() {
     assert!(md.contains("| json-minify | 22 | 0 | 0 | 11 |"), "{md}");
     assert!(md.contains("| table-v1 CSV | table-csv | 20 |"), "{md}");
 }
+
+/// A fresh, empty directory under the target tmpdir.
+fn fresh_dir(name: &str) -> PathBuf {
+    let d = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(&d).unwrap();
+    d
+}
+
+#[test]
+fn flag_values_cannot_be_flags() {
+    let o = eval(&["run", "--manifest", "--backend", "mock"]);
+    assert_eq!(o.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&o.stderr).contains("--manifest needs a value"));
+}
+
+#[test]
+fn manifest_rejects_bad_tolerance_and_uncontrolled_drop_evidence() {
+    let dir = fresh_dir("bad-manifests");
+    let input = manifest()
+        .parent()
+        .unwrap()
+        .join("inputs/api_query_repo.json");
+    let task = |extra: &str| {
+        format!(
+            r#"{{"tasks": [{{"id": "t", "category": "api_query", "input": {:?}, "question": "q", "answers": ["a"], "rule": "number", {extra}}}]}}"#,
+            input.to_str().unwrap()
+        )
+    };
+    for (name, extra, msg) in [
+        (
+            "neg",
+            r#""arms": ["json-minify"], "tolerance": -1"#,
+            "tolerance",
+        ),
+        (
+            "str",
+            r#""arms": ["json-minify"], "tolerance": "1""#,
+            "tolerance",
+        ),
+        (
+            "drop",
+            r#""arms": ["drop-evidence"], "evidence": "trunk""#,
+            "control evidence_drop",
+        ),
+    ] {
+        let path = dir.join(format!("{name}.json"));
+        std::fs::write(&path, task(extra)).unwrap();
+        let o = eval(&["variants", path.to_str().unwrap()]);
+        assert_eq!(o.status.code(), Some(2), "{name}");
+        assert!(String::from_utf8_lossy(&o.stderr).contains(msg), "{name}");
+    }
+    let ok = dir.join("ok.json");
+    std::fs::write(&ok, task(r#""arms": ["json-minify"], "tolerance": 0.5"#)).unwrap();
+    assert!(eval(&["variants", ok.to_str().unwrap()]).status.success());
+}
