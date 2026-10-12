@@ -67,15 +67,113 @@ The encoded text is the header line followed by the body.
   rejects as `unsupported_format` goes to this codec, or all input when
   `json_table` is off. Other table encoder rejections (`insufficient_gain`, `duplicate_key`, `escaped_key`,
   `depth_limit`) skip with that reason and the `json-table` id (see table-v1,
-  Pipeline and configuration).
+  Pipeline and configuration). When `line_templates` is on, it takes
+  precedence and the input goes to the `lines-v2` encoder instead.
 - The JSON scanner checks key policy and depth before it checks that the whole
   input is one value. Input whose leading JSON value it rejects for
   `duplicate_key`, `escaped_key` or `depth_limit` stays on the JSON path and
   reports that reason, even when lines that are not JSON follow.
 - The core decodes the candidate and compares it with the input. A mismatch
   yields `failed` / `invalid_candidate`.
-- The header, prefix, escape and unit splitting are shared, so a later
-  line-template codec can add its own directive to the same container.
+- The prefix, escape, run directive and unit splitting are shared with
+  `lines-v2`.
+
+## lines-v2
+
+Exact codec for runs of consecutive lines that share a template, such as log
+lines that differ only in timestamps, IDs, counts or paths. `lines-v2` is
+`lines-v1` plus the template directive. The decoder reconstructs the original
+bytes exactly. Transform identity: `line-templates`, transform version 1,
+report `format_version` 2.
+
+### Units and tokens
+
+- Units are as in `lines-v1`.
+- The template directive applies only to units that end with `\n`. The content
+  is the unit without that final `\n`. A `\r` before it belongs to the content.
+- Space and tab are the only delimiters. The content splits into alternating
+  gaps and tokens: `gap0 tok0 gap1 ... tok(n-1) gapn`. Only the first and the
+  last gap may be empty. Tokens are never empty.
+- A token is variable-class when it contains an ASCII digit, `/` or `\`.
+
+### Encoded text
+
+The encoded text is the header line followed by the body.
+
+- Header: `#!deslag lines-v2\n`.
+- The reserved prefix, the escape and the run directive are as in `lines-v1`.
+- Template directive: `#!deslag t<N> <p1>,<p2>,...\n`. N is canonical decimal
+  and N >= 2. It means: the unit directly above is the base, and the group has
+  N lines in total, the base included. The base is a literal or escaped unit
+  and ends with `\n`.
+- Each `p` is a canonical decimal token index of the base. Index 0 is the
+  first token, and `0` is the only number that may start with `0`. There is
+  at least one index. The indices ascend strictly, and each is below the
+  base's token count.
+- N-1 rows follow the directive, one per line of the group after the base.
+  A row holds that line's tokens at the listed indices, in index order,
+  joined by one space and followed by `\n`. Values are non-empty and contain
+  no space or tab.
+- A row that starts with the reserved prefix is written with the escape.
+- A run directive or a template directive never directly follows a template
+  group.
+
+### Decoder
+
+- The decoder accepts both headers. Under the `lines-v1` header a template
+  directive is rejected, so every `lines-v1` text decodes as before.
+- Each row line is the base with the row's values in place of the tokens at
+  the listed indices. The gaps and the other tokens come from the base.
+- The decoder rejects a template directive that is not canonical, has no base
+  directly above it, has indices that do not ascend or are out of range, or
+  lacks rows. It also rejects a row with the wrong number of values, an empty
+  value, a tab in a value, a missing `\n`, or the reserved prefix without the
+  escape.
+- The decoder does not check that some row differs from the base at each
+  listed index, or that each listed token is variable-class.
+- The output bound applies as in `lines-v1`.
+
+### Encoder
+
+At each unit, in input order:
+
+1. Count the identical consecutive copies. When there are at least 2 and the
+   `lines-v1` run rule pays, write the unit and a run directive.
+2. Otherwise grow a group greedily from this unit as the base. A following
+   unit joins when it ends with `\n`, has the same gaps byte for byte and the
+   same token count as the base, and each of its tokens equals the base token
+   or both tokens are variable-class. A constant token that differs ends the
+   group. So lines that differ in a constant token (a token with no ASCII
+   digit, `/` or `\`) never share a template.
+3. The variable indices are the indices where any row differs from the base.
+   The group is written only when the directive and the rows are shorter than
+   the rows' literal bytes, escapes included. Otherwise the base is written
+   literally. The encoder keeps two values: `no_group_before` and
+   `failed_end`. A group attempt runs at unit i only when i is at least
+   `no_group_before`. `failed_end` is the end of the span of the most recent
+   failed group with two or more lines. When such a group fails at unit i and
+   i is before `failed_end`, `no_group_before` becomes the larger of the two
+   span ends and `failed_end` is cleared. Otherwise `failed_end` becomes the
+   end of the failed group's span. A failed one-line attempt (no row fits the
+   base), a run directive and a written group change neither value. Run
+   directives still apply to all units.
+
+- Line order never changes and no line is dropped.
+- A partial final unit is always literal.
+- The candidate is emitted only when it is shorter than the input
+  (`insufficient_gain` otherwise).
+- Input that already starts with the `lines-v1` or `lines-v2` header is
+  skipped as `unsupported_format`.
+
+### Integration
+
+- The transform is opt-in: `CompressionContext::line_templates` is `false` in
+  `FIRST_SLICE_JSON_MINIFY_CONTEXT`.
+- Routing is as for `exact_line_runs`. With `line_templates` on, plain text
+  goes to this encoder, which also writes run directives. With only
+  `exact_line_runs` on, the codec stays `lines-v1`.
+- The core decodes the candidate and compares it with the input. A mismatch
+  yields `failed` / `invalid_candidate`.
 
 ## table-v1
 
@@ -271,9 +369,9 @@ When the switch is on, `compress` calls `encode` with `max_rows` set to `Limits:
 - If the input is eligible, `compress` decodes the encoded text and compares it with the minified original. A mismatch fails with `invalid_candidate` and validation outcome `failed`. Otherwise the report has transform id `json-table`, transform version 2 and format version 1, or format version 2 for table-v2 text. The byte and token fields are filled as for the minifier. Observe mode emits the original with outcome `would_change`.
 - If the input is ineligible and `json_minify` is true, `compress` runs the JSON minifier unchanged and reports it as `json-minify`.
 - If the input is ineligible and `json_minify` is false, `compress` skips with the table encoder's reason and transform id `json-table`. The format version is `null`, because no candidate was built.
-- If `exact_line_runs` is also true, input that the JSON transforms reject as `unsupported_format` goes to the lines-v1 codec as described in its Integration section. The report then has transform id `exact-line-runs`. The report names one selected transform: the table encoder (table-v1 or table-v2), else the minifier, else the line-run codec. More than one transform can run. When `json_minify` is true, input that the table encoder rejects falls through to the minifier. An eligible table encoder candidate is always validated against the minified original.
+- If `exact_line_runs` or `line_templates` is true, input that the JSON transforms reject as `unsupported_format` goes to the line codec as described in its Integration section. The report has transform id `line-templates` when `line_templates` is true. Otherwise it has transform id `exact-line-runs`. The report names one selected transform: the table encoder (table-v1 or table-v2), else the minifier, else the line codec. More than one transform can run. When `json_minify` is true, input that the table encoder rejects falls through to the minifier. An eligible table encoder candidate is always validated against the minified original.
 - If `json_table` is true and `json_minify` is false, every other skip reports transform id `json-table`, including the mode and size checks that run before encoding.
-- If `json_table`, `json_minify` and `exact_line_runs` are all false, `compress` skips with `transform_disabled`.
+- If `json_table`, `json_minify`, `exact_line_runs` and `line_templates` are all false, `compress` skips with `transform_disabled`.
 
 ## table-v2
 
