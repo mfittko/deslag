@@ -598,6 +598,35 @@ fn replay_without_a_commit_refreshes_retention_of_valid_manifests_only() {
     fs::remove_dir_all(dir).unwrap();
 }
 
+#[cfg(unix)]
+#[test]
+fn a_manifest_that_cannot_be_refreshed_still_replays() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = temp_dir();
+    let safe = store(&dir);
+    let off = Store {
+        mode: Mode::Off,
+        ..safe.clone()
+    };
+    off.replay("off", "m", &[], |_| true).unwrap();
+    safe.replay("safe", "m", &[], |_| true).unwrap();
+    let c = [candidate("toolu_1", "x")];
+    safe.replay("safe", "m", &c, |_| false).unwrap();
+    for s in ["off", "safe"] {
+        let path = manifest_path(&dir, s);
+        let old = backdate(&path);
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o444)).unwrap();
+        let store = if s == "off" { &off } else { &safe };
+        let got = store.replay(s, "m", &c, |_| unreachable!()).unwrap();
+        assert_eq!(got, [false], "{s}");
+        // Skip the mtime check when running as root, which can write anyway.
+        if fs::File::options().write(true).open(&path).is_err() {
+            assert_eq!(mtime(&path), old, "{s}: mtime unchanged");
+        }
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
 #[test]
 fn prune_never_removes_a_manifest_that_a_concurrent_replay_refreshed() {
     let dir = temp_dir();

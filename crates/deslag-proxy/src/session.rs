@@ -244,7 +244,7 @@ impl Store {
         match (manifest["owner"].as_str(), manifest["mode"].as_str()) {
             (Some("proxy"), Some("safe")) => {}
             (Some("proxy"), Some("off")) => {
-                refresh(&path)?;
+                refresh(&path);
                 return Ok(pass);
             }
             _ if has_results => return Err(ReplayError::MissingManifest),
@@ -286,7 +286,7 @@ impl Store {
         if dirty {
             write_manifest(&path, &manifest)?;
         } else {
-            refresh(&path)?;
+            refresh(&path);
         }
         Ok(encode)
     }
@@ -308,18 +308,16 @@ fn pinned(d: &Value, id: &str) -> Result<bool, ReplayError> {
 }
 
 /// Sets the mtime of an existing manifest to now when it is older than
-/// `REFRESH`. Never creates the file or changes its bytes.
-fn refresh(path: &Path) -> io::Result<()> {
-    let file = fs::File::options().write(true).open(path)?;
-    if file
-        .metadata()?
-        .modified()?
-        .elapsed()
-        .is_ok_and(|age| age > REFRESH)
-    {
-        file.set_modified(SystemTime::now())?;
+/// `REFRESH`. Never creates the file or changes its bytes. Best-effort: a
+/// manifest that cannot be opened for write, or that a concurrent prune
+/// removed, still replays and only keeps its old retention age.
+fn refresh(path: &Path) {
+    let stale = fs::metadata(path)
+        .and_then(|m| m.modified())
+        .is_ok_and(|t| t.elapsed().is_ok_and(|age| age > REFRESH));
+    if stale && let Ok(file) = fs::File::options().write(true).open(path) {
+        let _ = file.set_modified(SystemTime::now());
     }
-    Ok(())
 }
 
 fn hex(bytes: &[u8]) -> String {
