@@ -111,19 +111,20 @@ impl Drop for Service {
 
 /// Spawns `deslag local run` and waits until it answers `ping`.
 fn run(dir: &Path) -> Service {
-    let mut child = command(dir, &["local", "run"])
+    let child = command(dir, &["local", "run"])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .expect("spawn deslag local run");
+    // Guard first: a failed wait below kills the child on unwind.
+    let mut service = Service(child, dir.to_path_buf());
     let deadline = Instant::now() + Duration::from_secs(5);
     while !dir.join("local.sock").exists() {
-        assert!(child.try_wait().unwrap().is_none(), "service exited");
+        assert!(service.0.try_wait().unwrap().is_none(), "service exited");
         assert!(Instant::now() < deadline, "service did not bind");
         thread::sleep(Duration::from_millis(20));
     }
-    let service = Service(child, dir.to_path_buf());
     assert_eq!(request(dir, b"ping"), b"ok");
     service
 }
@@ -245,7 +246,22 @@ fn a_second_run_reports_already_running() {
     let dir = state_dir("second");
     let _cleanup = RemoveOnDrop(dir.clone());
     let service = run(&dir);
-    let second = deslag(&dir, &["local", "run"], b"");
+    let mut child = command(&dir, &["local", "run"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn second deslag local run");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while child.try_wait().unwrap().is_none() {
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("second run did not exit");
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    let second = child.wait_with_output().unwrap();
     assert_eq!(second.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&second.stderr).contains("already running"));
     assert_eq!(request(&dir, b"ping"), b"ok");
