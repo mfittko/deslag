@@ -94,8 +94,8 @@ pub enum Reason {
     /// or key-policy reason occurs earlier in the input. On the
     /// `exact-line-runs` path, input that already starts with the `lines-v1`
     /// header, so the codec never encodes its own output.
-    /// Also table-v1 shape ineligibility (see the eligibility table in
-    /// docs/compression-formats.md).
+    /// Also table encoder (table-v1 or table-v2) shape ineligibility (see the
+    /// eligibility tables in docs/compression-formats.md).
     UnsupportedFormat,
     DepthLimit,
     /// Consumers disagree on which duplicate wins. A duplicate in any object
@@ -152,7 +152,8 @@ pub struct Limits {
     /// Clamped to [`MAX_JSON_DEPTH_CEILING`], so no caller value can make the
     /// recursive scanner overflow the stack.
     pub max_json_depth: usize,
-    /// Arrays with more rows are never encoded as table-v1.
+    /// Applies per encoded array: an array with more rows is never encoded by
+    /// the table encoder (table-v1 or table-v2).
     pub max_table_rows: usize,
 }
 
@@ -208,16 +209,18 @@ pub trait TokenCounter {
 pub struct CompressionContext<'c> {
     pub mode: Mode,
     pub policy_version: u32,
-    /// Enables the JSON minifier. Also the fallback when table-v1 does not apply.
+    /// Enables the JSON minifier. Also the fallback when the table encoder
+    /// does not apply.
     pub json_minify: bool,
-    /// Enables the table-v1 encoder, tried before the minifier. Opt-in: it
-    /// is false in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
+    /// Enables the table encoder (table-v1 or table-v2), tried before the
+    /// minifier. Opt-in: it is false in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
     pub json_table: bool,
     /// Enables the exact line-run codec. With `json_minify` on, the codec
     /// handles text the JSON scanner rejects as `unsupported_format`. With
-    /// `json_minify` off, input table-v1 rejects as `unsupported_format` (all
-    /// input when `json_table` is off) goes to the codec. Other table-v1
-    /// rejections skip with their reason and the `json-table` id.
+    /// `json_minify` off, input the table encoder rejects as
+    /// `unsupported_format` (all input when `json_table` is off) goes to the
+    /// codec. Other table encoder rejections skip with their reason and the
+    /// `json-table` id.
     /// The codec skips input that already starts with the `lines-v1` header as
     /// `unsupported_format`. `false` in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
     pub exact_line_runs: bool,
@@ -360,10 +363,10 @@ impl CompressionResult<'_> {
     }
 }
 
-/// Runs the enabled transforms under `ctx`: table-v1 first, then the JSON
-/// minifier, then the exact line-run codec for input the JSON transforms reject
-/// as unsupported_format. Any skip or failure returns the input borrowed, never
-/// a partial rewrite.
+/// Runs the enabled transforms under `ctx`: the table encoder (table-v1 or
+/// table-v2) first, then the JSON minifier, then the exact line-run codec for
+/// input the JSON transforms reject as unsupported_format. Any skip or failure
+/// returns the input borrowed, never a partial rewrite.
 pub fn compress<'a>(input: &'a str, ctx: &CompressionContext) -> CompressionResult<'a> {
     let start = Instant::now();
     let mut report = CompressionReport {
@@ -473,10 +476,10 @@ fn decide<'a>(
         // Text the JSON transforms reject as unsupported_format is plain text. A
         // leading value rejected for duplicate_key, escaped_key or depth_limit
         // keeps the input on the JSON path, even when text lines follow. With
-        // json_minify off, input table-v1 rejects as unsupported_format (all
-        // input when json_table is off) arrives here. Other table-v1 rejections
-        // (insufficient_gain, duplicate_key, escaped_key, depth_limit) skip with
-        // that reason and the json-table id.
+        // json_minify off, input the table encoder (table-v1 or table-v2) rejects
+        // as unsupported_format (all input when json_table is off) arrives here.
+        // Other table encoder rejections (insufficient_gain, duplicate_key,
+        // escaped_key, depth_limit) skip with that reason and the json-table id.
         Err(Reason::UnsupportedFormat) if ctx.exact_line_runs => {
             set_line_runs_identity(report);
             // Input that already starts with the lines-v1 header is skipped as

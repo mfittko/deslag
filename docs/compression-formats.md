@@ -63,9 +63,9 @@ The encoded text is the header line followed by the body.
 - With the switch on, input that the JSON scanner rejects as
   `unsupported_format` is plain text and goes to this codec. With
   `json_minify` on, JSON content stays on the JSON path. With `json_minify` off
-  and `exact_line_runs` on, input that table-v1 rejects as `unsupported_format`
-  goes to this codec, or all input when `json_table` is off. Other table-v1
-  rejections (`insufficient_gain`, `duplicate_key`, `escaped_key`,
+  and `exact_line_runs` on, input that the table encoder (table-v1 or table-v2)
+  rejects as `unsupported_format` goes to this codec, or all input when
+  `json_table` is off. Other table encoder rejections (`insufficient_gain`, `duplicate_key`, `escaped_key`,
   `depth_limit`) skip with that reason and the `json-table` id (see table-v1,
   Pipeline and configuration).
 - The JSON scanner checks key policy and depth before it checks that the whole
@@ -270,8 +270,8 @@ When the switch is on, `compress` calls `encode` with `max_rows` set to `Limits:
 
 - If the input is eligible, `compress` decodes the encoded text and compares it with the minified original. A mismatch fails with `invalid_candidate` and validation outcome `failed`. Otherwise the report has transform id `json-table`, transform version 2 and format version 1, or format version 2 for table-v2 text. The byte and token fields are filled as for the minifier. Observe mode emits the original with outcome `would_change`.
 - If the input is ineligible and `json_minify` is true, `compress` runs the JSON minifier unchanged and reports it as `json-minify`.
-- If the input is ineligible and `json_minify` is false, `compress` skips with the table-v1 reason and transform id `json-table`. The format version is `null`, because no candidate was built.
-- If `exact_line_runs` is also true, input that the JSON transforms reject as `unsupported_format` goes to the lines-v1 codec as described in its Integration section. The report then has transform id `exact-line-runs`. The report names one selected transform: table-v1, else the minifier, else the line-run codec. More than one transform can run. When `json_minify` is true, an ineligible table-v1 input falls through to the minifier. An eligible table-v1 candidate is always validated against the minified original.
+- If the input is ineligible and `json_minify` is false, `compress` skips with the table encoder's reason and transform id `json-table`. The format version is `null`, because no candidate was built.
+- If `exact_line_runs` is also true, input that the JSON transforms reject as `unsupported_format` goes to the lines-v1 codec as described in its Integration section. The report then has transform id `exact-line-runs`. The report names one selected transform: the table encoder (table-v1 or table-v2), else the minifier, else the line-run codec. More than one transform can run. When `json_minify` is true, input that the table encoder rejects falls through to the minifier. An eligible table encoder candidate is always validated against the minified original.
 - If `json_table` is true and `json_minify` is false, every other skip reports transform id `json-table`, including the mode and size checks that run before encoding.
 - If `json_table`, `json_minify` and `exact_line_runs` are all false, `compress` skips with `transform_disabled`.
 
@@ -329,9 +329,11 @@ The decoder returns no value for any of these:
 
 `table::v2::decode` also reads table-v1 text: text that does not start with `table-v2` goes to the table-v1 decoder unchanged. `table::decode` reads table-v1 only.
 
+Encoder output is canonical. The decoder also accepts some non-canonical texts that the encoder does not emit. A hole may stand anywhere a JSON value can stand, for example a whole skeleton such as `table-v2 @0`, or a hole inside an array or a nested object. A block may have zero rows. Such texts decode, but encoding the result does not reproduce them.
+
 ### Encoder
 
-- A bare top-level array keeps its table-v1 encoding. `table::v2::encode` returns exactly `table::encode` output and reasons for input whose first non-whitespace byte is `[`. A wrapper with one array gains nothing from the skeleton, and table-v1 text stays stable for existing consumers.
+- A bare top-level array keeps its table-v1 encoding. `table::v2::encode` returns exactly `table::encode` output and reasons for input whose first non-whitespace byte is `[`. A bare array has no wrapper to keep, and table-v1 text stays stable for existing consumers.
 - For a top-level object, the encoder checks each member value that is an array, in member order. A member array becomes a hole when it is eligible as a table-v1 array (same rules as the table-v1 eligibility table, with `max_rows` per array) and its block, label line and hole are shorter than the array. Otherwise the array stays in the skeleton unchanged.
 - Arrays below the top-level object's members stay in the skeleton.
 - The whole document must pass the JSON minifier first, so a duplicate or escaped key anywhere, or nesting deeper than `max_depth`, skips the whole input with `duplicate_key`, `escaped_key` or `depth_limit`.
@@ -343,6 +345,8 @@ The decoder returns no value for any of these:
 | The gain check on the whole text fails | `insufficient_gain` |
 
 The gain check is the table-v1 gain check, applied to the whole table-v2 text against the minified document.
+
+Known limit: per-hole selection compares bytes only. The token gain check applies to the whole text, never to a single hole.
 
 ### Integration
 

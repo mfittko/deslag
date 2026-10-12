@@ -226,6 +226,22 @@ fn decoder_rejects_malformed_v2_text() {
 }
 
 #[test]
+fn decoder_accepts_non_canonical_holes_and_zero_row_blocks() {
+    let cases = [
+        ("table-v2 @0\n@0 [1]{a:int}\n1", r#"[{"a":1}]"#),
+        ("table-v2 [1,@0]\n@0 [1]{a:int}\n1", r#"[1,[{"a":1}]]"#),
+        (
+            "table-v2 {\"o\":{\"r\":@0}}\n@0 [1]{a:int}\n1",
+            r#"{"o":{"r":[{"a":1}]}}"#,
+        ),
+        ("table-v2 {\"r\":@0}\n@0 [0]{a:int}", r#"{"r":[]}"#),
+    ];
+    for (text, expected) in cases {
+        assert_eq!(v2::decode(text).as_deref(), Some(expected), "{text:?}");
+    }
+}
+
+#[test]
 fn decoder_reads_blocks_with_quoted_newlines() {
     let input = r#"{"r":[{"t":"a\nb"},{"t":"@0\n@1 [1]{x:int}"},{"t":"plain"},{"t":"plain"},{"t":"plain"},{"t":"plain"}],"z":1}"#;
     let encoded = round_trip(input);
