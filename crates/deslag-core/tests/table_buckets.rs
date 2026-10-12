@@ -118,6 +118,20 @@ fn discriminator_is_the_shortest_candidate() {
 }
 
 #[test]
+fn key_unique_in_every_row_is_not_a_discriminator() {
+    // `id` is the only candidate and every row has its own value, so the
+    // array has no bucket block. Without the skip the encoder builds one.
+    let items: Vec<String> = (0..4)
+        .map(|i| format!(r#"{{"id":"u{i}","a":{{"b":{{"c":{{"d":{{"e{i}":{i}}}}}}}}}}}"#))
+        .collect();
+    let input = format!("[{}]", items.join(","));
+    assert_eq!(
+        v2::encode(&input, &lenient()),
+        Err(Reason::UnsupportedFormat)
+    );
+}
+
+#[test]
 fn discriminator_tie_goes_to_the_first_key() {
     // `kind` and `tag` split the rows the same way at the same length.
     let items: Vec<String> = (0..8)

@@ -57,7 +57,11 @@ fn encode_by(array: &str, items: &[Item], key: &str, label: &str) -> Option<Stri
         buckets[b].push(&array[span.clone()]);
         order.push(b.to_string());
     }
-    if buckets.len() < 2 {
+    // ponytail: a key unique in every row gives one-row tables that each
+    // repeat the header, so it is skipped before the tables are encoded.
+    // `buckets.len() * 2 > items.len()` would skip more but drops winners
+    // such as the spec example (3 buckets over 5 rows).
+    if buckets.len() < 2 || buckets.len() == items.len() {
         return None;
     }
     let mut out = format!("[{}] by {key}\n{}", items.len(), order.join(","));
