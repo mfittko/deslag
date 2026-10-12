@@ -377,6 +377,8 @@ When the switch is on, `compress` calls `encode` with `max_rows` set to `Limits:
 - If `json_table` is true and `json_minify` is false, every other skip reports transform id `json-table`, including the mode and size checks that run before encoding.
 - If `json_table`, `json_minify`, `exact_line_runs` and `line_templates` are all false, `compress` skips with `transform_disabled`.
 
+With a token counter in the context, every transform also checks the token gain of a validated candidate that is shorter in bytes. It skips with `insufficient_gain` when the candidate has more tokens than the original, saves fewer than `Limits::min_estimated_token_savings` tokens (default 64) or saves less than `Limits::min_estimated_savings_permille` of the original tokens (default 100, which is the policy ratio 0.10). Observe mode applies the same check. Without a counter, no token check runs. `FIRST_SLICE_JSON_MINIFY_CONTEXT` sets both thresholds to 0.
+
 ## table-v2
 
 `table-v2` encodes a JSON document whose arrays of objects sit inside a wrapper object, for example `{"results":[...],"total":1000}`, and arrays whose objects come in several kinds. The text is a skeleton of the minified document with holes, followed by one block per hole. A block is a table block, which uses the table-v1 header and record rules, or a bucket block, which splits a heterogeneous array into one table block per discriminator value. A table block may hold a `json` column whose cells refer to sub-blocks, so a string that holds JSON is encoded as a table too. The encoder is `deslag_core::table::v2::encode`. The decoder is `deslag_core::table::v2::decode`. The transform identity is `json-table`, transform version 4, format version 2.
