@@ -158,11 +158,11 @@ fn report_renders_format_comparison_and_controls() {
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     let md = String::from_utf8(o.stdout).unwrap();
     assert!(
-        md.contains("| table-v1 CSV | table-csv | 12 | 12/12 (100.0%) |"),
+        md.contains("| table-v1 CSV | table-csv | 10 | 10/10 (100.0%) |"),
         "{md}"
     );
     assert!(
-        md.contains("| Markdown-KV | table-mdkv | 12 | 12/12 (100.0%) |"),
+        md.contains("| Markdown-KV | table-mdkv | 10 | 10/10 (100.0%) |"),
         "{md}"
     );
     assert!(md.contains("| evidence_drop | drop-evidence | 2 | 2/2 (100.0%) | 0/2 (0.0%) | 0 | 2 | evidence loss detected |"), "{md}");
@@ -239,4 +239,30 @@ fn estimate_prints_a_cost() {
         md.contains("| Estimated cost | USD ") && md.contains("| Hard cap (66 runs"),
         "{md}"
     );
+}
+
+#[test]
+fn report_pairs_within_each_seed() {
+    let (a, _) = mock_run("16", "seed-a.jsonl");
+    let (_, lines) = mock_run("17", "seed-b.jsonl");
+    // Seed 17's baselines all fail, so every seed-17 pair is discordant for the arm.
+    let mut text = a;
+    for mut l in lines {
+        if l["arm"] == "baseline" {
+            l["success"] = false.into();
+            l["error_kind"] = "wrong".into();
+        }
+        text += &format!("{l}\n");
+    }
+    let path = Path::new(env!("CARGO_TARGET_TMPDIR")).join("two-seeds.jsonl");
+    std::fs::write(&path, text).unwrap();
+    let o = eval(&["report", path.to_str().unwrap()]);
+    let md = String::from_utf8(o.stdout).unwrap();
+    assert!(md.contains("| seed | 16, 17 |"), "{md}");
+    assert!(
+        md.contains("| runs without a baseline partner | 0 |"),
+        "{md}"
+    );
+    assert!(md.contains("| json-minify | 22 | 0 | 0 | 11 |"), "{md}");
+    assert!(md.contains("| table-v1 CSV | table-csv | 20 |"), "{md}");
 }

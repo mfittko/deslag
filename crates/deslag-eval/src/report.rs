@@ -10,9 +10,9 @@ use serde_json::Value;
 
 use crate::{ARMS, score};
 
-/// Backend-reported fields summed in the per-arm table, space-separated.
-const REPORTED: &str =
-    "input_tokens output_tokens cache_read_tokens cache_creation_tokens cost_usd duration_ms turns";
+/// Fields summed in the per-arm table, space-separated: backend-reported,
+/// then `wall_ms`, the harness wall clock around each backend call.
+const REPORTED: &str = "input_tokens output_tokens cache_read_tokens cache_creation_tokens cost_usd duration_ms turns wall_ms";
 
 macro_rules! cells {
     ($($x:expr),* $(,)?) => { vec![$($x.to_string()),*] };
@@ -114,17 +114,23 @@ pub fn render(text: &str) -> Result<String, String> {
         })
         .collect::<Result<Vec<Value>, String>>()?;
     let first = rows.first().ok_or("no result lines")?;
-    let task = |r: &Value| r["task"].as_str().unwrap_or("").to_string();
-    let base: HashMap<String, &Value> = rows
+    // Runs pair within one seed, so concatenated seeds stay apart.
+    let key = |r: &Value| {
+        (
+            r["seed"].to_string(),
+            r["task"].as_str().unwrap_or("").to_string(),
+        )
+    };
+    let base: HashMap<(String, String), &Value> = rows
         .iter()
         .filter(|r| r["arm"] == "baseline")
-        .map(|r| (task(r), r))
+        .map(|r| (key(r), r))
         .collect();
     // Paired counts keyed by (scope, arm). Scope is "all", a category or "control:<kind>".
     let mut paired: BTreeMap<(String, String), Paired> = BTreeMap::new();
     let mut unpaired = 0;
     for r in rows.iter().filter(|r| r["arm"] != "baseline") {
-        let Some(b) = base.get(&task(r)) else {
+        let Some(b) = base.get(&key(r)) else {
             unpaired += 1;
             continue;
         };
@@ -175,10 +181,14 @@ pub fn render(text: &str) -> Result<String, String> {
     let per_category = scoped(&|s| s != "all" && !s.starts_with("control:"), true);
     section(&mut md, "Per category", "", head, per_category);
 
-    // Tasks that ran both table formats, so both rows score the same inputs.
-    let has = |t: &str, arm: &str| rows.iter().any(|r| r["task"] == t && r["arm"] == arm);
+    // Non-control tasks that ran both table formats in the same seed, so both
+    // rows score the same inputs.
+    let has =
+        |k: &(String, String), arm: &str| rows.iter().any(|r| key(r) == *k && r["arm"] == arm);
     let formats = [("table-v1 CSV", "table-csv"), ("Markdown-KV", "table-mdkv")];
-    let both = |r: &&Value| has(&task(r), "table-csv") && has(&task(r), "table-mdkv");
+    let both = |r: &&Value| {
+        r["control"].is_null() && has(&key(r), "table-csv") && has(&key(r), "table-mdkv")
+    };
     let format_rows = formats.iter().map(|(label, arm)| {
         let rs: Vec<&Value> = rows
             .iter()
@@ -187,7 +197,7 @@ pub fn render(text: &str) -> Result<String, String> {
             .collect();
         [cells![label, arm, rs.len()], kinds(&rs)].concat()
     });
-    let note = "Tasks that ran both table arms.\n\n";
+    let note = "Non-control tasks that ran both table arms in the same seed. Control tasks are excluded.\n\n";
     let head = "Format|Arm|Runs|Success|Wrong|Abstain|Backend error";
     let format_rows = format_rows.collect();
     section(&mut md, "Table format read-back", note, head, format_rows);
@@ -221,8 +231,8 @@ pub fn render(text: &str) -> Result<String, String> {
         let head = cells![arm, rs.len()];
         (!rs.is_empty()).then(|| [head, kinds(&rs), cells![est], usage].concat())
     });
-    let note = "All tasks, controls included. Payload tokens are estimates (deslag-estimate-v1). The columns after them are backend-reported sums; n/a means not reported.\n\n";
-    let head = "Arm|Runs|Success|Wrong|Abstain|Backend error|Payload tokens (estimate)|Input tokens|Output tokens|Cache read|Cache creation|Cost USD|Duration ms|Turns";
+    let note = "All tasks, controls included. Payload tokens are estimates (deslag-estimate-v1). The columns from Input tokens to Turns are backend-reported sums; n/a means not reported. Wall ms is the summed harness wall clock of the backend calls.\n\n";
+    let head = "Arm|Runs|Success|Wrong|Abstain|Backend error|Payload tokens (estimate)|Input tokens|Output tokens|Cache read|Cache creation|Cost USD|Duration ms|Turns|Wall ms";
     section(&mut md, "Per arm", note, head, per_arm.collect());
     Ok(md.trim_end().to_string() + "\n")
 }
