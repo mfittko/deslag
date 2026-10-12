@@ -120,9 +120,9 @@ pub(super) fn is_bucket(block: &str) -> bool {
 }
 
 /// Decodes the bucket block at `*i` of `text` to a minified JSON array and
-/// moves `*i` to the end of its last record. `label` is the block's own
-/// label. `None` for a malformed block.
-pub(super) fn decode(text: &str, i: &mut usize, label: &str) -> Option<String> {
+/// moves `*i` to the end of its last block. `label` is the block's own
+/// label and `level` its nesting level. `None` for a malformed block.
+pub(super) fn decode(text: &str, i: &mut usize, label: &str, level: usize) -> Option<String> {
     let line_end = |at: usize| text[at..].find('\n').map_or(text.len(), |e| at + e);
     let header_end = line_end(*i);
     let (count, key) = text[*i..header_end]
@@ -151,7 +151,8 @@ pub(super) fn decode(text: &str, i: &mut usize, label: &str) -> Option<String> {
     *i = order_end;
     let mut buckets = Vec::with_capacity(sizes.len());
     for (k, &size) in sizes.iter().enumerate() {
-        let start = format!("\n{label}.{k} ");
+        let table = format!("{label}.{k}");
+        let start = format!("\n{table} ");
         if !text[*i..].starts_with(&start) {
             return None;
         }
@@ -167,7 +168,7 @@ pub(super) fn decode(text: &str, i: &mut usize, label: &str) -> Option<String> {
         {
             return None;
         }
-        let rows = decode_rows(text, i)?;
+        let rows = decode_rows(text, i, Some((&table, level)))?;
         if rows.len() != size {
             return None;
         }

@@ -33,7 +33,7 @@ pub const JSON_MINIFY_VERSION: u32 = 1;
 /// Stable transform identity for the table encoder.
 pub const JSON_TABLE_ID: &str = "json-table";
 /// Bumped whenever `table::v2::encode` output can change for some input.
-pub const JSON_TABLE_VERSION: u32 = 3;
+pub const JSON_TABLE_VERSION: u32 = 4;
 /// Format version of table-v1 output, as reported in `format_version`.
 pub const JSON_TABLE_FORMAT_VERSION: u32 = 1;
 /// Format version of table-v2 output, as reported in `format_version`.

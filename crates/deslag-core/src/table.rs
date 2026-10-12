@@ -11,6 +11,7 @@ use std::{collections::HashMap, fmt::Write, iter};
 use crate::{Limits, Reason, Scanner, TokenCounter, minify};
 
 mod bucket;
+mod sub;
 pub mod v2;
 
 /// First token of every table-v1 header line.
@@ -45,13 +46,15 @@ impl Default for TableOptions<'_> {
 }
 
 /// Column type. A column of any type may also hold `null`. Only an undotted
-/// column may hold missing cells.
+/// column may hold missing cells. `Json` is a `str` column whose reference
+/// cells hold JSON text as sub-blocks; only table-v2 blocks use it.
 #[derive(Clone, Copy, PartialEq)]
 enum Ty {
     Int,
     Num,
     Str,
     Bool,
+    Json,
 }
 
 impl Ty {
@@ -61,11 +64,12 @@ impl Ty {
             Ty::Num => "num",
             Ty::Str => "str",
             Ty::Bool => "bool",
+            Ty::Json => "json",
         }
     }
 
     fn parse(s: &str) -> Option<Ty> {
-        [Ty::Int, Ty::Num, Ty::Str, Ty::Bool]
+        [Ty::Int, Ty::Num, Ty::Str, Ty::Bool, Ty::Json]
             .into_iter()
             .find(|t| t.name() == s)
     }
@@ -236,7 +240,7 @@ pub fn decode(text: &str) -> Option<String> {
 /// `*i` to the end of its last record. A block is a `[count]{columns}` header
 /// line and `count` records, each after a `\n`.
 fn decode_block(text: &str, i: &mut usize) -> Option<String> {
-    Some(format!("[{}]", decode_rows(text, i)?.join(",")))
+    Some(format!("[{}]", decode_rows(text, i, None)?.join(",")))
 }
 
 /// Parses `0` or `[1-9][0-9]*`: one canonical spelling per count or index.
@@ -251,14 +255,19 @@ fn parse_count(count: &str) -> Option<usize> {
 }
 
 /// Like [`decode_block`], but returns each row as a minified JSON object.
-fn decode_rows(text: &str, i: &mut usize) -> Option<Vec<String>> {
+/// `sub` is the block's label and nesting level in a table-v2 text, where
+/// `json` columns are allowed and their sub-blocks follow the records.
+fn decode_rows(text: &str, i: &mut usize, sub: Option<(&str, usize)>) -> Option<Vec<String>> {
     let header_end = text[*i..].find('\n').map_or(text.len(), |e| *i + e);
     let (count, specs) = text[*i..header_end].strip_prefix('[')?.split_once("]{")?;
     let count = parse_count(count)?;
     let cols = columns(specs.strip_suffix('}')?)?;
+    if sub.is_none() && cols.iter().any(|c| c.ty == Ty::Json) {
+        return None;
+    }
     *i = header_end;
 
-    let mut rows = Vec::new();
+    let mut records = Vec::new();
     for _ in 0..count {
         if !text[*i..].starts_with('\n') {
             return None;
@@ -268,6 +277,13 @@ fn decode_rows(text: &str, i: &mut usize) -> Option<Vec<String>> {
         if cells.len() != cols.len() {
             return None;
         }
+        records.push(cells);
+    }
+    // Reference cells are numbered in record order; their sub-blocks follow
+    // the last record in that order, so each is decoded when its row is built.
+    let mut refs = 0;
+    let mut rows = Vec::new();
+    for cells in &records {
         let mut out = String::from("{");
         // True right after `{`, where the next member needs no comma.
         let mut opened = true;
@@ -289,7 +305,22 @@ fn decode_rows(text: &str, i: &mut usize) -> Option<Vec<String>> {
                 opened = true;
             }
             push_key(&mut out, opened, col.leaf);
-            push_json_value(&mut out, cell, col.ty)?;
+            match (cell, sub) {
+                (Cell::Bare(s), Some((label, level))) if col.ty == Ty::Json && sub::is_ref(s) => {
+                    if parse_count(&s[1..])? != refs {
+                        return None;
+                    }
+                    let child = sub::child(label, refs);
+                    let start = format!("\n{child} ");
+                    if !text[*i..].starts_with(&start) {
+                        return None;
+                    }
+                    *i += start.len();
+                    refs += 1;
+                    push_json_str(&mut out, &sub::decode(text, i, &child, level + 1)?);
+                }
+                _ => push_json_value(&mut out, cell, col.ty)?,
+            }
             opened = false;
         }
         out.extend(iter::repeat_n('}', cols.last().map_or(0, |c| c.depth)));
@@ -576,12 +607,17 @@ fn push_str_cell(out: &mut String, text: &str) {
         || text.parse::<f64>().is_ok()
         || text.contains([',', '"', '\n', '\r']);
     if quote {
-        out.push('"');
-        out.push_str(&text.replace('"', "\"\""));
-        out.push('"');
+        push_quoted(out, text);
     } else {
         out.push_str(text);
     }
+}
+
+/// Writes `text` as a quoted cell with each `"` doubled.
+fn push_quoted(out: &mut String, text: &str) {
+    out.push('"');
+    out.push_str(&text.replace('"', "\"\""));
+    out.push('"');
 }
 
 enum Cell<'t> {
@@ -629,13 +665,13 @@ fn parse_record<'t>(body: &'t str, i: &mut usize) -> Option<Vec<Cell<'t>>> {
 /// Writes a non-missing cell as JSON, interpreted by the column type.
 fn push_json_value(out: &mut String, cell: &Cell, ty: Ty) -> Option<()> {
     match (cell, ty) {
-        (Cell::Quoted(s), Ty::Str) => push_json_str(out, s),
+        (Cell::Quoted(s), Ty::Str | Ty::Json) => push_json_str(out, s),
         (Cell::Quoted(_), _) => return None,
         (Cell::Bare(s @ "null"), _) => out.push_str(s),
         (Cell::Bare(s), Ty::Int) if is_int(s) => out.push_str(s),
         (Cell::Bare(s), Ty::Num) if is_number(s) => out.push_str(s),
         (Cell::Bare(s @ ("true" | "false")), Ty::Bool) => out.push_str(s),
-        (Cell::Bare(s), Ty::Str) => push_json_str(out, s),
+        (Cell::Bare(s), Ty::Str | Ty::Json) => push_json_str(out, s),
         _ => return None,
     }
     Some(())
