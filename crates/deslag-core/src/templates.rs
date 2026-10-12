@@ -24,11 +24,15 @@ pub fn encode_templates(input: &str) -> Option<String> {
         return None;
     }
     let units: Vec<&str> = input.split_inclusive('\n').collect();
+    let parts: Vec<Option<Vec<&str>>> = units
+        .iter()
+        .map(|u| u.strip_suffix('\n').map(split))
+        .collect();
     let mut out = String::from(HEADER_V2);
     let mut i = 0;
     while i < units.len() {
         let unit = units[i];
-        let count = units[i..].iter().take_while(|&&u| u == unit).count();
+        let count = run_length(&units[i..]);
         if count >= 2
             && let Some(directive) = run_directive(unit, count)
         {
@@ -37,7 +41,7 @@ pub fn encode_templates(input: &str) -> Option<String> {
             i += count;
             continue;
         }
-        if let Some((len, group)) = template_group(&units[i..]) {
+        if let Some((len, group)) = template_group(&units[i..], &parts[i..]) {
             out.push_str(&group);
             i += len;
             continue;
@@ -54,26 +58,32 @@ pub fn encode_templates(input: &str) -> Option<String> {
 const WINDOW: usize = 16;
 
 /// Grows a group from `units[0]` and returns the length and encoding of the
-/// prefix that saves the most bytes, or `None` when no prefix pays. Rows join
-/// while they fit the base and do not start a paying run. Past `WINDOW` rows, a
-/// row joins only when the current end is the best end and the row adds no
-/// variable index.
-fn template_group(units: &[&str]) -> Option<(usize, String)> {
-    let base = split(units[0].strip_suffix('\n')?);
+/// prefix that saves the most bytes, or `None` when no prefix pays. `parts`
+/// holds the split content of each unit, `None` for a partial unit. Rows join
+/// while they fit the base and do not start a run that is better as a run
+/// directive. Past `WINDOW` rows, a row joins only when the current end is the
+/// best end and the row adds no variable index.
+fn template_group(units: &[&str], parts: &[Option<Vec<&str>>]) -> Option<(usize, String)> {
+    let base = parts[0].as_deref()?;
     let mut variable = vec![false; base.len()];
     let mut bytes = vec![0; base.len()];
     let mut escapes = vec![0; base.len()];
     let (mut rows, mut literal, mut best) = (Vec::new(), 0, None);
-    for (j, &unit) in units.iter().enumerate().skip(1) {
-        let Some(row) = unit.strip_suffix('\n').map(split) else {
+    // Once every token is variable, each further row saves its gap bytes plus
+    // the newline minus one separator per token. When that is not positive and
+    // no prefix pays yet, no longer prefix can pay either.
+    let gaps: usize = base.iter().step_by(2).map(|g| g.len()).sum();
+    let dead_end = gaps < base.len() / 2;
+    for (j, (&unit, row)) in units.iter().zip(parts).enumerate().skip(1) {
+        let Some(row) = row.as_deref().filter(|row| fits(base, row)) else {
             break;
         };
-        if !fits(&base, &row) || starts_paying_run(&units[j - 1..]) {
-            break;
-        }
         let grows = (1..base.len())
             .step_by(2)
             .any(|k| !variable[k] && row[k] != base[k]);
+        if units[j - 1] != unit && run_wins(&units[j..], row, &variable, grows) {
+            break;
+        }
         if rows.len() >= WINDOW && (grows || best.map(|(n, _)| n) != Some(rows.len())) {
             break;
         }
@@ -97,8 +107,11 @@ fn template_group(units: &[&str]) -> Option<(usize, String)> {
                 best = Some((n, literal - cost));
             }
         }
+        if best.is_none() && dead_end && variable.iter().skip(1).step_by(2).all(|&v| v) {
+            break;
+        }
     }
-    let (n, _) = best?;
+    let (n, saving) = best?;
     let rows = &rows[..n];
     let positions: Vec<usize> = (1..base.len())
         .step_by(2)
@@ -111,6 +124,7 @@ fn template_group(units: &[&str]) -> Option<(usize, String)> {
         push_unit(&mut body, &(values.join(" ") + "\n"));
     }
     let literal: usize = units[1..=n].iter().map(|u| unit_cost(u)).sum();
+    debug_assert_eq!(body.len(), literal - saving, "group cost estimate drifted");
     if body.len() >= literal {
         return None;
     }
@@ -120,15 +134,28 @@ fn template_group(units: &[&str]) -> Option<(usize, String)> {
     Some((n + 1, out))
 }
 
-/// True when `units[1]` starts a run of identical units whose run directive
-/// pays. Each run is counted once, at its first unit.
-fn starts_paying_run(units: &[&str]) -> bool {
-    let unit = units[1];
-    if units[0] == unit {
+/// Number of identical consecutive units at the start of `units`.
+fn run_length(units: &[&str]) -> usize {
+    units.iter().take_while(|&&u| u == units[0]).count()
+}
+
+/// True when the run that starts at `units[0]` (split as `row`) saves more as a
+/// run directive than as group rows at the current `variable` indices. A row
+/// that `grows` the variable indices always yields to a paying run.
+fn run_wins(units: &[&str], row: &[&str], variable: &[bool], grows: bool) -> bool {
+    let unit = units[0];
+    let count = run_length(units);
+    let Some(directive) = run_directive(unit, count) else {
         return false;
-    }
-    let count = units[1..].iter().take_while(|&&u| u == unit).count();
-    count >= 2 && run_directive(unit, count).is_some()
+    };
+    let positions: Vec<usize> = (1..row.len()).step_by(2).filter(|&k| variable[k]).collect();
+    let Some(&first) = positions.first().filter(|_| !grows) else {
+        return true;
+    };
+    let row_cost = positions.iter().map(|&k| row[k].len() + 1).sum::<usize>()
+        + usize::from(row[first].starts_with(PREFIX)) * ESCAPE.len();
+    let run_saving = (count - 1) * unit_cost(unit) - directive.len();
+    run_saving > count * unit_cost(unit).saturating_sub(row_cost)
 }
 
 fn digits(n: usize) -> usize {

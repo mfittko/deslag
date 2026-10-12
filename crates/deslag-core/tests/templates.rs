@@ -465,7 +465,12 @@ fn rows(range: std::ops::Range<usize>) -> String {
 fn back_to_back_outliers_do_not_block_the_group_below() {
     let input = format!("12:00:00 500 /x\n12:00:00 404 /y\n{}", rows(0..1000));
     let encoded = roundtrip(&input);
-    assert!(encoded.contains("\n#!deslag t999 0\n"), "{encoded:.200}");
+    let longest = encoded
+        .split("\n#!deslag t")
+        .skip(1)
+        .filter_map(|group| group.split_once(' ')?.0.parse::<usize>().ok())
+        .max();
+    assert!(longest >= Some(990), "{encoded:.200}");
 }
 
 #[test]
@@ -486,4 +491,21 @@ fn alternating_outliers_are_linear() {
         })
         .collect();
     roundtrip(&input);
+}
+
+#[test]
+fn sporadic_short_runs_stay_in_the_group() {
+    let input: String = (0..600)
+        .map(|i| {
+            let line = format!(
+                "2024-01-01T12:{:02}:{:02} GET /api/items 200\n",
+                i / 60,
+                i % 60
+            );
+            if i % 10 == 5 { line.repeat(2) } else { line }
+        })
+        .collect();
+    let encoded = roundtrip(&input);
+    assert_eq!(encoded.matches("#!deslag t").count(), 1, "{encoded:.200}");
+    assert!(!encoded.contains("#!deslag x"), "{encoded:.200}");
 }

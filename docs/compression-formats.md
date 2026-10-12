@@ -144,16 +144,21 @@ At each unit, in input order:
    count as the base, and each of its tokens equals the base token or both
    tokens are variable-class. A constant token that differs ends the group.
    So lines that differ in a constant token (a token with no ASCII digit, `/`
-   or `\`) never share a template. A unit that starts a run of identical
-   units for which the `lines-v1` run rule pays also ends the group.
+   or `\`) never share a template. A unit can start a run of identical units
+   for which the `lines-v1` run rule pays. That unit ends the group when the
+   row adds a variable index, or when the run directive saves more bytes than
+   the run's copies would save as group rows at the current variable indices,
+   escapes included. Otherwise the copies join the group as rows.
 3. The variable indices of a group are the indices where any row differs from
    the base. Each group prefix of two or more lines saves the rows' literal
    bytes, escapes included, minus the bytes of the directive and the rows.
    The encoder tracks the prefix with the largest positive saving; on a tie
-   the longer prefix wins. After 16 rows, the group grows only while the
+   the longer prefix wins. Past 16 rows, the group grows only while the
    current end is that best prefix and the next row adds no variable index.
-   So an outlier row ends the group, and each group attempt that does not
-   commit scans at most 16 rows. Encoding stays linear in the input size.
+   So after 16 rows, a row that adds a variable index ends the group. A group
+   attempt that does not commit scans at most 16 rows. When every token index
+   is variable and a further row cannot save bytes, an attempt with no paying
+   prefix stops early. Encoding stays linear in the input size.
 4. When some prefix pays, write the best prefix as a group and continue after
    it. Otherwise write the base literally and continue at the next unit.
 
