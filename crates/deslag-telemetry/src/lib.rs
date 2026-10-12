@@ -8,7 +8,10 @@
 
 use std::{
     fs, io,
-    os::unix::{fs::PermissionsExt, net::UnixDatagram},
+    os::unix::{
+        fs::{DirBuilderExt, PermissionsExt},
+        net::UnixDatagram,
+    },
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -26,20 +29,30 @@ pub const SOCKET_FILE: &str = "local.sock";
 pub const STATS_FILE: &str = "stats.jsonl";
 
 /// `$DESLAG_STATE_DIR`, else `$XDG_STATE_HOME/deslag`, else
-/// `$HOME/.local/state/deslag`. `None` when none of them is set.
+/// `$HOME/.local/state/deslag`. Empty or relative values are ignored, as the
+/// XDG spec requires. `None` when no source is usable.
 pub fn state_dir() -> Option<PathBuf> {
-    let var = |name| std::env::var_os(name).filter(|v| !v.is_empty());
+    let var = |name| {
+        std::env::var_os(name)
+            .map(PathBuf::from)
+            .filter(|p| p.is_absolute())
+    };
     var("DESLAG_STATE_DIR")
-        .map(PathBuf::from)
-        .or_else(|| var("XDG_STATE_HOME").map(|d| PathBuf::from(d).join("deslag")))
-        .or_else(|| var("HOME").map(|d| PathBuf::from(d).join(".local/state/deslag")))
+        .or_else(|| var("XDG_STATE_HOME").map(|d| d.join("deslag")))
+        .or_else(|| var("HOME").map(|d| d.join(".local/state/deslag")))
 }
 
-/// Creates [`state_dir`] and sets mode 0700 on it, also when it already existed.
+/// Creates [`state_dir`] with mode 0700. An existing directory gets mode 0700
+/// again; a symlink at that path is followed but its target keeps its mode.
 pub fn ensure_state_dir() -> io::Result<PathBuf> {
     let dir = state_dir().ok_or_else(|| io::Error::other("no state directory: set HOME"))?;
-    fs::create_dir_all(&dir)?;
-    fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))?;
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&dir)?;
+    if fs::symlink_metadata(&dir)?.is_dir() {
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))?;
+    }
     Ok(dir)
 }
 
@@ -145,10 +158,10 @@ pub fn send(socket: &Path, message: &[u8]) -> bool {
 /// later report's `dropped` field.
 static DROPPED: AtomicU64 = AtomicU64::new(0);
 
-/// Runs [`compress`](deslag_core::compress) and, with `socket`, reports the result there. With a
-/// socket, token estimates are added to the report; the output is the same as
-/// without a socket for every context whose `json_table` is off, because only
-/// the table encoder reads the counter.
+/// Runs [`compress`](deslag_core::compress) and, with `socket`, reports the result there. The output
+/// never depends on `socket`. With a socket, token estimates are added to the
+/// report only when `json_table` is off, because the table encoder gates on
+/// the counter.
 pub fn compress_reported<'a>(
     input: &'a str,
     ctx: &CompressionContext,
@@ -160,7 +173,9 @@ pub fn compress_reported<'a>(
         return compress(input, ctx);
     };
     let mut ctx = *ctx;
-    ctx.token_counter = ctx.token_counter.or(Some(&EstimateCounter));
+    if !ctx.json_table {
+        ctx.token_counter = ctx.token_counter.or(Some(&EstimateCounter));
+    }
     let result = compress(input, &ctx);
     // Swap, not load: concurrent senders never carry the same drops twice.
     let dropped = DROPPED.swap(0, Ordering::Relaxed);

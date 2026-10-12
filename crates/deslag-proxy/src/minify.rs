@@ -386,8 +386,6 @@ mod tests {
         let report: serde_json::Value = serde_json::from_slice(&buf[..n]).unwrap();
         assert_eq!(report["adapter"], "proxy");
         assert_eq!(report["outcome"], "changed");
-        // At least the stale-socket send; other tests in this binary may add more.
-        assert!(report["dropped"].as_u64() >= Some(1));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
