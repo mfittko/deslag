@@ -2,6 +2,8 @@
 
 This document predeclares the scoring rules and the non-inferiority criterion for the paired task evaluation in PLAN §14.4. It was committed before any evaluation run. A change to the scoring rules or to the criterion after results have been inspected needs a decision record in `docs/decisions/`.
 
+This document was revised after its first commit. The revisions are the `lines-v2` arm, the `inferior` verdict through the upper bound, the rule for transform arms on `evidence_drop` controls, and the scope of the table format read-back, which excludes control tasks. Every revision precedes any live evaluation run. The two-call plumbing smoke check of the `claude` backend is not an analysis run.
+
 The harness is the `deslag-eval` binary in `crates/deslag-eval`. The corpus is `tests/evaluations/manifest.json`. Results are in `docs/benchmarks/evaluation.md`.
 
 ## Unit of analysis
@@ -17,7 +19,7 @@ One task is one paired observation. Each task runs once per arm. The analysis pa
 | `table-csv` | table-v1 output of `deslag_core::compress` with only `json_table` on, the estimate token counter and no size limits. |
 | `table-mdkv` | `deslag_core::table::render_markdown_kv` output with `TableOptions::default()` and the estimate token counter. Evaluation only. |
 | `lines-v1` | lines-v1 output of `deslag_core::compress` with only `exact_line_runs` on and no size limits. |
-| `lines-v2` | lines-v2 output of `deslag_core::compress` with only `line_templates` on and no size limits. The arm was added after this document was first committed and before any live run. |
+| `lines-v2` | lines-v2 output of `deslag_core::compress` with only `line_templates` on and no size limits. The arm was added after this document was first committed and before any live evaluation run. |
 | `drop-evidence` | The original with every line that contains the task's `evidence` substring removed. Negative control only. |
 
 Every task runs the `baseline` arm. A task lists the other arms that apply to it. When a transform declines the input, the arm's payload equals the baseline payload. The run still happens and its result line has `variant_unchanged: true`. Such pairs stay in the analysis, because the deployed transform would decline the same input.
@@ -126,7 +128,7 @@ The run order is a seeded shuffle (splitmix64, Fisher-Yates) over all (task, arm
 
 ## Cost controls
 
-- The `claude` backend refuses to start unless `DESLAG_EVAL_LIVE=1` is set and `--model` is given.
+- The `claude` backend refuses to start unless `DESLAG_EVAL_LIVE=1` is set and both `--model` and `--budget-usd` are given.
 - Every call passes `--max-budget-usd` with the per-run cap (`--per-run-usd`, default 0.30).
 - Before each call, the runner stops when the spent amount plus the per-run cap would exceed `--budget-usd`. A call that reports no cost counts as the full per-run cap.
 - The client checks `--max-budget-usd` only after a turn, so one call can exceed its cap. The total can then exceed `--budget-usd` by that excess. The runner stops with exit 2 after any call whose reported cost exceeds `--per-run-usd`. The partial results file is kept.
