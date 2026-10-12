@@ -98,23 +98,43 @@ fn several_wrapped_arrays_number_their_buckets_by_hole() {
 
 #[test]
 fn discriminator_is_the_shortest_candidate() {
-    // `name` is unique per row, `status` has two values that do not match
-    // the shapes, and `type` matches them. `type` gives the shortest block.
-    let items: Vec<String> = (0..9)
-        .map(|i| {
-            let status = if i % 2 == 0 { "ok" } else { "late" };
-            if i % 3 == 0 {
-                format!(r#"{{"name":"n{i}","status":"{status}","type":"num","v":{i}}}"#)
-            } else {
-                format!(r#"{{"name":"n{i}","status":"{status}","type":"txt","v":"t{i}"}}"#)
-            }
-        })
-        .collect();
-    let encoded = round_trip(&format!("[{}]", items.join(",")));
+    // `status` (first key) and `type` both split the rows into buckets that
+    // each form a table. `status` gives three buckets, `type` gives two, so
+    // the `by type` block is shorter and wins.
+    let status = ["ok", "late", "gone"];
+    let row = |i: usize| match i % 3 {
+        0 => format!(r#"{{"status":"ok","type":"num","v":{i}}}"#),
+        k => format!(r#"{{"status":"{}","type":"txt","v":"t{i}"}}"#, status[k]),
+    };
+    let input = format!("[{}]", (0..9).map(row).collect::<Vec<_>>().join(","));
+    let encoded = round_trip(&input);
     assert!(
-        encoded.starts_with("table-v2 @0\n@0 [9] by type\n"),
+        encoded.starts_with("table-v2 @0\n@0 [9] by type\n0,1,1,0,1,1,0,1,1\n"),
         "{encoded}"
     );
+    // The `by status` block decodes to the same array and is longer.
+    let bucket = |k: usize| {
+        let rows: Vec<String> = (0..9)
+            .filter(|i| i % 3 == k)
+            .map(|i| match k {
+                0 => format!("ok,num,{i}"),
+                _ => format!("{},txt,t{i}", status[k]),
+            })
+            .collect();
+        let v = if k == 0 { "int" } else { "str" };
+        format!(
+            "\n@0.{k} [3]{{status:str,type:str,v:{v}}}\n{}",
+            rows.join("\n")
+        )
+    };
+    let by_status = format!(
+        "table-v2 @0\n@0 [9] by status\n0,1,2,0,1,2,0,1,2{}{}{}",
+        bucket(0),
+        bucket(1),
+        bucket(2)
+    );
+    assert_eq!(v2::decode(&by_status), Some(input));
+    assert!(by_status.len() > encoded.len(), "{by_status}");
 }
 
 #[test]
@@ -224,6 +244,63 @@ fn homogeneous_arrays_keep_their_output() {
         v2::encode(sparse, &lenient()),
         table::encode(sparse, &lenient())
     );
+}
+
+#[test]
+fn table_block_wins_a_tie_with_the_bucket_block() {
+    // Row 1 is kind `b` with eight fields; the rest are kind `a` with two.
+    // The sparse table pays empty cells, the bucket block pays its order line
+    // and a second header. These sizes make both blocks equally long.
+    let rows = |n: usize| {
+        let items: Vec<String> = (0..n)
+            .map(|i| {
+                if i == 1 {
+                    let f: Vec<String> = (0..8).map(|j| format!(r#""y{j}":1"#)).collect();
+                    format!(r#"{{"t":"b",{}}}"#, f.join(","))
+                } else {
+                    format!(r#"{{"t":"a","x0":{i},"x1":{i}}}"#)
+                }
+            })
+            .collect();
+        format!("[{}]", items.join(","))
+    };
+    // The bucket block the encoder builds for `rows(n)`, split by `t`.
+    let buckets = |n: usize| {
+        let order: Vec<&str> = (0..n).map(|i| if i == 1 { "1" } else { "0" }).collect();
+        let a: Vec<String> = (0..n)
+            .filter(|&i| i != 1)
+            .map(|i| format!("a,{i},{i}"))
+            .collect();
+        let y: Vec<String> = (0..8).map(|j| format!("y{j}:int")).collect();
+        format!(
+            "[{n}] by t\n{}\n@0.0 [{}]{{t:str,x0:int,x1:int}}\n{}\n@0.1 [1]{{t:str,{}}}\nb{}",
+            order.join(","),
+            n - 1,
+            a.join("\n"),
+            y.join(","),
+            ",1".repeat(8)
+        )
+    };
+
+    // Wrapped form: the table block and the bucket block have equal length.
+    let wrapped = format!(r#"{{"r":{}}}"#, rows(6));
+    let bucket_text = format!("table-v2 {{\"r\":@0}}\n@0 {}", buckets(6));
+    assert_eq!(v2::decode(&bucket_text), Some(minified(&wrapped)));
+    let encoded = round_trip(&wrapped);
+    assert!(
+        encoded.starts_with("table-v2 {\"r\":@0}\n@0 [6]{"),
+        "{encoded}"
+    );
+    assert_eq!(encoded.len(), bucket_text.len(), "{encoded}");
+
+    // Bare form: table-v1 text and `table-v2 @0` with the bucket block have
+    // equal length.
+    let bare = rows(7);
+    let bucket_text = format!("table-v2 @0\n@0 {}", buckets(7));
+    assert_eq!(v2::decode(&bucket_text), Some(minified(&bare)));
+    let v1 = table::encode(&bare, &lenient()).unwrap();
+    assert_eq!(v1.len(), bucket_text.len(), "{v1}");
+    assert_eq!(v2::encode(&bare, &lenient()), Ok(v1));
 }
 
 #[test]
