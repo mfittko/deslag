@@ -467,14 +467,14 @@ fn skeleton_hole_blocks_share_their_level_up_to_the_bound() {
     assert!(!encoded.contains("data:str"), "{encoded}");
 }
 
-/// Five rows of kinds `a` and `b`, each with ten own columns and a `d` cell
-/// that holds `inner(3)`. Without sub-tables the bucket block is shorter;
-/// with sub-tables the table block is.
+/// Five rows of kinds `a` and `b`, each with eleven own columns and a `d` cell
+/// that holds `inner(3)`. Without sub-tables the bucket block is shorter at
+/// both labels `@0` and `@0.0`; with sub-tables the table block is.
 fn flips_with_sub_tables() -> String {
     let items: Vec<String> = (0..5)
         .map(|i| {
             let kind = if i % 2 == 0 { "a" } else { "b" };
-            let own: String = (0..10).map(|e| format!(r#","{kind}{e}":{e}"#)).collect();
+            let own: String = (0..11).map(|e| format!(r#","{kind}{e}":{e}"#)).collect();
             format!(r#"{{"t":"{kind}","d":{}{own}}}"#, lexeme(&inner(3)))
         })
         .collect();

@@ -77,8 +77,10 @@ pub(super) fn encode_object(
 }
 
 /// A bare array: table-v1 text, or `table-v2 @0` with one block when that is
-/// strictly shorter. A table block without sub-blocks never is, because
-/// `table-v2 @0\n@0 ` is longer than `table-v1 `. Rejections keep their
+/// strictly shorter. A table block without sub-blocks never is in bytes,
+/// because `table-v2 @0\n@0 ` is longer than `table-v1 `. Selection compares
+/// bytes only, so a longer bucket block that would pass the token check is
+/// not tried. Rejections keep their
 /// table-v1 reason, except that a block failing the gain check reports
 /// `InsufficientGain`.
 fn encode_bare(input: &str, opts: &TableOptions) -> Result<String, Reason> {
@@ -108,6 +110,9 @@ fn encode_bare(input: &str, opts: &TableOptions) -> Result<String, Reason> {
 /// The block for one minified array labelled `label` at nesting `level`.
 /// Sub-tables apply to the table block and to the bucket block, then the
 /// shorter wins, the table block on a tie. `None` when neither applies.
+// ponytail: both candidates recurse, so text at nesting level `k` is encoded
+// up to 2^k times, at most 2^MAX_NESTING. Still linear. Cache sub-blocks by
+// (text, label, level) if profiling shows it matters.
 pub(super) fn encode_array(
     array: &str,
     label: &str,
