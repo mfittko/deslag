@@ -105,7 +105,9 @@ fn proxy(args: &[&str]) -> Result<(), String> {
 /// its own event, so parallel tools and subagents cannot affect each other.
 ///
 /// Errors are diagnostics only. The caller reports them on stderr and still exits 0,
-/// so the hook never blocks the tool. Another `PostToolUse` hook that may replace
+/// so the hook never blocks the tool. A rejected or panicked compression job is
+/// such an error (`compression <reason>; tool output unchanged`), and it leaves
+/// every routed field unchanged. Another `PostToolUse` hook that may replace
 /// the same output is such an error, because the client keeps only the last write.
 fn claude_hook(
     mut input: impl Read,

@@ -48,11 +48,12 @@ Status: experimental. The proxy rewrite is stateless and keeps no replay manifes
 - The proxy passes requests with a body-integrity header (`content-digest`, `digest`, `content-md5`, `x-amz-content-sha256`, `repr-digest`) through unchanged.
 - The proxy passes a request with trailers through unchanged. Its trailers are not forwarded upstream. A client that sends trailers on only some requests would see drift.
 - The proxy does not rewrite `/v1/messages/count_tokens`. Its token counts can overstate the rewritten request.
-- The proxy buffers and rewrites at most 4 eligible requests at once (`INSPECT_PERMITS`). Others wait for a permit. A body over 32 MiB (`MAX_INSPECT_BYTES`) is forwarded unrewritten. A buffered body that does not arrive within `BODY_READ_TIMEOUT` (300 s) of its permit fails with `408`. The deadline covers only the first 32 MiB. For a larger body the permit is released and the rest streams without a deadline. See the README proxy limits.
+- The proxy buffers and rewrites at most 4 eligible requests at once (`INSPECT_PERMITS`). Others wait for a permit. A body over 32 MiB (`MAX_INSPECT_BYTES`) is forwarded unrewritten. A buffered body that does not arrive within `BODY_READ_TIMEOUT` (300 s) of its permit fails with `408`. The deadline covers only the first 32 MiB. For a larger body the permit is released and the rest streams without a deadline. The permit stays held through the rewrite after the read, also when the client disconnects. See the README proxy limits.
+- Hook and proxy compress each tool result as one job of the bounded executor (4 parallel jobs, 10 ms per job). A job that finds every slot taken (`busy`), runs past its budget (`budget_exceeded`) or panics (`job_panicked`) fails open: the proxy forwards the whole original body unrewritten, and the hook leaves the tool output unchanged. Under load a resend can therefore differ from the first send.
 
 ### Hook field routing
 
-With `--minify-json`, `deslag hook claude` passes only these fields through the core. Each field is compressed on its own. Other fields keep their values. The hook re-serializes the whole `tool_response`. Key order can change. Numbers keep their exact value and digits, including integers outside the 64-bit range. Only an exponent can change form, for example `1e3` becomes `1e+3`.
+With `--minify-json`, `deslag hook claude` passes only these fields through the core. Each field is compressed as its own job of the bounded executor. When any job of one tool output is rejected or panics, every routed field stays unchanged and the hook writes `deslag: compression <busy|budget_exceeded|job_panicked>; tool output unchanged` to stderr. Other fields keep their values. The hook re-serializes the whole `tool_response`. Key order can change. Numbers keep their exact value and digits, including integers outside the 64-bit range. Only an exponent can change form, for example `1e3` becomes `1e+3`.
 
 | Tool | Routed field | Unchanged |
 | --- | --- | --- |
@@ -73,7 +74,7 @@ Subagent tool calls carry `agent_id` and `agent_type` and the parent's `session_
 
 ### Hook conflict reporting
 
-Before it emits a replacement, the hook looks for another `PostToolUse` hook that may match the same tool. The client keeps only the last rewrite, so on a match the hook writes one line to stderr, such as `deslag: PostToolUse hook in <file> also matches Bash; leaving the output unchanged`, and exits 0 with empty stdout. It reads:
+Before it emits a replacement, the hook looks for another `PostToolUse` hook that may match the same tool. The client keeps only the last rewrite, so on a match the hook writes one line to stderr, such as `deslag: PostToolUse hook in <file> also matches Bash; leaving the output unchanged`, and exits 0 with empty stdout. The compression diagnostic from [Hook field routing](#hook-field-routing) is the other stderr line the hook can write; it is reported before this check runs. It reads:
 
 - user settings: `$CLAUDE_CONFIG_DIR/settings.json`, else `$HOME/.claude/settings.json`
 - project settings: `.claude/settings.json` and `.claude/settings.local.json` under `$CLAUDE_PROJECT_DIR`, else under the event `cwd`

@@ -37,7 +37,10 @@ use hyper::{
 };
 use serde::de::{Deserialize, Deserializer, Error, MapAccess, Visitor};
 use serde_json::value::RawValue;
-use tokio::{sync::Semaphore, time::Duration};
+use tokio::{
+    sync::{Semaphore, SemaphorePermit},
+    time::Duration,
+};
 
 /// ponytail: at or above the Anthropic Messages request limit (32 MB), so every
 /// request the provider accepts is inspected and the decision never depends on
@@ -52,6 +55,8 @@ const MAX_INSPECT_BYTES: usize = 32 * 1024 * 1024;
 /// `Limits::body_read_timeout` gets `408` and releases the permit.
 /// The deadline covers only the buffered part, up to `MAX_INSPECT_BYTES`. For a
 /// larger body the permit is released and the rest streams without a deadline.
+/// After the read, the permit stays held through the rewrite, which is bounded
+/// by the per-job budget of `Limits::executor`.
 /// Make the permit count configurable via `Limits` if that ceiling is wrong.
 static INSPECT_PERMITS: Semaphore = Semaphore::const_new(4);
 
@@ -124,7 +129,8 @@ impl Body for ReqBody {
 /// A buffered read that exceeds `read_timeout` after its permit is granted is
 /// `408`: the request is rejected, never forwarded unrewritten. The rewrite
 /// runs after the read, outside that deadline, and holds the permit until it
-/// ends. A rejected or panicked rewrite forwards the original body.
+/// ends, also when the client disconnects mid-rewrite. A rejected or panicked
+/// rewrite forwards the original body.
 pub(crate) async fn prepare(
     req: Request<Incoming>,
     enabled: bool,
@@ -147,7 +153,7 @@ pub(crate) async fn prepare(
         };
         return Ok(Request::from_parts(parts, body));
     }
-    let _permit = INSPECT_PERMITS
+    let permit = INSPECT_PERMITS
         .acquire()
         .await
         .expect("semaphore is never closed");
@@ -158,13 +164,8 @@ pub(crate) async fn prepare(
         Ok(Err(_)) => return Err(StatusCode::BAD_REQUEST),
         Err(_) => return Err(StatusCode::REQUEST_TIMEOUT),
     };
-    // The rewrite blocks, so it runs on the blocking pool, outside the read
-    // deadline and with the permit still held. A rejected job or a panic there
-    // forwards the original.
     let mut buf = Bytes::from(buf);
-    let input = buf.clone();
-    let rewritten = tokio::task::spawn_blocking(move || rewrite(&input, &exec, minify)).await;
-    if let Ok(Some(rewritten)) = rewritten {
+    if let Some(rewritten) = rewrite_blocking(permit, buf.clone(), exec, minify).await {
         buf = rewritten.into();
         parts
             .headers
@@ -176,6 +177,25 @@ pub(crate) async fn prepare(
         trailers: None,
     };
     Ok(Request::from_parts(parts, body))
+}
+
+/// Runs [`rewrite`] on the blocking pool, outside the read deadline. The permit
+/// moves into the blocking task, so it is released only when the rewrite ends,
+/// even when the caller is dropped (client disconnect). A rejected job or a
+/// panic returns `None`, so the original body is forwarded.
+async fn rewrite_blocking(
+    permit: SemaphorePermit<'static>,
+    input: Bytes,
+    exec: BoundedExecutor,
+    job: Job,
+) -> Option<Vec<u8>> {
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        rewrite(&input, &exec, job)
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 /// Result of [`buffer`]: a complete body to rewrite, or a request to forward as is.
@@ -351,13 +371,14 @@ impl<'de> Deserialize<'de> for Obj<'de> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
     use deslag_core::BoundedExecutor;
     use http_body_util::BodyExt;
     use hyper::HeaderMap;
 
-    use super::{ReqBody, minify, rewrite};
+    use super::{ReqBody, minify, rewrite, rewrite_blocking};
 
     /// A budget no debug build on a slow runner can miss.
     fn generous() -> BoundedExecutor {
@@ -429,6 +450,37 @@ mod tests {
             rewrite(TWO_RESULTS.as_bytes(), &generous(), panic_on_b),
             None
         );
+    }
+
+    #[tokio::test]
+    async fn dropped_rewrite_keeps_its_permit_until_the_rewrite_ends() {
+        static PERMITS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
+        static OPEN: AtomicBool = AtomicBool::new(false);
+        /// Blocks until the test opens the gate.
+        fn gated(text: &str) -> Option<String> {
+            while !OPEN.load(Ordering::Acquire) {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            minify(text)
+        }
+        let permit = PERMITS.acquire().await.unwrap();
+        let input = bytes::Bytes::from_static(TWO_RESULTS.as_bytes());
+        // Polls the rewrite until it is spawned, then drops it like a disconnect.
+        let fut = rewrite_blocking(permit, input, generous(), gated);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(50), fut)
+                .await
+                .is_err()
+        );
+        assert_eq!(PERMITS.available_permits(), 0, "permit freed mid-rewrite");
+        OPEN.store(true, Ordering::Release);
+        tokio::time::timeout(Duration::from_secs(60), async {
+            while PERMITS.available_permits() == 0 {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("permit never released after the rewrite ended");
     }
 
     #[test]
