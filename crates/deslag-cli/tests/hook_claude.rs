@@ -1,29 +1,33 @@
 use std::io::Write;
+use std::os::unix::net::UnixDatagram;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
 /// Returns a fresh directory unique to this call, so parallel test threads never
-/// remove a directory another thread is using.
+/// remove a directory another thread is using. It lives under /tmp because macOS
+/// caps socket paths at 104 bytes.
 fn temp_dir(name: &str) -> PathBuf {
     static NEXT: AtomicUsize = AtomicUsize::new(0);
     let n = NEXT.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("deslag-it-{}-{n}-{name}", std::process::id()));
+    let dir = PathBuf::from(format!("/tmp/deslag-it-{}-{n}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
 
-/// Spawns the hook with config, project and home dirs at `dir`, so the developer's
-/// real Claude Code settings never apply.
+/// Spawns the hook with config, project, home and state dirs at `dir`, so the
+/// developer's real Claude Code settings and local service never apply.
 fn spawn_in(dir: &Path, args: &[&str]) -> Child {
     Command::new(env!("CARGO_BIN_EXE_deslag"))
         .args(args)
         .env("CLAUDE_CONFIG_DIR", dir)
         .env("CLAUDE_PROJECT_DIR", dir)
         .env("HOME", dir)
+        .env("DESLAG_STATE_DIR", dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -156,6 +160,52 @@ fn without_flag_pretty_json_is_untouched() {
     let output = run(&["hook", "claude"], &fixture("posttooluse-bash-json.json"));
     assert_eq!(output.status.code(), Some(0));
     assert!(output.stdout.is_empty());
+}
+
+#[test]
+fn live_service_gets_a_hook_report_and_output_is_unchanged() {
+    let args = ["hook", "claude", "--minify-json"];
+    let dir = temp_dir("live");
+    let service = UnixDatagram::bind(dir.join("local.sock")).unwrap();
+    service
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+
+    for (name, tool) in [
+        ("posttooluse-bash-json.json", "bash"),
+        ("posttooluse-mcp-text.json", "mcp"),
+    ] {
+        let input = fixture(name);
+        let baseline = run(&args, &input);
+        assert!(!baseline.stdout.is_empty(), "{name}");
+        let output = run_in(&dir, &args, &input);
+        assert_eq!(output.status.code(), Some(0), "{name}");
+        assert!(output.stderr.is_empty(), "{name}");
+        assert_eq!(output.stdout, baseline.stdout, "{name}");
+
+        let mut buf = [0; 1024];
+        let n = service.recv(&mut buf).expect("hook sends a report");
+        let report = json(&buf[..n]);
+        assert_eq!(report["adapter"], "hook", "{name}");
+        assert_eq!(report["tool"], tool, "{name}");
+    }
+}
+
+#[test]
+fn stale_socket_does_not_change_output_or_block() {
+    let input = fixture("posttooluse-bash-json.json");
+    let args = ["hook", "claude", "--minify-json"];
+    let baseline = run(&args, &input);
+    let dir = temp_dir("stale");
+    // Bind and drop: the socket file stays with no listener behind it.
+    drop(UnixDatagram::bind(dir.join("local.sock")).unwrap());
+
+    let start = Instant::now();
+    let output = run_in(&dir, &args, &input);
+    assert!(start.elapsed() < Duration::from_secs(5));
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+    assert_eq!(output.stdout, baseline.stdout);
 }
 
 fn replaced(updated: Value) -> Value {
