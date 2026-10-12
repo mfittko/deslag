@@ -184,14 +184,4 @@ jobs:
           GH_REPO: ${{ github.repository }}
           VERSION: ${{ needs.verify.outputs.version }}
           ACTION: ${{ steps.state.outputs.action }}
-        run: |
-          tag="v$VERSION"
-          assets=(dist/*.tar.gz dist/SHA256SUMS)
-          if [ "$ACTION" = upload ]; then
-            gh release upload "$tag" "${assets[@]}"
-          else
-            flags=()
-            case ${VERSION%%+*} in *-*) flags+=(--prerelease) ;; esac
-            gh release create "$tag" "${assets[@]}" \
-              --verify-tag --title "$tag" --notes-file release-notes.md "${flags[@]}"
-          fi
+        run: scripts/release/publish.sh "$VERSION" "$ACTION"
