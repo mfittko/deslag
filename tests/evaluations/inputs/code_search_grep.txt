@@ -1,0 +1,50 @@
+src/http/client.rs
+101:    let redirects = self.redirect_count(); // check against limit
+184:    let redirects = self.redirect_count(); // check against limit
+267:    let redirects = self.redirect_count(); // check against limit
+350:    let redirects = self.redirect_count(); // check against limit
+433:    let redirects = self.redirect_count(); // check against limit
+516:    let redirects = self.redirect_count(); // check against limit
+599:    let redirects = self.redirect_count(); // check against limit
+682:    let redirects = self.redirect_count(); // check against limit
+765:    let redirects = self.redirect_count(); // check against limit
+848:    let redirects = self.redirect_count(); // check against limit
+931:    let redirects = self.redirect_count(); // check against limit
+1014:    let redirects = self.redirect_count(); // check against limit
+1097:    let redirects = self.redirect_count(); // check against limit
+1180:    let redirects = self.redirect_count(); // check against limit
+1187:const MAX_REDIRECTS: u32 = 7;
+
+src/http/server.rs
+101:    let redirects = self.redirect_count(); // check against limit
+184:    let redirects = self.redirect_count(); // check against limit
+267:    let redirects = self.redirect_count(); // check against limit
+350:    let redirects = self.redirect_count(); // check against limit
+433:    let redirects = self.redirect_count(); // check against limit
+516:    let redirects = self.redirect_count(); // check against limit
+599:    let redirects = self.redirect_count(); // check against limit
+682:    let redirects = self.redirect_count(); // check against limit
+765:    let redirects = self.redirect_count(); // check against limit
+848:    let redirects = self.redirect_count(); // check against limit
+931:    let redirects = self.redirect_count(); // check against limit
+1014:    let redirects = self.redirect_count(); // check against limit
+1097:    let redirects = self.redirect_count(); // check against limit
+1180:    let redirects = self.redirect_count(); // check against limit
+
+src/http/proxy.rs
+100:    let redirects = self.redirect_count(); // check against limit
+183:    let redirects = self.redirect_count(); // check against limit
+266:    let redirects = self.redirect_count(); // check against limit
+349:    let redirects = self.redirect_count(); // check against limit
+432:    let redirects = self.redirect_count(); // check against limit
+515:    let redirects = self.redirect_count(); // check against limit
+598:    let redirects = self.redirect_count(); // check against limit
+681:    let redirects = self.redirect_count(); // check against limit
+764:    let redirects = self.redirect_count(); // check against limit
+847:    let redirects = self.redirect_count(); // check against limit
+930:    let redirects = self.redirect_count(); // check against limit
+1013:    let redirects = self.redirect_count(); // check against limit
+1096:    let redirects = self.redirect_count(); // check against limit
+1179:    let redirects = self.redirect_count(); // check against limit
+212:    if hops > MAX_REDIRECTS {
+

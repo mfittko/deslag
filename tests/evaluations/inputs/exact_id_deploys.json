@@ -1,0 +1,242 @@
+[
+  {
+    "environment": "staging-us",
+    "service": "search",
+    "commit": "9e3779b100009e3700010dcd41c64e6d015a4e35",
+    "deployed_at": "2026-09-11T12:00:00Z"
+  },
+  {
+    "environment": "production-us",
+    "service": "catalog",
+    "commit": "3c6ef36200013c6e00021b9a838c9cda02b49c6a",
+    "deployed_at": "2026-09-12T12:00:00Z"
+  },
+  {
+    "environment": "production-eu",
+    "service": "catalog",
+    "commit": "daa66d130001daa500032967c552eb47040eea9f",
+    "deployed_at": "2026-09-13T12:00:00Z"
+  },
+  {
+    "environment": "staging-eu",
+    "service": "search",
+    "commit": "78dde6c4000278dc00043734071939b4056938d4",
+    "deployed_at": "2026-09-14T12:00:00Z"
+  },
+  {
+    "environment": "staging-us",
+    "service": "catalog",
+    "commit": "17156075000317130005450148df882106c38709",
+    "deployed_at": "2026-09-15T12:00:00Z"
+  },
+  {
+    "environment": "production-us",
+    "service": "checkout",
+    "commit": "b54cda260003b54a000652ce8aa5d68e081dd53e",
+    "deployed_at": "2026-09-16T12:00:00Z"
+  },
+  {
+    "environment": "production-eu",
+    "service": "search",
+    "commit": "538453d7000453810007609bcc6c24fb09782373",
+    "deployed_at": "2026-09-17T12:00:00Z"
+  },
+  {
+    "environment": "staging-eu",
+    "service": "catalog",
+    "commit": "f1bbcd880004f1b800086e680e3273680ad271a8",
+    "deployed_at": "2026-09-18T12:00:00Z"
+  },
+  {
+    "environment": "staging-us",
+    "service": "checkout",
+    "commit": "8ff3473900058fef00097c354ff8c1d50c2cbfdd",
+    "deployed_at": "2026-09-19T12:00:00Z"
+  },
+  {
+    "environment": "production-us",
+    "service": "search",
+    "commit": "2e2ac0ea00062e26000a8a0291bf10420d870e12",
+    "deployed_at": "2026-09-20T12:00:00Z"
+  },
+  {
+    "environment": "production-eu",
+    "service": "catalog",
+    "commit": "cc623a9b0006cc5d000b97cfd3855eaf0ee15c47",
+    "deployed_at": "2026-09-21T12:00:00Z"
+  },
+  {
+    "environment": "staging-eu",
+    "service": "checkout",
+    "commit": "6a99b44c00076a94000ca59c154bad1c103baa7c",
+    "deployed_at": "2026-09-22T12:00:00Z"
+  },
+  {
+    "environment": "staging-us",
+    "service": "search",
+    "commit": "08d12dfd000808cb000db3695711fb891195f8b1",
+    "deployed_at": "2026-09-23T12:00:00Z"
+  },
+  {
+    "environment": "production-us",
+    "service": "catalog",
+    "commit": "a708a7ae0008a702000ec13698d849f612f046e6",
+    "deployed_at": "2026-09-24T12:00:00Z"
+  },
+  {
+    "environment": "production-eu",
+    "service": "catalog",
+    "commit": "4540215f00094539000fcf03da9e9863144a951b",
+    "deployed_at": "2026-09-25T12:00:00Z"
+  },
+  {
+    "environment": "staging-eu",
+    "service": "search",
+    "commit": "e3779b100009e3700010dcd01c64e6d015a4e350",
+    "deployed_at": "2026-09-26T12:00:00Z"
+  },
+  {
+    "environment": "staging-us",
+    "service": "catalog",
+    "commit": "81af14c1000a81a70011ea9d5e2b353d16ff3185",
+    "deployed_at": "2026-09-27T12:00:00Z"
+  },
+  {
+    "environment": "production-us",
+    "service": "checkout",
+    "commit": "1fe68e72000b1fde0012f86a9ff183aa18597fba",
+    "deployed_at": "2026-09-28T12:00:00Z"
+  },
+  {
+    "environment": "production-eu",
+    "service": "search",
+    "commit": "be1e0823000bbe1500140637e1b7d21719b3cdef",
+    "deployed_at": "2026-09-29T12:00:00Z"
+  },
+  {
+    "environment": "staging-eu",
+    "service": "catalog",
+    "commit": "5c5581d4000c5c4c00151404237e20841b0e1c24",
+    "deployed_at": "2026-09-10T12:00:00Z"
+  },
+  {
+    "environment": "staging-us",
+    "service": "checkout",
+    "commit": "fa8cfb85000cfa83001621d165446ef11c686a59",
+    "deployed_at": "2026-09-11T12:00:00Z"
+  },
+  {
+    "environment": "production-us",
+    "service": "search",
+    "commit": "98c47536000d98ba00172f9ea70abd5e1dc2b88e",
+    "deployed_at": "2026-09-12T12:00:00Z"
+  },
+  {
+    "environment": "production-eu",
+    "service": "catalog",
+    "commit": "36fbeee7000e36f100183d6be8d10bcb1f1d06c3",
+    "deployed_at": "2026-09-13T12:00:00Z"
+  },
+  {
+    "environment": "staging-eu",
+    "service": "checkout",
+    "commit": "d5336898000ed52800194b382a975a38207754f8",
+    "deployed_at": "2026-09-14T12:00:00Z"
+  },
+  {
+    "environment": "staging-us",
+    "service": "search",
+    "commit": "736ae249000f735f001a59056c5da8a521d1a32d",
+    "deployed_at": "2026-09-15T12:00:00Z"
+  },
+  {
+    "environment": "production-us",
+    "service": "catalog",
+    "commit": "11a25bfa00101196001b66d2ae23f712232bf162",
+    "deployed_at": "2026-09-16T12:00:00Z"
+  },
+  {
+    "environment": "production-eu",
+    "service": "checkout",
+    "commit": "4be1c09d7a3f5e2286c1d0b9f47a6e3c58d2b710",
+    "deployed_at": "2026-09-17T12:00:00Z"
+  },
+  {
+    "environment": "staging-eu",
+    "service": "search",
+    "commit": "4e114f5c00114e04001d826c31b093ec25e08dcc",
+    "deployed_at": "2026-09-18T12:00:00Z"
+  },
+  {
+    "environment": "staging-us",
+    "service": "catalog",
+    "commit": "ec48c90d0011ec3b001e90397376e259273adc01",
+    "deployed_at": "2026-09-19T12:00:00Z"
+  },
+  {
+    "environment": "production-us",
+    "service": "checkout",
+    "commit": "8a8042be00128a72001f9e06b53d30c628952a36",
+    "deployed_at": "2026-09-20T12:00:00Z"
+  },
+  {
+    "environment": "production-eu",
+    "service": "search",
+    "commit": "28b7bc6f001328a90020abd3f7037f3329ef786b",
+    "deployed_at": "2026-09-21T12:00:00Z"
+  },
+  {
+    "environment": "staging-eu",
+    "service": "catalog",
+    "commit": "c6ef36200013c6e00021b9a038c9cda02b49c6a0",
+    "deployed_at": "2026-09-22T12:00:00Z"
+  },
+  {
+    "environment": "staging-us",
+    "service": "checkout",
+    "commit": "6526afd1001465170022c76d7a901c0d2ca414d5",
+    "deployed_at": "2026-09-23T12:00:00Z"
+  },
+  {
+    "environment": "production-us",
+    "service": "search",
+    "commit": "035e29820015034e0023d53abc566a7a2dfe630a",
+    "deployed_at": "2026-09-24T12:00:00Z"
+  },
+  {
+    "environment": "production-eu",
+    "service": "catalog",
+    "commit": "a195a3330015a1850024e307fe1cb8e72f58b13f",
+    "deployed_at": "2026-09-25T12:00:00Z"
+  },
+  {
+    "environment": "staging-eu",
+    "service": "checkout",
+    "commit": "3fcd1ce400163fbc0025f0d43fe3075430b2ff74",
+    "deployed_at": "2026-09-26T12:00:00Z"
+  },
+  {
+    "environment": "staging-us",
+    "service": "search",
+    "commit": "de0496950016ddf30026fea181a955c1320d4da9",
+    "deployed_at": "2026-09-27T12:00:00Z"
+  },
+  {
+    "environment": "production-us",
+    "service": "catalog",
+    "commit": "7c3c104600177c2a00280c6ec36fa42e33679bde",
+    "deployed_at": "2026-09-28T12:00:00Z"
+  },
+  {
+    "environment": "production-eu",
+    "service": "catalog",
+    "commit": "1a7389f700181a6100291a3b0535f29b34c1ea13",
+    "deployed_at": "2026-09-29T12:00:00Z"
+  },
+  {
+    "environment": "staging-eu",
+    "service": "search",
+    "commit": "b8ab03a80018b898002a280846fc4108361c3848",
+    "deployed_at": "2026-09-10T12:00:00Z"
+  }
+]
