@@ -98,13 +98,13 @@ The criterion is evaluated per arm over all non-control tasks that list the arm.
 
 ## Secondary measures
 
-Each result line records, when the backend reports them: input, output, cache-read and cache-creation tokens, cost in USD, backend duration in ms and the number of turns. It also records the payload bytes and the estimated payload tokens (`deslag-estimate-v1`). Reported usage and estimated tokens are different measurements and are never mixed.
+Each result line records, when the backend reports them: input, output, cache-read and cache-creation tokens, cost in USD, backend duration in ms and the number of turns. It also records the payload bytes, the estimated payload tokens (`deslag-estimate-v1`) and `wall_ms`, the harness wall clock around each backend call. Every backend records `wall_ms`, the mock included. Reported usage and estimated tokens are different measurements and are never mixed.
 
 The harness never retries a call. A failed call is recorded with error kind `backend`, so the retry count is always zero. Tool-call count does not apply, because the corpus is single-turn read-back with tools disabled. Multi-turn agentic tasks with real tools are a follow-up.
 
 ## Corpus and controls
 
-Each task in `tests/evaluations/manifest.json` has `id`, `category`, `input` (a path relative to the manifest), `question`, `answers`, `rule`, an optional `tolerance`, `arms`, an optional `control` and, for the evidence-drop control, `evidence`. All content is synthetic. No real user content is exported.
+Each task in `tests/evaluations/manifest.json` has `id`, `category`, `input` (a path relative to the manifest), `question`, `answers`, `rule`, an optional `tolerance` (a number >= 0), `arms`, an optional `control` and, for the evidence-drop control, `evidence`. Only a task with control `evidence_drop` may list the `drop-evidence` arm. The manifest is trusted and committed, so an input path may also be absolute. All content is synthetic. No real user content is exported.
 
 The categories are the PLAN §14.4 task kinds: `api_query`, `code_search`, `failure_diagnosis`, `issue_triage`, `logs`, `aggregation`, `exact_id` and `buried_evidence`. A `buried_evidence` task puts the answer in the middle or at the end of a large result. At least one input has 100 or more rows.
 
@@ -117,7 +117,7 @@ Two control kinds validate the harness:
 
 The `mock` backend is offline and deterministic. It answers with the first accepted answer when that answer occurs verbatim in the payload, else `NOT_FOUND`. For a `set` task, every item must occur. The mock measures evidence presence only. It is plumbing evidence for the harness, never evidence about a model.
 
-The `claude` backend runs `claude -p` in a throwaway directory with a project `.claude/settings.json`, `--setting-sources project`, `--strict-mcp-config`, `--no-session-persistence`, `--tools ""` and the fixed system prompt. The prompt goes on stdin. It never reads or edits the user's global settings.
+The `claude` backend runs `claude -p` in a throwaway directory with a project `.claude/settings.json`, `--setting-sources project`, `--strict-mcp-config`, `--no-session-persistence`, `--tools ""` and the fixed system prompt. The prompt goes on stdin. It loads no user or local settings files, no MCP servers and no hooks. The client still uses the user's credentials and may update its own state file.
 
 ## Randomization
 
@@ -128,9 +128,11 @@ The run order is a seeded shuffle (splitmix64, Fisher-Yates) over all (task, arm
 - The `claude` backend refuses to start unless `DESLAG_EVAL_LIVE=1` is set and `--model` is given.
 - Every call passes `--max-budget-usd` with the per-run cap (`--per-run-usd`, default 0.30).
 - Before each call, the runner stops when the spent amount plus the per-run cap would exceed `--budget-usd`. A call that reports no cost counts as the full per-run cap.
+- The client checks `--max-budget-usd` only after a turn, so one call can exceed its cap. The total can then exceed `--budget-usd` by that excess. The runner stops with exit 2 after any call whose reported cost exceeds `--per-run-usd`. The partial results file is kept.
+- `run` refuses an existing `--out` path with exit 2, so a rerun never overwrites results.
 - `deslag-eval estimate` prints an upper-bound cost of a full live run before any money is spent.
 - CI runs only `cargo test`, which uses the mock backend. CI never sets `DESLAG_EVAL_LIVE`.
 
 ## Table format read-back
 
-The `table-csv` and `table-mdkv` arms run on the same tasks. The report gives per-format accuracy for both. The CSV form cannot become a default until a live comparison exists. The default decision belongs to the DF-025 release gate (#22), not to this harness.
+The `table-csv` and `table-mdkv` arms run on the same tasks. The report gives per-format accuracy for both, over non-control tasks that ran both arms in the same seed. The CSV form cannot become a default until a live comparison exists. The default decision belongs to the DF-025 release gate (#22), not to this harness.

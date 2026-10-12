@@ -2,7 +2,7 @@
 
 The method, the scoring rules and the non-inferiority criterion are predeclared in [benchmark-methodology.md](../benchmark-methodology.md). The corpus is `tests/evaluations/manifest.json`: 20 synthetic tasks, 16 of them in the PLAN §14.4 categories, 2 incompressible controls and 2 evidence-drop controls.
 
-No live model run exists yet. This file holds the offline mock dry run and the pending live run.
+No live model results exist yet. This file holds the pending live run, a two-call live plumbing smoke check and the offline mock dry run.
 
 ## Status
 
@@ -12,7 +12,7 @@ No live model run exists yet. This file holds the offline mock dry run and the p
 | Mock dry run | below, plumbing evidence only |
 | Corpus size per arm | 5 to 11 non-control pairs; the criterion needs at least 81, so every verdict is `not shown` by construction |
 | table-v1 CSV vs Markdown-KV | no model comparison yet; CSV cannot become a default before one exists |
-| Generated | 2026-10-12T00:14:14Z, commit 4c7e1110d80cc1ccfb308dcc5fb386a32a18b085 |
+| Generated | 2026-10-12T00:25:55Z, commit 298604e85550fc3f01e0596283d3f13d6a4baf69 |
 
 ## Pending live runs
 
@@ -28,7 +28,7 @@ DESLAG_EVAL_LIVE=1 cargo run -q -p deslag-eval --locked -- run \
 cargo run -q -p deslag-eval --locked -- report tmp/eval/live-claude-haiku-5-5-seed16.jsonl
 ```
 
-Estimated cost from `deslag-eval estimate --manifest tests/evaluations/manifest.json` (default assumptions). The prices are conservative assumptions for an upper bound, not the published price of the model. `--budget-usd 3.00` stops the run before any call that could take the total above USD 3.00. `--max-budget-usd 0.30` caps each call.
+Estimated cost from `deslag-eval estimate --manifest tests/evaluations/manifest.json` (default assumptions). The prices are conservative assumptions for an upper bound, not the published price of the model. Before each call, the runner stops when the spent amount plus the per-run cap of USD 0.30 would exceed `--budget-usd 3.00`. Each call passes `--max-budget-usd 0.30`, but the client checks it only after a turn. One call can therefore exceed its cap, and the total can exceed USD 3.00 by that excess. The runner stops with exit 2 after any call that reports more than USD 0.30 and keeps the partial results file. `run` refuses an existing `--out` path.
 
 | Field | Value |
 | --- | --- |
@@ -41,12 +41,17 @@ Estimated cost from `deslag-eval estimate --manifest tests/evaluations/manifest.
 
 After the run, add its report as a new section above the mock dry run, with the client version and the total spend, and update the Status table.
 
+## Live plumbing smoke check
+
+On 2026-10-12, 2 live calls checked the `claude` backend plumbing: task `api-repo-branch`, arms `baseline` and `json-minify`, model `claude-haiku-5-5`, client 2.1.296, seed 16, `--per-run-usd 0.30`, `--budget-usd 0.60`. Both calls answered correctly. The total reported cost was USD 0.0004. The cache-creation tokens were 918 and 868 against payload estimates of 178 and 130. The per-call overhead was therefore about 740 tokens, below the 2000-token overhead that the estimate assumes. This is plumbing evidence only. It is not part of any analysis.
+
 ## Mock dry run
 
 The mock backend answers with the accepted answer when it occurs verbatim in the payload, else `NOT_FOUND`. It measures evidence presence, not model reading. Its results show that the harness pairs runs, scores them, detects evidence loss and keeps the incompressible controls unchanged. They are no evidence about any model.
 
 ```sh
 mkdir -p tmp/eval
+rm -f tmp/eval/mock-seed16.jsonl
 cargo run -q -p deslag-eval --locked -- run --manifest tests/evaluations/manifest.json \
   --backend mock --seed 16 --out tmp/eval/mock-seed16.jsonl
 cargo run -q -p deslag-eval --locked -- report tmp/eval/mock-seed16.jsonl
@@ -66,7 +71,7 @@ cargo run -q -p deslag-eval --locked -- report tmp/eval/mock-seed16.jsonl
 
 ### Non-inferiority per arm
 
-Non-control tasks. Agresti-Min lower one-sided 95% bound; an arm passes when the bound exceeds -2.0 pp. b: only baseline succeeded; c: only the arm succeeded.
+Non-control tasks. Agresti-Min lower one-sided 95% bound; an arm passes when the bound exceeds -2.0 pp and is inferior when the upper one-sided 95% bound is below -2.0 pp. b: only baseline succeeded; c: only the arm succeeded.
 
 | Arm | Pairs | Unchanged | b | c | Baseline success | Arm success | Difference pp | Lower bound pp | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -107,12 +112,12 @@ Non-control tasks. Agresti-Min lower one-sided 95% bound; an arm passes when the
 
 ### Table format read-back
 
-Tasks that ran both table arms.
+Non-control tasks that ran both table arms in the same seed. Control tasks are excluded.
 
 | Format | Arm | Runs | Success | Wrong | Abstain | Backend error |
 | --- | --- | --- | --- | --- | --- | --- |
-| table-v1 CSV | table-csv | 12 | 12/12 (100.0%) | 0 | 0 | 0 |
-| Markdown-KV | table-mdkv | 12 | 12/12 (100.0%) | 0 | 0 | 0 |
+| table-v1 CSV | table-csv | 10 | 10/10 (100.0%) | 0 | 0 | 0 |
+| Markdown-KV | table-mdkv | 10 | 10/10 (100.0%) | 0 | 0 | 0 |
 
 ### Controls
 
@@ -126,16 +131,16 @@ Tasks that ran both table arms.
 
 ### Per arm
 
-All tasks, controls included. Payload tokens are estimates (deslag-estimate-v1). The columns after them are backend-reported sums; n/a means not reported.
+All tasks, controls included. Payload tokens are estimates (deslag-estimate-v1). The columns from Input tokens to Turns are backend-reported sums; n/a means not reported. Wall ms is the summed harness wall clock of the backend calls.
 
-| Arm | Runs | Success | Wrong | Abstain | Backend error | Payload tokens (estimate) | Input tokens | Output tokens | Cache read | Cache creation | Cost USD | Duration ms | Turns |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| baseline | 20 | 20/20 (100.0%) | 0 | 0 | 0 | 45075 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| json-minify | 13 | 13/13 (100.0%) | 0 | 0 | 0 | 22572 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| table-csv | 12 | 12/12 (100.0%) | 0 | 0 | 0 | 14247 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| table-mdkv | 12 | 12/12 (100.0%) | 0 | 0 | 0 | 22387 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| lines-v1 | 7 | 7/7 (100.0%) | 0 | 0 | 0 | 11834 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
-| drop-evidence | 2 | 0/2 (0.0%) | 0 | 2 | 0 | 1136 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| Arm | Runs | Success | Wrong | Abstain | Backend error | Payload tokens (estimate) | Input tokens | Output tokens | Cache read | Cache creation | Cost USD | Duration ms | Turns | Wall ms |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline | 20 | 20/20 (100.0%) | 0 | 0 | 0 | 45075 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| json-minify | 13 | 13/13 (100.0%) | 0 | 0 | 0 | 22572 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| table-csv | 12 | 12/12 (100.0%) | 0 | 0 | 0 | 14247 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| table-mdkv | 12 | 12/12 (100.0%) | 0 | 0 | 0 | 22387 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| lines-v1 | 7 | 7/7 (100.0%) | 0 | 0 | 0 | 11834 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| drop-evidence | 2 | 0/2 (0.0%) | 0 | 2 | 0 | 1136 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
 
 ## Payload sizes
 
