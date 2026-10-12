@@ -17,8 +17,11 @@
 //! so its counts can overstate. Each text of a Bash tool result is compressed
 //! as one job of `Limits::executor`: each text item of a content array, or the
 //! string content. When the executor rejects any job (busy, budget exceeded or
-//! panicked), the whole body is forwarded unrewritten, so under load a resend
-//! can differ from the first send.
+//! panicked), the whole body is forwarded unrewritten. Every request re-runs
+//! one job per Bash tool result text in the full history, so the chance of a
+//! rejection grows with history length as well as with load. A rejection sends
+//! every earlier, previously minified result unminified. The resend then
+//! differs from the first send and invalidates the prompt-cache prefix.
 
 use std::{
     collections::HashSet,
