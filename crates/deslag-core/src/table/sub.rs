@@ -168,8 +168,7 @@ fn encode(text: &str, label: &str, level: usize, opts: &TableOptions) -> Option<
         return None;
     }
     if first == b'[' {
-        let block = v2::encode_array(text, label, opts.max_rows)?;
-        Some(apply(&block, label, level, opts))
+        v2::encode_array(text, label, level, opts)
     } else {
         Some(format!(
             "= {}",
