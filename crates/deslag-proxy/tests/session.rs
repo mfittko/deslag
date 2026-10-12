@@ -293,7 +293,11 @@ fn a_corrupt_manifest_is_never_overwritten_without_tool_results() {
     store.replay("s", "m", &[], |_| true).unwrap();
     let mut v2 = manifest(&dir, "s");
     v2["version"] = json!(2);
-    for bytes in [b"{ not json".to_vec(), v2.to_string().into_bytes()] {
+    for bytes in [
+        b"{ not json".to_vec(),
+        v2.to_string().into_bytes(),
+        br#"{"owner":"proxy","mode":"safe","decisions":{}}"#.to_vec(),
+    ] {
         fs::write(&path, &bytes).unwrap();
         let got = store.replay("s", "m", &[], |_| unreachable!());
         assert!(matches!(&got, Ok(v) if v.is_empty()), "{got:?}");
@@ -431,6 +435,7 @@ fn corrupt_manifest_with_tool_results_is_missing_manifest() {
         b"[]".to_vec(),
         b"{}".to_vec(),
         br#"{"version":1}"#.to_vec(),
+        br#"{"owner":"proxy","mode":"safe","decisions":{}}"#.to_vec(),
     ];
     for bytes in corrupt {
         fs::write(&path, &bytes).unwrap();
@@ -452,6 +457,7 @@ fn version_2_manifest_with_tool_results_is_unsupported() {
     for m in [
         m,
         json!({"version": 2, "decisions": []}),
+        json!({"version": 2, "decisions": {}}),
         json!({"version": 2}),
     ] {
         fs::write(manifest_path(&dir, "s"), m.to_string()).unwrap();
@@ -504,6 +510,113 @@ fn mode_off_session_passes_through_without_writes() {
         [false]
     );
     assert_eq!(fs::read(&path).unwrap(), before);
+    // The manifest mode is pinned: a configuration change to `safe` does not
+    // reach the existing `off` session.
+    let safe = Store {
+        mode: Mode::Safe,
+        ..store.clone()
+    };
+    assert_eq!(
+        safe.replay("s", "m", &c, |_| unreachable!()).unwrap(),
+        [false]
+    );
+    assert_eq!(fs::read(&path).unwrap(), before);
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn mode_safe_session_keeps_deciding_after_a_change_to_off() {
+    let dir = temp_dir();
+    store(&dir).replay("s", "m", &[], |_| true).unwrap();
+    let off = Store {
+        mode: Mode::Off,
+        ..store(&dir)
+    };
+    let c = [candidate("toolu_1", "{ \"a\": 1 }")];
+    assert_eq!(off.replay("s", "m", &c, |_| true).unwrap(), [true]);
+    let m = manifest(&dir, "s");
+    assert_eq!(m["mode"], "safe");
+    assert_eq!(m["decisions"]["toolu_1"]["encoded"]["transform"], ID);
+    fs::remove_dir_all(dir).unwrap();
+}
+
+fn backdate(path: &Path) -> SystemTime {
+    let t = SystemTime::now() - RETENTION - Duration::from_secs(60);
+    fs::File::options()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(t)
+        .unwrap();
+    t
+}
+
+fn mtime(path: &Path) -> SystemTime {
+    fs::metadata(path).unwrap().modified().unwrap()
+}
+
+#[test]
+fn replay_without_a_commit_refreshes_retention_of_valid_manifests_only() {
+    let dir = temp_dir();
+    let safe = store(&dir);
+    let off = Store {
+        mode: Mode::Off,
+        ..safe.clone()
+    };
+    off.replay("off", "m", &[], |_| true).unwrap();
+    safe.replay("safe", "m", &[], |_| true).unwrap();
+    safe.replay("idle", "m", &[], |_| true).unwrap();
+    let c = [candidate("toolu_1", "x")];
+    safe.replay("safe", "m", &c, |_| false).unwrap();
+    let path = |s| manifest_path(&dir, s);
+    let before = ["off", "safe"].map(|s| fs::read(path(s)).unwrap());
+    for s in ["off", "safe", "idle"] {
+        backdate(&path(s));
+    }
+    // Used sessions: an `off` session, and a `safe` one that only replays.
+    off.replay("off", "m", &c, |_| unreachable!()).unwrap();
+    assert_eq!(
+        safe.replay("safe", "m", &c, |_| unreachable!()).unwrap(),
+        [false]
+    );
+    assert_eq!(prune(&dir, RETENTION, SystemTime::now()).unwrap(), 1);
+    assert!(!path("idle").exists(), "an idle session expires");
+    for (s, bytes) in ["off", "safe"].iter().zip(&before) {
+        assert_eq!(&fs::read(path(s)).unwrap(), bytes, "{s}: bytes unchanged");
+    }
+    // Corrupt and unsupported manifests are never refreshed.
+    for bytes in [&b"{ not json"[..], br#"{"version":2,"decisions":{}}"#] {
+        fs::write(path("bad"), bytes).unwrap();
+        let old = backdate(&path("bad"));
+        safe.replay("bad", "m", &[], |_| unreachable!()).unwrap();
+        assert_eq!(mtime(&path("bad")), old);
+    }
+    // A scope without a manifest under a non-proxy owner gets none.
+    write_owner(&dir, Owner::Hook).unwrap();
+    safe.replay("none", "m", &[], |_| unreachable!()).unwrap();
+    assert!(!path("none").exists());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn prune_never_removes_a_manifest_that_a_concurrent_replay_refreshed() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let path = manifest_path(&dir, "s");
+    let c = [candidate("toolu_1", "x")];
+    for _ in 0..200 {
+        backdate(&path);
+        std::thread::scope(|s| {
+            let pruner = s.spawn(|| prune(&dir, RETENTION, SystemTime::now()).unwrap());
+            // Either prune runs first and this replay starts a new manifest,
+            // or this replay refreshes the manifest and prune keeps it.
+            store.replay("s", "m", &[], |_| true).unwrap();
+            pruner.join().unwrap();
+        });
+        assert!(path.exists());
+        store.replay("s", "m", &c, |_| false).unwrap();
+    }
     fs::remove_dir_all(dir).unwrap();
 }
 

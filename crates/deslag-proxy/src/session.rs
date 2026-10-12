@@ -39,9 +39,13 @@ pub enum Mode {
     Safe,
 }
 
-/// Manifests unchanged for this long are removed by [`prune`].
+/// Manifests unused for this long are removed by [`prune`]. A replay that
+/// commits nothing refreshes the manifest mtime, so retention counts from the
+/// last use.
 pub const RETENTION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
+/// ponytail: a replay without a commit refreshes the mtime at most this often.
+const REFRESH: Duration = Duration::from_secs(24 * 60 * 60);
 const VERSION: u64 = 1;
 const POLICY_VERSION: u64 = 1;
 /// Pinned to deslag-core, so a core version bump retires old decisions.
@@ -91,8 +95,11 @@ pub fn manifest_path(dir: &Path, scope: &str) -> PathBuf {
 
 /// Removes session manifests and leftover temp files last modified before
 /// `now - retention`. Returns how many files were removed. Entries that are
-/// not regular files or that vanish while pruning are skipped.
+/// not regular files or that vanish while pruning are skipped. Holds the
+/// replay lock, so a manifest that a replay in this process commits or
+/// refreshes is never removed after its age check.
 pub fn prune(dir: &Path, retention: Duration, now: SystemTime) -> io::Result<usize> {
+    let _guard = LOCK.lock().unwrap_or_else(PoisonError::into_inner);
     let cutoff = now.checked_sub(retention).unwrap_or(SystemTime::UNIX_EPOCH);
     let entries = match fs::read_dir(dir.join("sessions")) {
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(0),
@@ -175,7 +182,9 @@ impl Store {
     /// their pinned encoding. Only `mode` is pinned per session. A manifest
     /// whose owner or mode is not `proxy`/`safe` or `proxy`/`off` is corrupt:
     /// it returns `MissingManifest` when the request carries tool results and
-    /// passes through otherwise.
+    /// passes through otherwise. So is a manifest without a `version`. A
+    /// replay of a valid manifest that commits nothing refreshes its mtime,
+    /// so [`prune`] keeps sessions in use.
     pub fn replay(
         &self,
         scope: &str,
@@ -220,7 +229,8 @@ impl Store {
                         Ok(pass)
                     };
                 }
-                match parsed.filter(|m| m["decisions"].is_object()) {
+                // An absent version is corrupt state, never version skew.
+                match parsed.filter(|m| m["version"] == VERSION && m["decisions"].is_object()) {
                     Some(m) => m,
                     None if has_results => return Err(ReplayError::MissingManifest),
                     // A corrupt manifest is never overwritten.
@@ -228,19 +238,15 @@ impl Store {
                 }
             }
         };
-        if manifest["version"] != VERSION {
-            return if has_results {
-                Err(ReplayError::UnsupportedManifest)
-            } else {
-                Ok(pass)
-            };
-        }
         // Mode is pinned per session; the configured owner is read per
         // request. Only the proxy writes a manifest, so a manifest owner other
         // than `proxy`, any other mode, or a missing one, is corrupt.
         match (manifest["owner"].as_str(), manifest["mode"].as_str()) {
             (Some("proxy"), Some("safe")) => {}
-            (Some("proxy"), Some("off")) => return Ok(pass),
+            (Some("proxy"), Some("off")) => {
+                refresh(&path)?;
+                return Ok(pass);
+            }
             _ if has_results => return Err(ReplayError::MissingManifest),
             _ => return Ok(pass),
         }
@@ -279,6 +285,8 @@ impl Store {
         }
         if dirty {
             write_manifest(&path, &manifest)?;
+        } else {
+            refresh(&path)?;
         }
         Ok(encode)
     }
@@ -297,6 +305,21 @@ fn pinned(d: &Value, id: &str) -> Result<bool, ReplayError> {
         },
         _ => Err(ReplayError::CorruptDecision(id.into())),
     }
+}
+
+/// Sets the mtime of an existing manifest to now when it is older than
+/// `REFRESH`. Never creates the file or changes its bytes.
+fn refresh(path: &Path) -> io::Result<()> {
+    let file = fs::File::options().write(true).open(path)?;
+    if file
+        .metadata()?
+        .modified()?
+        .elapsed()
+        .is_ok_and(|age| age > REFRESH)
+    {
+        file.set_modified(SystemTime::now())?;
+    }
+    Ok(())
 }
 
 fn hex(bytes: &[u8]) -> String {
