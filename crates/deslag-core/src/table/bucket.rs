@@ -44,26 +44,27 @@ pub(super) fn encode(array: &str, label: &str, max_rows: usize) -> Option<String
 
 /// The bucket block that splits `items` by the string value of `key`.
 fn encode_by(array: &str, items: &[Item], key: &str, label: &str) -> Option<String> {
+    // Buckets are numbered in order of their first row.
     let mut index: HashMap<&str, usize> = HashMap::new();
-    let mut buckets: Vec<Vec<&str>> = Vec::new();
     let mut order = Vec::with_capacity(items.len());
-    for (span, members) in items {
+    for (_, members) in items {
         let (_, value) = members.iter().find(|(k, _)| *k == key)?;
-        // Buckets are numbered in order of their first row.
-        let b = *index.entry(&array[value.clone()]).or_insert_with(|| {
-            buckets.push(Vec::new());
-            buckets.len() - 1
-        });
-        buckets[b].push(&array[span.clone()]);
-        order.push(b.to_string());
+        let next = index.len();
+        order.push(*index.entry(&array[value.clone()]).or_insert(next));
     }
     // ponytail: a key unique in every row gives one-row tables that each
     // repeat the header, so it is skipped before the tables are encoded.
-    // `buckets.len() * 2 > items.len()` would skip more but drops winners
+    // `index.len() * 2 > items.len()` would skip more but drops winners
     // such as the spec example (3 buckets over 5 rows).
-    if buckets.len() < 2 || buckets.len() == items.len() {
+    if index.len() < 2 || index.len() == items.len() {
         return None;
     }
+    // Rows and the order line are built only for a key that passes the check.
+    let mut buckets: Vec<Vec<&str>> = vec![Vec::new(); index.len()];
+    for ((span, _), &b) in items.iter().zip(&order) {
+        buckets[b].push(&array[span.clone()]);
+    }
+    let order: Vec<String> = order.iter().map(usize::to_string).collect();
     let mut out = format!("[{}] by {key}\n{}", items.len(), order.join(","));
     for (k, rows) in buckets.iter().enumerate() {
         let block = encode_block(&format!("[{}]", rows.join(",")), 1, usize::MAX)?;
@@ -149,6 +150,8 @@ pub(super) fn decode(text: &str, i: &mut usize, label: &str, level: usize) -> Op
         return None;
     }
     *i = order_end;
+    // The rows of every bucket, in one text, and each bucket's row spans.
+    let mut rows = String::new();
     let mut buckets = Vec::with_capacity(sizes.len());
     for (k, &size) in sizes.iter().enumerate() {
         let table = format!("{label}.{k}");
@@ -168,15 +171,20 @@ pub(super) fn decode(text: &str, i: &mut usize, label: &str, level: usize) -> Op
         {
             return None;
         }
-        let rows = decode_rows(text, i, Some((&table, level)))?;
-        if rows.len() != size {
+        let spans = decode_rows(text, i, Some((&table, level)), &mut rows)?;
+        if spans.len() != size {
             return None;
         }
-        buckets.push(rows.into_iter());
+        buckets.push(spans.into_iter());
     }
-    let rows: Vec<String> = order
-        .iter()
-        .map(|&b| buckets[b].next())
-        .collect::<Option<_>>()?;
-    Some(format!("[{}]", rows.join(",")))
+    let mut out = String::with_capacity(rows.len() + 2);
+    out.push('[');
+    for (n, &b) in order.iter().enumerate() {
+        if n > 0 {
+            out.push(',');
+        }
+        out.push_str(&rows[buckets[b].next()?]);
+    }
+    out.push(']');
+    Some(out)
 }
