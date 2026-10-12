@@ -49,8 +49,9 @@ const MAX_INSPECT_BYTES: usize = 32 * 1024 * 1024;
 /// for a permit and never stream through, so the decision never depends on load.
 /// A permit holder that does not deliver its body within
 /// `Limits::body_read_timeout` gets `408` and releases the permit.
-/// The deadline covers only the buffered part, up to `MAX_INSPECT_BYTES`. For a
-/// larger body the permit is released and the rest streams without a deadline.
+/// The deadline covers only the buffered part, up to `MAX_INSPECT_BYTES`, and
+/// never the replay. The permit is held until the replay ends. For a larger
+/// body the permit is released and the rest streams without a deadline.
 /// Make the permit count configurable via `Limits` if that ceiling is wrong.
 static INSPECT_PERMITS: Semaphore = Semaphore::const_new(4);
 
@@ -132,8 +133,9 @@ const SCOPE_HEADER: &str = "x-claude-code-session-id";
 /// `POST /v1/messages` body is buffered and its tool results replayed.
 /// Anything else streams through untouched. A failed buffered read is `400`.
 /// A buffered read that exceeds `read_timeout` after its permit is granted is
-/// `408`: the request is rejected, never forwarded unrewritten. Replay errors
-/// are `400`, a failed state commit is `500`; neither is forwarded.
+/// `408`: the request is rejected, never forwarded unrewritten. The timeout
+/// covers only the body read, never the replay. Replay errors are `400`, a
+/// failed state commit is `500`; neither is forwarded.
 pub(crate) async fn prepare(
     req: Request<Incoming>,
     store: Option<&Store>,
@@ -154,31 +156,73 @@ pub(crate) async fn prepare(
         };
         return Ok(Request::from_parts(parts, body));
     };
-    let _permit = INSPECT_PERMITS
+    let permit = INSPECT_PERMITS
         .acquire()
         .await
         .expect("semaphore is never closed");
     // The deadline starts at the permit, so time spent queued does not count.
-    match tokio::time::timeout(read_timeout, buffer(parts, body, store.clone())).await {
-        Ok(result) => result,
-        Err(_) => Err((
-            StatusCode::REQUEST_TIMEOUT,
-            "invalid_request_error",
-            READ_FAILED,
-        )),
+    // It covers only the body read, so a state stall is never reported as `408`.
+    let (mut parts, mut buf, trailers) =
+        match tokio::time::timeout(read_timeout, buffer(parts, body)).await {
+            Err(_) => {
+                return Err((
+                    StatusCode::REQUEST_TIMEOUT,
+                    "invalid_request_error",
+                    READ_FAILED,
+                ));
+            }
+            Ok(Err(e)) => return Err(e),
+            Ok(Ok(Buffered::Overflow(req))) => return Ok(req),
+            Ok(Ok(Buffered::Complete(parts, buf, trailers))) => (parts, buf, trailers),
+        };
+    let scope = parts
+        .headers
+        .get(SCOPE_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned);
+    if let (Some(scope), None) = (scope, &trailers) {
+        // Manifest IO blocks, so the replay runs off the async workers. The
+        // blocking task owns the permit, so the buffer stays counted against
+        // `INSPECT_PERMITS` until the replay ends, even if this future is dropped.
+        let store = store.clone();
+        let (back, result) = tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            let result = rewrite(&buf, &store, &scope);
+            (buf, result)
+        })
+        .await
+        .map_err(|_| STATE_FAILED)?;
+        buf = back;
+        if let Some(rewritten) = result.map_err(reject)? {
+            buf = rewritten;
+            parts
+                .headers
+                .insert(header::CONTENT_LENGTH, buf.len().into());
+        }
     }
+    let body = ReqBody {
+        prefix: Some(buf.into()),
+        rest: None,
+        trailers,
+    };
+    Ok(Request::from_parts(parts, body))
 }
 
-/// Buffers up to `MAX_INSPECT_BYTES` of `body` and rewrites it once complete.
-/// A body with trailers is never rewritten, because a trailer such as
-/// `content-digest` can pin its bytes. The trailers are kept in the body, but
-/// they do not reach the upstream: the hop-by-hop strip removes the `trailer`
-/// header, and a `content-length` body carries no trailers over HTTP/1.1.
-async fn buffer(
-    mut parts: Parts,
-    mut body: Incoming,
-    store: Store,
-) -> Result<Request<ReqBody>, Reject> {
+/// A buffered request body.
+enum Buffered {
+    /// The body exceeded `MAX_INSPECT_BYTES`; forward it unrewritten.
+    Overflow(Request<ReqBody>),
+    /// The whole body and its trailers, ready for replay.
+    Complete(Parts, Vec<u8>, Option<HeaderMap>),
+}
+
+/// Buffers up to `MAX_INSPECT_BYTES` of `body`. A body with trailers is never
+/// rewritten, because a trailer such as `content-digest` can pin its bytes. The
+/// trailers are kept in the body, but they do not reach the upstream: the
+/// hop-by-hop strip removes the `trailer` header, and a `content-length` body
+/// carries no trailers over HTTP/1.1.
+async fn buffer(parts: Parts, mut body: Incoming) -> Result<Buffered, Reject> {
     let hint = body.size_hint().exact().unwrap_or(0);
     let mut buf = Vec::with_capacity(hint.min(MAX_INSPECT_BYTES as u64 + 1) as usize);
     let mut trailers: Option<HeaderMap> = None;
@@ -207,37 +251,10 @@ async fn buffer(
                 rest: Some(body),
                 trailers: None,
             };
-            return Ok(Request::from_parts(parts, body));
+            return Ok(Buffered::Overflow(Request::from_parts(parts, body)));
         }
     }
-    let scope = parts
-        .headers
-        .get(SCOPE_HEADER)
-        .and_then(|v| v.to_str().ok())
-        .filter(|s| !s.is_empty())
-        .map(str::to_owned);
-    if let (Some(scope), None) = (scope, &trailers) {
-        // Manifest IO blocks, so the replay runs off the async workers.
-        let (back, result) = tokio::task::spawn_blocking(move || {
-            let result = rewrite(&buf, &store, &scope);
-            (buf, result)
-        })
-        .await
-        .map_err(|_| STATE_FAILED)?;
-        buf = back;
-        if let Some(rewritten) = result.map_err(reject)? {
-            buf = rewritten;
-            parts
-                .headers
-                .insert(header::CONTENT_LENGTH, buf.len().into());
-        }
-    }
-    let body = ReqBody {
-        prefix: Some(buf.into()),
-        rest: None,
-        trailers,
-    };
-    Ok(Request::from_parts(parts, body))
+    Ok(Buffered::Complete(parts, buf, trailers))
 }
 
 fn reject(e: ReplayError) -> Reject {
