@@ -36,9 +36,9 @@ With `--minify-json`, two more constants in `crates/deslag-proxy/src/minify.rs` 
 | Limit | Default | Effect |
 | --- | --- | --- |
 | `MAX_INSPECT_BYTES` | 32 MiB | A larger body is forwarded unrewritten: the buffered prefix, then the rest as it arrives. |
-| `INSPECT_PERMITS` | 4 | At most 4 requests buffer and rewrite at once. Further eligible requests wait for a permit. `BODY_READ_TIMEOUT` bounds the read. The permit stays held through the rewrite after the read, also when the client disconnects, so the executor budget below bounds that part. |
+| `INSPECT_PERMITS` | 4 | At most 4 requests buffer and rewrite at once. Further eligible requests wait for a permit. `BODY_READ_TIMEOUT` bounds the read. The permit stays held through the rewrite after the read, also when the client disconnects. The rewrite parses and rebuilds the body without a time limit and runs one job per text in sequence. The executor budget below bounds each job, not the whole hold. |
 
-Compression in the proxy and in `deslag hook claude --minify-json` runs under `BoundedExecutor::default()`. The proxy takes it from `Limits::executor`. Each tool result is one job:
+Compression in the proxy and in `deslag hook claude --minify-json` runs under `BoundedExecutor::default()`. The proxy takes it from `Limits::executor`. Each text is one job. In the hook a text is the Bash stdout or one MCP text block. In the proxy a text is one text item of a Bash `tool_result` content array, or its string content:
 
 | Limit | Default | Effect |
 | --- | --- | --- |
