@@ -17,6 +17,74 @@ fn normalizes_in_declared_order() {
     assert_eq!(normalize("1873."), "1873");
     assert_eq!(normalize("a.."), "a.");
     assert_eq!(normalize("\""), "\"");
+    // Quotes are stripped before the trailing period.
+    assert_eq!(normalize("\"x\"."), "\"x\"");
+    assert_eq!(normalize("\"x.\""), "x");
+}
+
+#[test]
+fn parses_manifest_rule_names() {
+    assert_eq!(Rule::parse("exact"), Some(Rule::Exact));
+    assert_eq!(Rule::parse("exact_ci"), Some(Rule::ExactCi));
+    assert_eq!(Rule::parse("set"), Some(Rule::Set));
+    assert_eq!(Rule::parse("number"), Some(Rule::Number));
+    assert_eq!(Rule::parse("EXACT"), None);
+    assert_eq!(Rule::parse(""), None);
+}
+
+#[test]
+fn set_rule_drops_empty_items_and_is_case_sensitive() {
+    let set = s(&["5127,5133,5190"]);
+    assert_eq!(
+        score("5127,,5133,5190,", &set, Rule::Set, 0.0),
+        ErrorKind::None
+    );
+    assert_eq!(score("a,b", &s(&["a,B"]), Rule::Set, 0.0), ErrorKind::Wrong);
+    let set_score = |a: &str| score(a, &set, Rule::Set, 0.0);
+    assert_eq!(set_score("\"5127\", \"5133\", \"5190\""), ErrorKind::None);
+    assert_eq!(set_score("`5127`, `5133`, `5190`"), ErrorKind::None);
+    assert_eq!(set_score("\"5127,5133,5190\""), ErrorKind::None);
+    assert_eq!(set_score("5190, 5127 ,5133"), ErrorKind::None);
+    assert_eq!(set_score("\"5127\", \"5133\""), ErrorKind::Wrong);
+    assert_eq!(
+        score("\"a\", \"b\"", &s(&["a,B"]), Rule::Set, 0.0),
+        ErrorKind::Wrong
+    );
+}
+
+#[test]
+fn number_tolerance_holds_at_decimal_boundaries() {
+    let n = |a: &str, x: &str, t: f64| score(a, &s(&[x]), Rule::Number, t);
+    assert_eq!(n("1.1", "1.0", 0.1), ErrorKind::None);
+    assert_eq!(n("0.3", "0.2", 0.1), ErrorKind::None);
+    assert_eq!(n("5", "5", 0.0), ErrorKind::None);
+    assert_eq!(n("1.2", "1.0", 0.1), ErrorKind::Wrong);
+    assert_eq!(n("6", "5", 0.0), ErrorKind::Wrong);
+}
+
+#[test]
+fn accepts_possible_paired_tables() {
+    assert!(lower_bound(10, 2, 3).is_finite());
+    assert!(upper_bound(5, 5, 0).is_finite());
+    assert_eq!(verdict(0, 0, 0), "no data");
+}
+
+#[test]
+#[should_panic(expected = "exceed n")]
+fn rejects_more_discordant_pairs_than_tasks() {
+    verdict(1, 5, 0);
+}
+
+#[test]
+#[should_panic(expected = "exceed n")]
+fn rejects_discordant_pairs_summing_past_n() {
+    verdict(3, 2, 2);
+}
+
+#[test]
+#[should_panic(expected = "exceed n")]
+fn rejects_discordant_pairs_with_no_tasks() {
+    verdict(0, 1, 0);
 }
 
 #[test]
@@ -117,4 +185,11 @@ fn shuffle_is_a_seeded_permutation() {
     assert_ne!(a, base);
     a.sort();
     assert_eq!(a, base);
+}
+
+#[test]
+fn shuffle_order_is_pinned_for_a_recorded_seed() {
+    let mut v: Vec<u32> = (0..10).collect();
+    shuffle(&mut v, 16);
+    assert_eq!(v, [2, 1, 0, 3, 9, 6, 7, 8, 4, 5]);
 }

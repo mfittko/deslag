@@ -50,4 +50,4 @@ $(rustc -Vv)
 EOF
 
 # Only the benchmark binaries print to stdout. cargo build output and errors stay on stderr.
-cargo bench --locked --workspace --bench minify --bench hook --bench proxy
+cargo bench --locked --workspace --bench minify --bench core --bench hook --bench proxy
