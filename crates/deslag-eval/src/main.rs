@@ -83,7 +83,9 @@ fn flags(args: &[String], allowed: &str) -> Result<HashMap<String, String>, Stri
             .next()
             .filter(|v| !v.starts_with("--"))
             .ok_or_else(|| format!("{arg} needs a value"))?;
-        out.insert(name.to_string(), value.clone());
+        if out.insert(name.to_string(), value.clone()).is_some() {
+            return Err(format!("{arg} given twice"));
+        }
     }
     Ok(out)
 }

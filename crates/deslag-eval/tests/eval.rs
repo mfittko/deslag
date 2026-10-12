@@ -332,6 +332,13 @@ fn flag_values_cannot_be_flags() {
 }
 
 #[test]
+fn repeated_flags_are_rejected() {
+    let o = eval(&["run", "--seed", "1", "--seed", "2"]);
+    assert_eq!(o.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&o.stderr).contains("--seed given twice"));
+}
+
+#[test]
 fn manifest_rejects_bad_tolerance_and_uncontrolled_drop_evidence() {
     let dir = fresh_dir("bad-manifests");
     let input = manifest()
