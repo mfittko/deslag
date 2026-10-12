@@ -17,7 +17,7 @@ This file holds live run 1 (pilot corpus), the predeclared live run 2, a two-cal
 | Corpus size per arm (full corpus) | non-control pairs: json-minify 106, table-csv 105, table-mdkv 105, table-v2 105, lines-v1 106, lines-v2 105; changed non-control pairs (the transform changed the payload): json-minify 106, table-csv 104, table-mdkv 104, table-v2 105, lines-v1 104, lines-v2 105; 935 runs |
 | Live run 2 | predeclared in Live runs; pending |
 | Mock dry run | below, full corpus, plumbing evidence only |
-| Generated | live run 1 at commit 2627754 (v0.1.0-alpha.2), 2026-10-12; mock output reproduced on the full corpus generated with seed 7700 at commit 4b2d4e1 (`tests/evaluations/generated/manifest.json` sha256 `e620eeec695f7a909b58eb4e087d22e21241286f2681c5b824a820588171d848`) |
+| Generated | live run 1 at commit 2627754 (v0.1.0-alpha.2), 2026-10-12; mock output reproduced on the full corpus generated with seed 7700 at commit e159c9d (`tests/evaluations/generated/manifest.json` sha256 `e620eeec695f7a909b58eb4e087d22e21241286f2681c5b824a820588171d848`) |
 
 ## Live runs
 
@@ -66,7 +66,7 @@ Estimate with the run-2 assumptions, from `cargo run -q -p deslag-eval --locked 
 | Field | Value |
 | --- | --- |
 | Runs (task, arm) | 935 |
-| Estimated input tokens (deslag-estimate-v1, incl. 1000 overhead per run) | 1590271 |
+| Estimated input tokens (deslag-estimate-v1, incl. 1000 overhead per run) | 1590323 |
 | Assumed output tokens per run | 128 |
 | Assumed prices, USD per Mtok | input 1 (x1.25 cache write), output 5 |
 | Estimated cost | USD 2.59 |
@@ -77,7 +77,7 @@ Estimate with the default assumptions, from the same command without the assumpt
 | Field | Value |
 | --- | --- |
 | Runs (task, arm) | 935 |
-| Estimated input tokens (deslag-estimate-v1, incl. 2000 overhead per run) | 2525271 |
+| Estimated input tokens (deslag-estimate-v1, incl. 2000 overhead per run) | 2525323 |
 | Assumed output tokens per run | 256 |
 | Assumed prices, USD per Mtok | input 3 (x1.25 cache write), output 15 |
 | Estimated cost | USD 13.06 |
@@ -229,7 +229,7 @@ jq -rs '(map(select(.arm=="baseline"))|map({key:.task,value:.payload_tokens_est}
 
 ## Mock dry run
 
-The mock backend answers with the accepted answer when it occurs verbatim in the payload, else `NOT_FOUND`. It measures evidence presence only. Its results show that the harness pairs runs, scores them, detects evidence loss and keeps the incompressible controls unchanged. The run covers the full corpus (228 tasks, 935 runs). The output was reproduced on the corpus generated with seed 7700 at commit 4b2d4e1 (`tests/evaluations/generated/manifest.json` sha256 `e620eeec695f7a909b58eb4e087d22e21241286f2681c5b824a820588171d848`). The mock reports no usage, so the Claude columns of the paired savings table show `n/a`. The verdicts below describe the mock backend only.
+The mock backend answers with the accepted answer when it occurs verbatim in the payload, else `NOT_FOUND`. It measures evidence presence only. Its results show that the harness pairs runs, scores them, detects evidence loss and keeps the incompressible controls unchanged. The run covers the full corpus (228 tasks, 935 runs). The output was reproduced on the corpus generated with seed 7700 at commit e159c9d (`tests/evaluations/generated/manifest.json` sha256 `e620eeec695f7a909b58eb4e087d22e21241286f2681c5b824a820588171d848`). The mock reports no usage, so the Claude columns of the paired savings table show `n/a`. The verdicts below describe the mock backend only.
 
 ```sh
 mkdir -p tmp/eval
@@ -339,13 +339,13 @@ All tasks, controls included. Payload tokens are estimates (deslag-estimate-v1).
 
 | Arm | Runs | Success | Wrong | Abstain | Backend error | Payload tokens (estimate) | Input tokens | Output tokens | Cache read | Cache creation | Cost USD | Duration ms | Turns | Wall ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| baseline | 228 | 228/228 (100.0%) | 0 | 0 | 0 | 190625 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| baseline | 228 | 228/228 (100.0%) | 0 | 0 | 0 | 190626 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
 | json-minify | 117 | 117/117 (100.0%) | 0 | 0 | 0 | 73653 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
 | table-csv | 116 | 116/116 (100.0%) | 0 | 0 | 0 | 47094 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
 | table-mdkv | 116 | 116/116 (100.0%) | 0 | 0 | 0 | 76653 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
 | table-v2 | 116 | 116/116 (100.0%) | 0 | 0 | 0 | 45913 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
-| lines-v1 | 117 | 117/117 (100.0%) | 0 | 0 | 0 | 78241 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
-| lines-v2 | 117 | 117/117 (100.0%) | 0 | 0 | 0 | 67486 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| lines-v1 | 117 | 117/117 (100.0%) | 0 | 0 | 0 | 78242 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| lines-v2 | 117 | 117/117 (100.0%) | 0 | 0 | 0 | 67536 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
 | drop-evidence | 8 | 0/8 (0.0%) | 0 | 8 | 0 | 4506 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
 
 ### Paired savings
@@ -356,7 +356,7 @@ Secondary measure; it never decides pass or fail. Non-control tasks; drop-eviden
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | json-minify | 106 | 31643 | 30.5 | 0 | n/a | n/a | n/a | n/a | n/a |
 | lines-v1 | 106 | 5552 | 6.8 | 0 | n/a | n/a | n/a | n/a | n/a |
-| lines-v2 | 105 | 15793 | 19.5 | 0 | n/a | n/a | n/a | n/a | n/a |
+| lines-v2 | 105 | 15744 | 19.4 | 0 | n/a | n/a | n/a | n/a | n/a |
 | table-csv | 105 | 57472 | 55.5 | 0 | n/a | n/a | n/a | n/a | n/a |
 | table-mdkv | 105 | 28525 | 27.6 | 0 | n/a | n/a | n/a | n/a | n/a |
 | table-v2 | 105 | 58653 | 56.7 | 0 | n/a | n/a | n/a | n/a | n/a |
@@ -371,8 +371,8 @@ Per-arm summary for the full corpus (the pilot and the generated tasks), from `c
 | table-csv | 116 | 107 | 105813 | 47094 |
 | table-mdkv | 116 | 107 | 105813 | 76653 |
 | table-v2 | 116 | 108 | 105813 | 45913 |
-| lines-v1 | 117 | 104 | 83793 | 78241 |
-| lines-v2 | 117 | 109 | 83522 | 67486 |
+| lines-v1 | 117 | 104 | 83794 | 78242 |
+| lines-v2 | 117 | 109 | 83523 | 67536 |
 | drop-evidence | 8 | 8 | 4665 | 4506 |
 
 The same command prints one row per (task, arm), 935 rows, with bytes, estimated tokens and the changed flag. Add `> tmp/eval/variants.md` to keep the rows.
