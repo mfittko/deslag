@@ -434,3 +434,35 @@ fn sub_blocks_hold_bucket_blocks() {
     );
     assert!(encoded.contains("\n@0.1.1 [3]"), "{encoded}");
 }
+
+/// `level` 0 is `inner(12)`; each further level is three rows whose `data`
+/// cell holds `{"r":<previous level>}` as a string.
+fn nested_wrapped(level: usize) -> String {
+    if level == 0 {
+        return inner(12);
+    }
+    rows_with(3, |_| {
+        lexeme(&format!(r#"{{"r":{}}}"#, nested_wrapped(level - 1)))
+    })
+}
+
+#[test]
+fn skeleton_hole_blocks_share_their_level_up_to_the_bound() {
+    let encoded = round_trip(&nested_wrapped(5));
+    // A level-4 skeleton block and its level-4 hole block; past the bound the
+    // strings stay `str`.
+    assert!(
+        encoded
+            .contains("\n@0.0.0.0.0.0.0.0 = {\"r\":@0}\n@0.0.0.0.0.0.0.0.0 [3]{id:int,data:str}\n"),
+        "{encoded}"
+    );
+    assert!(!encoded.contains("\n@0.0.0.0.0.0.0.0.0.0 "), "{encoded}");
+    assert_eq!(
+        encoded.matches("data:json").count(),
+        1 + 3 + 9 + 27,
+        "{encoded}"
+    );
+    // Within the bound every level nests.
+    let encoded = round_trip(&nested_wrapped(4));
+    assert!(!encoded.contains("data:str"), "{encoded}");
+}

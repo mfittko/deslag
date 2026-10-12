@@ -362,7 +362,7 @@ table-v1 [2]{id:int,name:str,meta.region:str}
 
 ### Pipeline and configuration
 
-`compress` tries the table encoder only when `CompressionContext.json_table` is true. It calls `table::v2::encode`, which emits table-v1 for a bare top-level array unless a bucket block is shorter, and table-v2 otherwise, and validates with `table::v2::decode`, which reads both. The switch is opt-in. It is false in `FIRST_SLICE_JSON_MINIFY_CONTEXT`.
+`compress` tries the table encoder only when `CompressionContext.json_table` is true. It calls `table::v2::encode`, which emits table-v1 for a bare top-level array unless a table-v2 block is shorter, and table-v2 otherwise, and validates with `table::v2::decode`, which reads both. The switch is opt-in. It is false in `FIRST_SLICE_JSON_MINIFY_CONTEXT`.
 
 When the switch is on, `compress` calls `encode` with `max_rows` set to `Limits::max_table_rows` (default 20000), `max_depth` set to `Limits::max_json_depth` and the context's token counter. The other thresholds keep their `TableOptions::default()` values. The size limits and mode checks apply first, as for the minifier.
 
