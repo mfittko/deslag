@@ -46,7 +46,7 @@ fn rows_with(n: usize, cell: impl Fn(usize) -> String) -> String {
 
 #[test]
 fn identity_is_bumped() {
-    assert_eq!(JSON_TABLE_VERSION, 4);
+    assert_eq!(JSON_TABLE_VERSION, 5);
 }
 
 #[test]
@@ -465,4 +465,42 @@ fn skeleton_hole_blocks_share_their_level_up_to_the_bound() {
     // Within the bound every level nests.
     let encoded = round_trip(&nested_wrapped(4));
     assert!(!encoded.contains("data:str"), "{encoded}");
+}
+
+/// Five rows of kinds `a` and `b`, each with ten own columns and a `d` cell
+/// that holds `inner(3)`. Without sub-tables the bucket block is shorter;
+/// with sub-tables the table block is.
+fn flips_with_sub_tables() -> String {
+    let items: Vec<String> = (0..5)
+        .map(|i| {
+            let kind = if i % 2 == 0 { "a" } else { "b" };
+            let own: String = (0..10).map(|e| format!(r#","{kind}{e}":{e}"#)).collect();
+            format!(r#"{{"t":"{kind}","d":{}{own}}}"#, lexeme(&inner(3)))
+        })
+        .collect();
+    format!("[{}]", items.join(","))
+}
+
+#[test]
+fn bare_hole_and_sub_block_sites_pick_the_same_block() {
+    let arr = flips_with_sub_tables();
+    let bare = round_trip(&arr);
+    let bare = bare
+        .strip_prefix("table-v2 @0\n@0 ")
+        .expect(&bare)
+        .to_string();
+    let hole = round_trip(&format!(r#"{{"a":{arr}}}"#));
+    let hole = hole
+        .strip_prefix("table-v2 {\"a\":@0}\n@0 ")
+        .expect(&hole)
+        .to_string();
+    let outer = round_trip(&rows_with(2, |_| lexeme(&arr)));
+    let start = outer.find("\n@0.0 ").expect(&outer) + "\n@0.0 ".len();
+    let end = outer.find("\n@0.1 ").expect(&outer);
+    // The sub-block labelled `@0.0` labels its children `@0.0.n`.
+    let sub = outer[start..end].replace("\n@0.0.", "\n@0.");
+
+    assert!(bare.starts_with("[5]{t:str,d:json,a0:int,"), "{bare}");
+    assert_eq!(hole, bare);
+    assert_eq!(sub, bare);
 }
