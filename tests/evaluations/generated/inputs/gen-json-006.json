@@ -504,6 +504,12 @@
     "seq": 377
   },
   {
+    "event_id": "evt_RBRTX9EB",
+    "target": "keen-koala",
+    "action": "delete",
+    "seq": 103
+  },
+  {
     "event_id": "evt_BX76AH7Y",
     "target": "calm-egret",
     "action": "read",
@@ -544,12 +550,6 @@
     "target": "ivory-badger",
     "action": "read",
     "seq": 645
-  },
-  {
-    "event_id": "evt_RBRTX9EB",
-    "target": "keen-koala",
-    "action": "delete",
-    "seq": 103
   },
   {
     "event_id": "evt_XK84RN11",

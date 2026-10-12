@@ -484,7 +484,7 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
     };
     shuffle(&mut rows, rng.next());
     // The answer rows of a buried task sit in the last 40% of the table.
-    let lo = if buried { n * 6 / 10 } else { 0 };
+    let lo = if buried { (n * 6).div_ceil(10) } else { 0 };
     for r in special {
         let at = lo + rng.below(rows.len() - lo + 1);
         rows.insert(at, r);
@@ -521,7 +521,7 @@ fn log_task(t: usize, rng: &mut Rng) -> Gen {
     let buried = kind == 3;
     let (base, spread) = if buried { (100, 5) } else { (12, 11) };
     let n = base + rng.below(spread);
-    let lo = if buried { n * 6 / 10 } else { 0 };
+    let lo = if buried { (n * 6).div_ceil(10) } else { 0 };
     let p = lo + rng.below(n - lo);
     let d = (p + 1 + rng.below(n - 1)) % n;
     let names = rng.names(n + 2);

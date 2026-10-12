@@ -396,6 +396,12 @@
     "seq": 343
   },
   {
+    "event_id": "evt_202E4T32",
+    "target": "fuzzy-falcon",
+    "action": "delete",
+    "seq": 833
+  },
+  {
     "event_id": "evt_YED53D7R",
     "target": "dusty-badger",
     "action": "read",
@@ -424,12 +430,6 @@
     "target": "dusty-iguana",
     "action": "read",
     "seq": 292
-  },
-  {
-    "event_id": "evt_202E4T37",
-    "target": "fuzzy-falcon-2",
-    "action": "read",
-    "seq": 112
   },
   {
     "event_id": "evt_YSQ9RH9N",
@@ -540,16 +540,16 @@
     "seq": 119
   },
   {
-    "event_id": "evt_202E4T32",
-    "target": "fuzzy-falcon",
-    "action": "delete",
-    "seq": 833
-  },
-  {
     "event_id": "evt_MGFCE0GV",
     "target": "lunar-egret",
     "action": "read",
     "seq": 248
+  },
+  {
+    "event_id": "evt_202E4T37",
+    "target": "fuzzy-falcon-2",
+    "action": "read",
+    "seq": 112
   },
   {
     "event_id": "evt_WDB5JZ1V",

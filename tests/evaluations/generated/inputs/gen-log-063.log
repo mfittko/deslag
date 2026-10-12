@@ -16,6 +16,13 @@
 [ 16/103] Compiling crate_015 v6.1.0
 [ 17/103] Compiling crate_016 v7.2.1
 [ 18/103] Compiling crate_017 v8.3.2
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
 [ 19/103] Compiling crate_018 v0.4.3
 [ 20/103] Compiling crate_019 v1.5.4
 [ 21/103] Compiling crate_020 v2.6.0
@@ -28,13 +35,9 @@
 [ 28/103] Compiling crate_027 v0.6.2
 [ 29/103] Compiling crate_028 v1.0.3
 [ 30/103] Compiling crate_029 v2.1.4
-artifact deslag-ivory-cedar-debug.tar.gz sha256=b85e8d4c2d69a683b5af86ef2613f3b9ea960e250cdc7555b7eed64c630e14f7
+[ 31/103] Compiling crate_030 v3.2.0
 [ 32/103] Compiling crate_031 v4.3.1
 [ 33/103] Compiling crate_032 v5.4.2
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
-retrying after a transient error
 [ 34/103] Compiling crate_033 v6.5.3
 [ 35/103] Compiling crate_034 v7.6.4
 [ 36/103] Compiling crate_035 v8.0.0
@@ -52,8 +55,12 @@ retrying after a transient error
 [ 48/103] Compiling crate_047 v2.5.2
 [ 49/103] Compiling crate_048 v3.6.3
 [ 50/103] Compiling crate_049 v4.0.4
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
 [ 51/103] Compiling crate_050 v5.1.0
-[ 52/103] Compiling crate_051 v6.2.1
+artifact deslag-ivory-cedar-debug.tar.gz sha256=b85e8d4c2d69a683b5af86ef2613f3b9ea960e250cdc7555b7eed64c630e14f7
 [ 53/103] Compiling crate_052 v7.3.2
 [ 54/103] Compiling crate_053 v8.4.3
 [ 55/103] Compiling crate_054 v0.5.4
@@ -74,16 +81,9 @@ retrying after a transient error
 [ 70/103] Compiling crate_069 v6.6.4
 [ 71/103] Compiling crate_070 v7.0.0
 [ 72/103] Compiling crate_071 v8.1.1
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
 [ 73/103] Compiling crate_072 v0.2.2
 [ 74/103] Compiling crate_073 v1.3.3
-artifact deslag-ivory-cedar.tar.gz sha256=b85e8d4c2d69a683b5af86ef2613f3b9ea960e250cdc7555b7eed64c630e14f1
+[ 75/103] Compiling crate_074 v2.4.4
 [ 76/103] Compiling crate_075 v3.5.0
 [ 77/103] Compiling crate_076 v4.6.1
 [ 78/103] Compiling crate_077 v5.0.2
@@ -104,7 +104,7 @@ artifact deslag-ivory-cedar.tar.gz sha256=b85e8d4c2d69a683b5af86ef2613f3b9ea960e
 [ 93/103] Compiling crate_092 v2.1.2
 [ 94/103] Compiling crate_093 v3.2.3
 [ 95/103] Compiling crate_094 v4.3.4
-[ 96/103] Compiling crate_095 v5.4.0
+artifact deslag-ivory-cedar.tar.gz sha256=b85e8d4c2d69a683b5af86ef2613f3b9ea960e250cdc7555b7eed64c630e14f1
 [ 97/103] Compiling crate_096 v6.5.1
 [ 98/103] Compiling crate_097 v7.6.2
 [ 99/103] Compiling crate_098 v8.0.3

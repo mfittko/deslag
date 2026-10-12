@@ -74,12 +74,23 @@ fn another_seed_changes_the_corpus() {
 }
 
 #[test]
-fn generate_refuses_a_seed_with_a_shallow_buried_answer() {
-    // Seed 2 puts the gen-json-048 answer at row 60 of 101.
-    let out = fresh_dir("seed-shallow");
-    let o = eval(&["generate", "--seed", "2", "--out", out.to_str().unwrap()]);
-    assert_eq!(o.status.code(), Some(2));
-    assert!(String::from_utf8_lossy(&o.stderr).contains("gen-json-048"));
+fn generate_accepts_every_seed_at_the_60_percent_boundary() {
+    // Seed 2 once put the gen-json-048 answer at row 60 of 101, above the rounded-up boundary.
+    for seed in 0..8 {
+        let out = fresh_dir(&format!("seed-boundary-{seed}"));
+        let o = eval(&[
+            "generate",
+            "--seed",
+            &seed.to_string(),
+            "--out",
+            out.to_str().unwrap(),
+        ]);
+        assert!(
+            o.status.success(),
+            "seed {seed}: {}",
+            String::from_utf8_lossy(&o.stderr)
+        );
+    }
 }
 
 #[test]

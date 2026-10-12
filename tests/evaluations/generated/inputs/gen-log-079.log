@@ -2,24 +2,26 @@
 [  2/103] Compiling crate_001 v1.1.1
 [  3/103] Compiling crate_002 v2.2.2
 [  4/103] Compiling crate_003 v3.3.3
-artifact deslag-keen-dingo-debug.tar.gz sha256=5746868cd9d8113ed299bfaf5d14294d43966fae2391340a628b153b0a82ec87
+[  5/103] Compiling crate_004 v4.4.4
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
 [  6/103] Compiling crate_005 v5.5.0
 [  7/103] Compiling crate_006 v6.6.1
 [  8/103] Compiling crate_007 v7.0.2
 [  9/103] Compiling crate_008 v8.1.3
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
-heartbeat ok
 [ 10/103] Compiling crate_009 v0.2.4
 [ 11/103] Compiling crate_010 v1.3.0
 [ 12/103] Compiling crate_011 v2.4.1
 [ 13/103] Compiling crate_012 v3.5.2
 [ 14/103] Compiling crate_013 v4.6.3
 [ 15/103] Compiling crate_014 v5.0.4
-[ 16/103] Compiling crate_015 v6.1.0
+artifact deslag-keen-dingo-debug.tar.gz sha256=5746868cd9d8113ed299bfaf5d14294d43966fae2391340a628b153b0a82ec87
 [ 17/103] Compiling crate_016 v7.2.1
 [ 18/103] Compiling crate_017 v8.3.2
 [ 19/103] Compiling crate_018 v0.4.3
@@ -42,6 +44,12 @@ heartbeat ok
 [ 36/103] Compiling crate_035 v8.0.0
 [ 37/103] Compiling crate_036 v0.1.1
 [ 38/103] Compiling crate_037 v1.2.2
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
+heartbeat ok
 [ 39/103] Compiling crate_038 v2.3.3
 [ 40/103] Compiling crate_039 v3.4.4
 [ 41/103] Compiling crate_040 v4.5.0
@@ -70,20 +78,12 @@ heartbeat ok
 [ 64/103] Compiling crate_063 v0.0.3
 [ 65/103] Compiling crate_064 v1.1.4
 [ 66/103] Compiling crate_065 v2.2.0
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
-waiting for upstream to accept connections
 [ 67/103] Compiling crate_066 v3.3.1
 [ 68/103] Compiling crate_067 v4.4.2
 [ 69/103] Compiling crate_068 v5.5.3
 [ 70/103] Compiling crate_069 v6.6.4
 [ 71/103] Compiling crate_070 v7.0.0
-artifact deslag-keen-dingo.tar.gz sha256=5746868cd9d8113ed299bfaf5d14294d43966fae2391340a628b153b0a82ec8b
+[ 72/103] Compiling crate_071 v8.1.1
 [ 73/103] Compiling crate_072 v0.2.2
 [ 74/103] Compiling crate_073 v1.3.3
 [ 75/103] Compiling crate_074 v2.4.4
@@ -94,7 +94,7 @@ artifact deslag-keen-dingo.tar.gz sha256=5746868cd9d8113ed299bfaf5d14294d43966fa
 [ 80/103] Compiling crate_079 v7.2.4
 [ 81/103] Compiling crate_080 v8.3.0
 [ 82/103] Compiling crate_081 v0.4.1
-[ 83/103] Compiling crate_082 v1.5.2
+artifact deslag-keen-dingo.tar.gz sha256=5746868cd9d8113ed299bfaf5d14294d43966fae2391340a628b153b0a82ec8b
 [ 84/103] Compiling crate_083 v2.6.3
 [ 85/103] Compiling crate_084 v3.0.4
 [ 86/103] Compiling crate_085 v4.1.0
