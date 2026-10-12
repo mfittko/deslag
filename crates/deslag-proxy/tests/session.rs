@@ -437,11 +437,18 @@ fn corrupt_manifest_with_tool_results_is_missing_manifest() {
         br#"{"version":1}"#.to_vec(),
         br#"{"owner":"proxy","mode":"safe","decisions":{}}"#.to_vec(),
     ];
-    for bytes in corrupt {
-        fs::write(&path, &bytes).unwrap();
-        let got = store.replay("s", "m", &[candidate("toolu_1", "x")], |_| unreachable!());
-        assert!(matches!(got, Err(ReplayError::MissingManifest)), "{got:?}");
-        assert_eq!(fs::read(&path).unwrap(), bytes);
+    // A corrupt manifest is an error under every owner, never a passthrough.
+    for owner in [Owner::Proxy, Owner::Hook, Owner::None] {
+        write_owner(&dir, owner).unwrap();
+        for bytes in &corrupt {
+            fs::write(&path, bytes).unwrap();
+            let got = store.replay("s", "m", &[candidate("toolu_1", "x")], |_| unreachable!());
+            assert!(
+                matches!(got, Err(ReplayError::MissingManifest)),
+                "{owner:?}: {got:?}"
+            );
+            assert_eq!(&fs::read(&path).unwrap(), bytes, "{owner:?}");
+        }
     }
     fs::remove_dir_all(dir).unwrap();
 }
@@ -548,7 +555,8 @@ fn backdate(path: &Path) -> SystemTime {
         .unwrap()
         .set_modified(t)
         .unwrap();
-    t
+    // The filesystem may truncate `t` to its timestamp granularity.
+    mtime(path)
 }
 
 fn mtime(path: &Path) -> SystemTime {

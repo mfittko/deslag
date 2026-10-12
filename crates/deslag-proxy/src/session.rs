@@ -39,9 +39,9 @@ pub enum Mode {
     Safe,
 }
 
-/// Manifests unused for this long are removed by [`prune`]. A replay that
-/// commits nothing refreshes the manifest mtime, so retention counts from the
-/// last use.
+/// [`prune`] removes a manifest whose mtime is older than this. A replay that
+/// commits nothing refreshes the mtime at most once a day, so a manifest can
+/// be removed after `RETENTION` minus up to one day without use.
 pub const RETENTION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 
 /// ponytail: a replay without a commit refreshes the mtime at most this often.
@@ -183,8 +183,9 @@ impl Store {
     /// whose owner or mode is not `proxy`/`safe` or `proxy`/`off` is corrupt:
     /// it returns `MissingManifest` when the request carries tool results and
     /// passes through otherwise. So is a manifest without a `version`. A
-    /// replay of a valid manifest that commits nothing refreshes its mtime,
-    /// so [`prune`] keeps sessions in use.
+    /// replay of a valid manifest that commits nothing refreshes its mtime at
+    /// most once a day, so [`prune`] keeps sessions in use and can remove an
+    /// idle one after [`RETENTION`] minus up to one day without use.
     pub fn replay(
         &self,
         scope: &str,
