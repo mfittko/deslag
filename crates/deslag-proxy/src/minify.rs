@@ -14,10 +14,11 @@
 //! so a client that compresses only some requests would see drift. Requests
 //! with a body-integrity header or with trailers also pass through. Trailers
 //! are not forwarded upstream. `/v1/messages/count_tokens` is not rewritten,
-//! so its counts can overstate. Each tool result is compressed as one job of
-//! `Limits::executor`. When the executor rejects any job (busy, budget exceeded
-//! or panicked), the whole body is forwarded unrewritten, so under load a
-//! resend can differ from the first send.
+//! so its counts can overstate. Each text of a Bash tool result is compressed
+//! as one job of `Limits::executor`: each text item of a content array, or the
+//! string content. When the executor rejects any job (busy, budget exceeded or
+//! panicked), the whole body is forwarded unrewritten, so under load a resend
+//! can differ from the first send.
 
 use std::{
     collections::HashSet,
@@ -55,8 +56,9 @@ const MAX_INSPECT_BYTES: usize = 32 * 1024 * 1024;
 /// `Limits::body_read_timeout` gets `408` and releases the permit.
 /// The deadline covers only the buffered part, up to `MAX_INSPECT_BYTES`. For a
 /// larger body the permit is released and the rest streams without a deadline.
-/// After the read, the permit stays held through the rewrite, which is bounded
-/// by the per-job budget of `Limits::executor`.
+/// After the read, the permit stays held through the rewrite. The body parse
+/// and rebuild have no time limit. The jobs run in sequence, and the budget of
+/// `Limits::executor` bounds each job only.
 /// Make the permit count configurable via `Limits` if that ceiling is wrong.
 static INSPECT_PERMITS: Semaphore = Semaphore::const_new(4);
 
