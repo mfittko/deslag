@@ -7,7 +7,11 @@
 //! IDs, paths, raw tool names or request IDs.
 
 use std::{
-    os::unix::net::UnixDatagram,
+    fs, io,
+    os::unix::{
+        fs::{DirBuilderExt, MetadataExt, PermissionsExt},
+        net::UnixDatagram,
+    },
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -22,6 +26,8 @@ use serde_json::json;
 pub const MAX_MESSAGE_BYTES: usize = 512;
 /// Service socket file name inside [`state_dir`].
 pub const SOCKET_FILE: &str = "local.sock";
+/// Aggregate store file name inside [`state_dir`].
+pub const STATS_FILE: &str = "stats.jsonl";
 
 /// `$DESLAG_STATE_DIR`, else `$XDG_STATE_HOME/deslag`, else
 /// `$HOME/.local/state/deslag`. Empty or relative values are ignored, as the
@@ -35,6 +41,47 @@ pub fn state_dir() -> Option<PathBuf> {
     var("DESLAG_STATE_DIR")
         .or_else(|| var("XDG_STATE_HOME").map(|d| d.join("deslag")))
         .or_else(|| var("HOME").map(|d| d.join(".local/state/deslag")))
+}
+
+/// Creates [`state_dir`] with mode 0700. A symlink at that path is followed.
+/// Fails unless the target is a directory owned by the current user; that
+/// directory gets mode 0700 again.
+// ponytail: check-then-use. A symlink in a shared parent can be retargeted
+// between the owner check and later use; opening the dir once and using
+// fd-relative calls (openat/fchmod) would close that window.
+pub fn ensure_state_dir() -> io::Result<PathBuf> {
+    let dir = state_dir().ok_or_else(|| {
+        io::Error::other("no state directory: set DESLAG_STATE_DIR, XDG_STATE_HOME or HOME")
+    })?;
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&dir)?;
+    let meta = fs::metadata(&dir)?;
+    if !meta.is_dir() {
+        return Err(io::Error::other(format!(
+            "state dir {} is not a directory",
+            dir.display()
+        )));
+    }
+    if meta.uid() != current_uid()? {
+        return Err(io::Error::other(format!(
+            "state dir {} is not owned by the current user",
+            dir.display()
+        )));
+    }
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))?;
+    Ok(dir)
+}
+
+/// The effective uid. On Linux and macOS, fstat on an anonymous pipe reports
+/// the effective uid of the process that created the pipe. No file is written
+/// anywhere, so a 0500 state dir or an unusable TMPDIR still passes.
+// ponytail: std has no getuid; the libc crate would replace this probe.
+fn current_uid() -> io::Result<u32> {
+    let (reader, _writer) = io::pipe()?;
+    let file = fs::File::from(std::os::fd::OwnedFd::from(reader));
+    Ok(file.metadata()?.uid())
 }
 
 /// The service socket path when the socket file exists. One `stat`, so adapters
