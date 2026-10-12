@@ -389,3 +389,22 @@ fn spec_example() {
         r#"[{"id":1,"data":"[{\"k\":0,\"v\":\"a\"},{\"k\":1,\"v\":\"b\"}]"},{"id":2,"data":"@1"}]"#;
     assert_eq!(v2::decode(text).as_deref(), Some(json));
 }
+
+#[test]
+fn sub_tables_never_lengthen_a_block() {
+    // One cell pays as a reference, but the forty `@n` look-alikes would each
+    // gain two quote bytes in a `json` column, so the plain block is kept.
+    let rows = rows_with(41, |i| match i {
+        0 => lexeme(&inner(4)),
+        _ => lexeme(&format!("@{i}")),
+    });
+    let encoded = round_trip(&format!(r#"{{"rows":{rows}}}"#));
+    assert!(
+        encoded.starts_with("table-v2 {\"rows\":@0}\n@0 [41]{id:int,data:str}\n"),
+        "{encoded}"
+    );
+    // Without the look-alikes the same cell does become a reference.
+    let rows = rows_with(2, |_| lexeme(&inner(4)));
+    let encoded = round_trip(&format!(r#"{{"rows":{rows}}}"#));
+    assert!(encoded.contains("{id:int,data:json}"), "{encoded}");
+}

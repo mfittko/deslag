@@ -11,9 +11,10 @@ use super::{
 };
 use crate::{MAX_JSON_DEPTH_CEILING, minify};
 
-/// Sub-blocks nest at most this many levels below a top-level block. Every
-/// level escapes the decoded text once more, which can double its length, so
-/// the bound also bounds decoded size per byte of encoded text.
+/// Sub-blocks nest at most this many levels below a top-level block. Each
+/// level escapes the decoded text once more, which at most doubles its
+/// length, so nested content decodes to at most 2^4 = 16 times the size it
+/// would have at level 0.
 pub(super) const MAX_NESTING: usize = 4;
 
 /// The label of block `n` under `label`: `@n` at the top level, else `label.n`.
@@ -25,7 +26,7 @@ pub(super) fn child(label: &str, n: usize) -> String {
     }
 }
 
-/// True for a bare cell with reference syntax: `@` and one or more digits.
+/// True for cell text with reference syntax: `@` and one or more digits.
 pub(super) fn is_ref(cell: &str) -> bool {
     cell.strip_prefix('@')
         .is_some_and(|d| !d.is_empty() && d.bytes().all(|c| c.is_ascii_digit()))
@@ -33,13 +34,16 @@ pub(super) fn is_ref(cell: &str) -> bool {
 
 /// Rewrites the table or bucket `block` labelled `label` at nesting `level`
 /// so that each string cell with a shorter sub-block becomes a reference.
-/// Returns `block` unchanged when no cell qualifies.
+/// Returns `block` unchanged when no cell qualifies or the rewrite is not
+/// strictly shorter, for example when quoting `@n` look-alikes costs more.
 pub(super) fn apply(block: &str, label: &str, level: usize, opts: &TableOptions) -> String {
     if level >= MAX_NESTING {
         return block.to_string();
     }
     // Encoder output always parses; `None` would only keep the block as is.
-    rewrite(block, label, level, opts).unwrap_or_else(|| block.to_string())
+    rewrite(block, label, level, opts)
+        .filter(|out| out.len() < block.len())
+        .unwrap_or_else(|| block.to_string())
 }
 
 fn rewrite(block: &str, label: &str, level: usize, opts: &TableOptions) -> Option<String> {
@@ -144,6 +148,7 @@ fn table(
                 }
                 // A string with reference syntax is quoted in a `json` column.
                 Cell::Bare(s) if json[j] && is_ref(s) => push_quoted(out, s),
+                Cell::Quoted(s) if json[j] && is_ref(s) => push_quoted(out, s),
                 Cell::Bare(s) => out.push_str(s),
                 Cell::Quoted(s) => push_str_cell(out, s),
             }
@@ -187,4 +192,21 @@ pub(super) fn decode(text: &str, i: &mut usize, label: &str, level: usize) -> Op
     let out = v2::decode_array(text, i, label, level)?;
     let check = minify(&out, MAX_JSON_DEPTH_CEILING).ok()?;
     (check == out.as_bytes()).then_some(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn quoted_reference_lookalikes_stay_quoted_in_json_columns() {
+        // The table-v1 encoder never quotes `@3`, so build the block by hand.
+        let items: Vec<String> = (0..4)
+            .map(|i| format!(r#"{{"k":{i},"v":"w{i}"}}"#))
+            .collect();
+        let mut block = String::from("[2]{a:str}\n\"@3\"\n");
+        push_str_cell(&mut block, &format!("[{}]", items.join(",")));
+        let out = apply(&block, "@0", 0, &TableOptions::default());
+        assert!(out.starts_with("[2]{a:json}\n\"@3\"\n@0\n@0.0 "), "{out}");
+    }
 }
