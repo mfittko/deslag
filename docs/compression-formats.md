@@ -503,7 +503,7 @@ A sub-block is one of these:
 
 The decoder decodes the sub-block to JSON text `t`, which must be valid minified JSON. The cell's value is `t` written as a JSON string with the canonical string escape from table-v1 Lexeme preservation.
 
-Nesting is bounded. A top-level block, its bucket tables and the blocks of top-level holes have level 0. A sub-block of a table at level `d` has level `d + 1`. A skeleton block's hole blocks share its level. The maximum level is 4. Every level escapes the decoded text once more, which can double its length, so the bound keeps decoded output within a constant factor of the text.
+Nesting is bounded. A top-level block, its bucket tables and the blocks of top-level holes have level 0. A sub-block of a table at level `d` has level `d + 1`. A skeleton block's hole blocks share its level. The maximum level is 4. Each level escapes the decoded text once more, which at most doubles its length. So nested content decodes to at most 2^4 = 16 times the size it would have at level 0.
 
 The decoder returns no value for a sub-table with any of these:
 
@@ -523,7 +523,7 @@ The encoder applies sub-tables after it has chosen each array's table or bucket 
 3. The text has a sub-block. An array has the table or bucket block that a top-level hole would get, with `max_rows`. An object has a skeleton block when at least one of its member arrays becomes a hole under the Encoder rules below. Sub-tables apply to the sub-block recursively.
 4. The reference cell, its label line and its sub-block are strictly shorter than the string cell: `reference length + label length + 2 + sub-block length` is less than the cell's length.
 
-A column with at least one reference cell becomes `json`. Its other strings with reference syntax are then quoted. Each step is linear in its text, and the level bound makes the whole encoder linear in the input.
+A column with at least one reference cell becomes `json`. Its other strings with reference syntax are then quoted. The rewritten block replaces the block only when it is strictly shorter, so sub-tables never make a block longer. Each step is linear in its text, and the level bound makes the whole encoder linear in the input.
 
 ### Decoder
 
@@ -543,7 +543,7 @@ The decoder returns no value for any of these:
 
 Encoder output is canonical. The decoder also accepts some non-canonical texts that the encoder does not emit. A hole may stand anywhere a JSON value can stand, for example a whole skeleton such as `table-v2 @0`, or a hole inside an array or a nested object. A table block in a hole may have zero rows; a bucket table may not. Such texts decode, but encoding the result does not reproduce them.
 
-Decoding is linear in the text length. With sub-tables the decoded output can be up to a constant factor longer than the text, as Sub-tables describes.
+Decoding is linear in the text length. Sub-tables multiply the decoded size of nested content by at most 16, as Sub-tables describes.
 
 ### Encoder
 
