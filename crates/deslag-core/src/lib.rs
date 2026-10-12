@@ -4,8 +4,10 @@
 //! network client, filesystem handle or session state. Adapters own decision
 //! recording and decide whether to commit a `Changed` output.
 
+mod bounded;
 mod lines;
 
+pub use bounded::{BoundedExecutor, Rejected};
 pub use lines::{
     DecodeError, EXACT_LINE_RUNS_ID, EXACT_LINE_RUNS_VERSION, LINES_FORMAT_VERSION, decode_lines,
     encode_lines,
