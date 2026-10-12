@@ -181,7 +181,7 @@ At each unit, in input order:
 
 ## table-v1
 
-`table-v1` is a lossless tabular encoding for a JSON array of objects. Uniform nested objects flatten to dotted columns. The encoder is `deslag_core::table::encode`. The decoder is `deslag_core::table::decode`. The transform identity is `json-table`, format version 1. The transform version was 1 when table-v1 was the only table format. It was 2 with table-v2 wrapped arrays, 3 with bucket blocks, and is 4 since sub-tables. `compress` still emits table-v1 for a bare top-level array unless a table-v2 block is shorter (see table-v2).
+`table-v1` is a lossless tabular encoding for a JSON array of objects. Uniform nested objects flatten to dotted columns. The encoder is `deslag_core::table::encode`. The decoder is `deslag_core::table::decode`. The transform identity is `json-table`, format version 1. The transform version was 1 when table-v1 was the only table format. It was 2 with table-v2 wrapped arrays, 3 with bucket blocks, 4 with sub-tables, and is 5 since bare, hole and sub-block arrays share one block-selection order. `compress` still emits table-v1 for a bare top-level array unless a table-v2 block is shorter (see table-v2).
 
 For every eligible input `x`, `decode(encode(x))` equals the minified form of `x` byte for byte. The minified form is the output of the JSON minifier: the same members in the same order, with every lexeme unchanged.
 
@@ -370,7 +370,7 @@ table-v1 [2]{id:int,name:str,meta.region:str}
 
 When the switch is on, `compress` calls `encode` with `max_rows` set to `Limits::max_table_rows` (default 20000), `max_depth` set to `Limits::max_json_depth` and the context's token counter. The other thresholds keep their `TableOptions::default()` values. The size limits and mode checks apply first, as for the minifier.
 
-- If the input is eligible, `compress` decodes the encoded text and compares it with the minified original. A mismatch fails with `invalid_candidate` and validation outcome `failed`. Otherwise the report has transform id `json-table`, transform version 4 and format version 1, or format version 2 for table-v2 text. The byte and token fields are filled as for the minifier. Observe mode emits the original with outcome `would_change`.
+- If the input is eligible, `compress` decodes the encoded text and compares it with the minified original. A mismatch fails with `invalid_candidate` and validation outcome `failed`. Otherwise the report has transform id `json-table`, transform version 5 and format version 1, or format version 2 for table-v2 text. The byte and token fields are filled as for the minifier. Observe mode emits the original with outcome `would_change`.
 - If the input is ineligible and `json_minify` is true, `compress` runs the JSON minifier unchanged and reports it as `json-minify`.
 - If the input is ineligible and `json_minify` is false, `compress` skips with the table encoder's reason and transform id `json-table`. The format version is `null`, because no candidate was built.
 - If `exact_line_runs` or `line_templates` is true, input that the JSON transforms reject as `unsupported_format` goes to the line codec as described in its Integration section. The report has transform id `line-templates` when `line_templates` is true. Otherwise it has transform id `exact-line-runs`. The report names one selected transform: the table encoder (table-v1 or table-v2), else the minifier, else the line codec. More than one transform can run. When `json_minify` is true, input that the table encoder rejects falls through to the minifier. An eligible table encoder candidate is always validated against the minified original.
@@ -379,7 +379,7 @@ When the switch is on, `compress` calls `encode` with `max_rows` set to `Limits:
 
 ## table-v2
 
-`table-v2` encodes a JSON document whose arrays of objects sit inside a wrapper object, for example `{"results":[...],"total":1000}`, and arrays whose objects come in several kinds. The text is a skeleton of the minified document with holes, followed by one block per hole. A block is a table block, which uses the table-v1 header and record rules, or a bucket block, which splits a heterogeneous array into one table block per discriminator value. A table block may hold a `json` column whose cells refer to sub-blocks, so a string that holds JSON is encoded as a table too. The encoder is `deslag_core::table::v2::encode`. The decoder is `deslag_core::table::v2::decode`. The transform identity is `json-table`, transform version 4, format version 2.
+`table-v2` encodes a JSON document whose arrays of objects sit inside a wrapper object, for example `{"results":[...],"total":1000}`, and arrays whose objects come in several kinds. The text is a skeleton of the minified document with holes, followed by one block per hole. A block is a table block, which uses the table-v1 header and record rules, or a bucket block, which splits a heterogeneous array into one table block per discriminator value. A table block may hold a `json` column whose cells refer to sub-blocks, so a string that holds JSON is encoded as a table too. The encoder is `deslag_core::table::v2::encode`. The decoder is `deslag_core::table::v2::decode`. The transform identity is `json-table`, transform version 5, format version 2.
 
 For every eligible input `x`, `decode(encode(x))` equals the minified form of `x` byte for byte, as for table-v1. Every byte of the wrapper outside the encoded arrays stays in the skeleton unchanged.
 
@@ -523,11 +523,11 @@ The decoder returns no value for a sub-table with any of these:
 
 The decoder accepts a `json` column with no reference cell, though the encoder never emits one.
 
-The encoder applies sub-tables after it has chosen each array's table or bucket block. For each string cell of a `str` column, in record order and then column order, the cell becomes a reference cell when all of these hold:
+The encoder applies sub-tables to each candidate block of an array, the table block and the bucket block, before it chooses between them, as the Encoder rules below describe. For each string cell of a `str` column, in record order and then column order, the cell becomes a reference cell when all of these hold:
 
 1. The table's level is below 4.
 2. The string's decoded text starts with `[` or `{`, and the JSON minifier, run with `max_depth`, accepts it and returns it unchanged. The original lexeme is canonical, because table-v1 accepts only canonical string lexemes. So the decoder restores the lexeme exactly.
-3. The text has a sub-block. An array has the table or bucket block that a top-level hole would get, with `max_rows`. An object has a skeleton block when at least one of its member arrays becomes a hole under the Encoder rules below. Sub-tables apply to the sub-block recursively.
+3. The text has a sub-block. An array has the block that the Encoder rules below choose for an array at the sub-block's label and level, with `max_rows`. So a bare array, a hole and a sub-block use the same selection order: sub-tables apply to each candidate block, then the shorter block wins, the table block on a tie. The chosen block can still differ beyond its labels. A longer label can make a reference cell fail rule 4, and a sub-block sits one level deeper, so rule 1 stops its sub-tables one level earlier. An object has a skeleton block when at least one of its member arrays becomes a hole under the Encoder rules below. Sub-tables apply to each candidate block recursively.
 4. The reference cell, its label line and its sub-block are strictly shorter than the string cell: `reference length + label length + 2 + sub-block length` is less than the cell's length.
 
 A column with at least one reference cell becomes `json`. Its other strings with reference syntax are then quoted. The rewritten block replaces the block only when it is strictly shorter, so sub-tables never make a block longer. Each step is linear in its text, and the level bound makes the whole encoder linear in the input.
@@ -554,8 +554,9 @@ Decoding is linear in the text length. Sub-tables bound the decoded size of nest
 
 ### Encoder
 
-- A bare top-level array keeps its table-v1 encoding unless a table-v2 block is strictly shorter. The candidates are the table-v1 table with sub-tables applied, when that changes it, and the bucket block with sub-tables applied. The shorter candidate wins, the table on a tie. Then the text is `table-v2 @0` with that block labelled `@0`, and it must pass the gain check. Otherwise `table::v2::encode` returns exactly `table::encode` output and reasons for input whose first non-whitespace byte is `[`, except that a candidate that fails only the gain check reports `insufficient_gain`. table-v1 text stays stable for existing consumers.
-- For a top-level object, the encoder checks each member value that is an array, in member order. A member array has a table block when it passes every row of the table-v1 eligibility table except the gain row, with `max_rows` per array. It has a bucket block under the rules in Bucket blocks. When it has both, the encoder uses the shorter one, and the table block on a tie. It then applies sub-tables to that block. The array becomes a hole when it has a block and `hole length + label length + 2 + block length` is strictly less than the array's minified byte length. For a top-level hole the label is the hole text, so this is `2 * hole length + 2 + block length`. Otherwise the array stays in the skeleton unchanged.
+- An encoded array gets its block in one order, whether it is a bare array, a hole or a sub-block. The candidates are the table block, when the array passes every row of the table-v1 eligibility table except the gain row with `max_rows`, and the bucket block under the rules in Bucket blocks. Sub-tables apply to each candidate. Then the shorter candidate wins, the table block on a tie.
+- A bare top-level array keeps its table-v1 encoding unless a table-v2 block is strictly shorter. The text is `table-v2 @0` with the block above labelled `@0`, and it must pass the gain check. Otherwise `table::v2::encode` returns exactly `table::encode` output and reasons for input whose first non-whitespace byte is `[`, except that a candidate that fails only the gain check reports `insufficient_gain`. table-v1 text stays stable for existing consumers. A table block without reference cells is never shorter in bytes, because `table-v2 @0` and the label cost more bytes than the `table-v1` prefix. Selection compares bytes only, so with a token counter a bare array whose table-v1 text fails only the token check passes through even when a longer bucket block would pass it.
+- For a top-level object, the encoder checks each member value that is an array, in member order. A member array gets its block as above, with its hole label. The array becomes a hole when it has a block and `hole length + label length + 2 + block length` is strictly less than the array's minified byte length. For a top-level hole the label is the hole text, so this is `2 * hole length + 2 + block length`. Otherwise the array stays in the skeleton unchanged.
 - Arrays below the top-level object's members stay in the skeleton.
 - The whole document must pass the JSON minifier first, so a duplicate or escaped key anywhere, or nesting deeper than `max_depth`, skips the whole input with `duplicate_key`, `escaped_key` or `depth_limit`.
 
@@ -571,7 +572,7 @@ Known limit: per-hole selection uses only the strict byte comparison above. It a
 
 ### Integration
 
-`compress` calls `table::v2::encode` when `json_table` is true, and validates the candidate with `table::v2::decode`. The report's format version is 2 for table-v2 text and 1 for table-v1 text. The transform version is 4 for both. All other rules in the table-v1 Pipeline and configuration section apply unchanged.
+`compress` calls `table::v2::encode` when `json_table` is true, and validates the candidate with `table::v2::decode`. The report's format version is 2 for table-v2 text and 1 for table-v1 text. The transform version is 5 for both. All other rules in the table-v1 Pipeline and configuration section apply unchanged.
 
 ### Reserved extensions
 
