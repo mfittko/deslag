@@ -97,7 +97,7 @@ upper = d' + 1.6449 * se
 
 The arm passes when `lower > -0.02`. The verdict is `inferior` when `upper < -0.02`, so inferiority beyond the margin is shown at the same one-sided 95% level. Otherwise the verdict is `not shown`. A `not shown` verdict means the data cannot decide between non-inferiority and inferiority. An arm with zero paired non-control tasks (n = 0) gets the verdict `no data`.
 
-With zero discordant pairs, `lower = -1.6449 / (n + 2)`. That exceeds -0.02 only for `n >= 81`. A corpus with fewer than 81 paired tasks for an arm is inconclusive by construction. The initial corpus is such a pilot.
+With zero discordant pairs, `lower = -1.6449 / (n + 2)`. That exceeds -0.02 only for `n >= 81`. With fewer than 81 paired tasks, an arm passes only when discordance favors it. For example, `n = 20, b = 0, c = 3` gives `lower` of about -0.005 and passes. The criterion sets no minimum sample size. The initial corpus is a pilot, so an arm that roughly ties the baseline on it gets `not shown`.
 
 The criterion is evaluated per arm over all non-control tasks that list the arm. The report also gives the paired counts and the bound per task category. Control tasks and the `drop-evidence` arm are excluded from this analysis.
 

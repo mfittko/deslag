@@ -167,10 +167,17 @@ fn agresti_min_bound_matches_hand_values() {
 }
 
 #[test]
-fn minimum_pilot_size_is_81() {
+fn zero_discordance_passes_from_81_pairs() {
     assert_eq!(verdict(80, 0, 0), "not shown");
     assert_eq!(verdict(81, 0, 0), "passes");
     assert_eq!(verdict(0, 0, 0), "no data");
+}
+
+#[test]
+fn favorable_discordance_passes_below_81_pairs() {
+    // n' = 22, d' = 3/22, lower is about -0.005: no hard minimum sample size.
+    assert!(lower_bound(20, 0, 3) > -0.02);
+    assert_eq!(verdict(20, 0, 3), "passes");
 }
 
 #[test]
