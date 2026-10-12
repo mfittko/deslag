@@ -20,7 +20,8 @@ Two files carry the version, and they must always agree:
 - `Cargo.toml`: `[workspace.package] version`
 - `plugins/claude/.claude-plugin/plugin.json`: `version`
 
-`scripts/release/check-versions.sh` fails when they differ or when the version
+`scripts/release/check-versions.sh` fails when they differ, when
+`fuzz/Cargo.lock` pins another `deslag-core` version, or when the version
 is no SemVer `X.Y.Z` or `X.Y.Z-pre` version. It refuses build metadata (`+...`).
 CI runs it on every pull request and every push to `main`. The release workflow
 also fails unless the tag equals both surfaces.
@@ -36,14 +37,16 @@ toolchain.
 
 | Script | Purpose |
 | --- | --- |
-| `check-versions.sh [<tag>]` | Print the version; fail on a surface mismatch or a tag mismatch. |
+| `check-versions.sh [<tag>]` | Print the version; fail on a surface mismatch, a `fuzz/Cargo.lock` mismatch or a tag mismatch. |
 | `PR_BODY=<text> check-changelog-fragment.sh <base>` | Fail a `crates/` or `plugins/` change without a valid fragment or a `changelog: none` line in `PR_BODY`. |
 | `lib.sh` | The fragment format rules and the SemVer pattern, sourced by `bump.sh`, `check-changelog-fragment.sh` and `check-versions.sh`. |
-| `bump.sh <version>` | Set both surfaces, refresh `Cargo.lock`, assemble fragments, stamp the changelog, stage the result. |
+| `bump.sh <version>` | Set both surfaces, refresh `Cargo.lock` and `fuzz/Cargo.lock`, assemble fragments, stamp the changelog, stage the result. |
 | `extract-notes.sh <version\|Unreleased> [<changelog>]` | Print a `CHANGELOG.md` section body; fail when it is missing or empty. |
 | `verify-approval.sh <version> <owner/repo> [<since>]` | Fail a stable release without an operator approval comment. |
 | `package.sh <version> <target>` | Pack the `deslag` binary, both license files and `README.md` into a `deslag-<version>-<target>/` directory in `dist/deslag-<version>-<target>.tar.gz`. |
 | `checksums.sh <dir>` | Write `<dir>/SHA256SUMS` for every archive in `<dir>`. |
+| `release-state.sh <tag> <asset>...` | Print `create`, `upload` or `skip` for a release; fail on a partial release or a lookup error. |
+| `publish.sh <version> <action> <asset>...` | Create the release with the assets, upload them into it or skip it, as `release-state.sh` decided for the same asset list. It never replaces an asset. |
 
 ## 1. Collect changelog fragments
 
@@ -59,18 +62,23 @@ scripts/release/bump.sh 0.1.0-alpha.1
 git diff --cached
 ```
 
-The script sets both version surfaces, refreshes `Cargo.lock` offline, folds
-every fragment into `## Unreleased`, stamps that section as
-`## 0.1.0-alpha.1 - <UTC date>` and adds a new empty `## Unreleased` above it.
+The script sets both version surfaces, refreshes `Cargo.lock` and
+`fuzz/Cargo.lock` offline, folds every fragment into `## Unreleased`, stamps
+that section as `## 0.1.0-alpha.1 - <UTC date>` and adds a new empty
+`## Unreleased` above it.
+The lock refresh runs offline, so the local cargo cache must hold the
+fuzz-only crates. Run `cargo fetch --manifest-path fuzz/Cargo.toml` once
+before the first bump on a machine. Without them the fuzz lock refresh fails,
+and `bump.sh` prints that command as a hint and restores the original files.
 It stages exactly those files and the fragment deletions. It never commits,
 tags or pushes. It refuses an invalid SemVer version, a version that
 `CHANGELOG.md` already has, a fragment or `## Unreleased` line that breaks the
 fragment format in `changes/README.md`, and an empty release (empty
 `## Unreleased` and no fragments). The refusals happen before the first write.
-When a later step up to and including `cargo update` fails, the script
-restores the original files. A refusal, or a failure up to and including
-`cargo update`, therefore changes no file. A later failure (`git add`, `rm`,
-`git rm`) can leave the rewritten files in the tree. Check `git status` before
+When a later step fails, up to and including both `cargo update` runs, the
+script restores the original files. A refusal, or a failure up to that point,
+therefore changes no file. A later failure (`git add`, `rm`, `git rm`) can
+leave the rewritten files in the tree. Check `git status` before
 you re-run.
 
 Edit the stamped section if the wording needs work. Then commit, open a pull
@@ -154,6 +162,7 @@ archives do not match the published ones byte for byte. Delete the partial
 release (`gh release delete v<version>`) and re-run. The run creates a release
 only when `gh release view` reports "release not found". Any other lookup
 error, such as an HTTP 5xx or an auth error, fails the run before attestation.
+`scripts/release/test.sh` runs each of these re-run cases against a fake `gh`.
 
 ## Dry run
 
