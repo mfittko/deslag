@@ -509,3 +509,14 @@ fn sporadic_short_runs_stay_in_the_group() {
     assert_eq!(encoded.matches("#!deslag t").count(), 1, "{encoded:.200}");
     assert!(!encoded.contains("#!deslag x"), "{encoded:.200}");
 }
+
+#[test]
+fn escaped_unprofitable_group_is_linear() {
+    // Every row fits, adds no variable index and costs an escape, so no prefix
+    // pays and the dead-end break never fires: only the window bounds the scan.
+    let input: String = (0..20_000).map(|i| format!("  #!deslag{i}\n")).collect();
+    let start = std::time::Instant::now();
+    assert_eq!(roundtrip(&input), format!("{HEADER}{input}"));
+    let elapsed = start.elapsed();
+    assert!(elapsed.as_secs() < 5, "{elapsed:?}");
+}
