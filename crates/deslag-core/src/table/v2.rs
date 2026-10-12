@@ -1,28 +1,30 @@
 //! table-v2: a skeleton of the minified JSON with holes, followed by one
-//! table block per hole. The encoder replaces eligible array members of a
-//! top-level object, so the wrapper's other members stay byte-identical.
-//! A bare top-level array keeps its table-v1 output.
+//! block per hole. The encoder replaces eligible array members of a top-level
+//! object, so the wrapper's other members stay byte-identical. A block is a
+//! table, or a bucket block that splits a heterogeneous array by a string
+//! field. A bare top-level array keeps its table-v1 output unless one bucket
+//! block is shorter.
 //!
 //! `docs/compression-formats.md` specifies the format. The round-trip contract
 //! is `decode(&encode(x)?) == minified(x)`, byte for byte.
 
 use std::fmt::Write;
 
-use super::{TableOptions, decode_block, encode_block, enough_gain};
+use super::{TableOptions, bucket, decode_block, encode_block, enough_gain};
 use crate::{MAX_JSON_DEPTH_CEILING, Reason, Scanner, minify};
 
 /// First token of every table-v2 skeleton line.
 pub const MARKER: &str = "table-v2";
 
-/// Encodes `input` as table-v2, or as table-v1 when it is a bare array.
-/// `Err` means: pass the input through unchanged.
+/// Encodes `input` as table-v2, or as table-v1 when it is a bare array that
+/// bucketing does not shorten. `Err` means: pass the input through unchanged.
 pub fn encode(input: &str, opts: &TableOptions) -> Result<String, Reason> {
     const NO: Reason = Reason::UnsupportedFormat;
     if input
         .trim_start_matches([' ', '\t', '\n', '\r'])
         .starts_with('[')
     {
-        return super::encode(input, opts);
+        return encode_bare(input, opts);
     }
     let minified = String::from_utf8(minify(input, opts.max_depth)?).map_err(|_| NO)?;
     let mut skeleton = String::new();
@@ -31,10 +33,10 @@ pub fn encode(input: &str, opts: &TableOptions) -> Result<String, Reason> {
     let mut holes = 0;
     for span in array_members(&minified).ok_or(NO)? {
         let array = &minified[span.clone()];
-        let Some(block) = encode_block(array, opts.max_rows) else {
+        let hole = format!("@{holes}");
+        let Some(block) = encode_array(array, &hole, opts.max_rows) else {
             continue;
         };
-        let hole = format!("@{holes}");
         // The hole costs its label twice, a space and a line break. Per-hole
         // selection is this strict byte comparison only: no permille or token
         // threshold. The gain check runs once on the whole text below.
@@ -56,6 +58,46 @@ pub fn encode(input: &str, opts: &TableOptions) -> Result<String, Reason> {
         return Err(Reason::InsufficientGain);
     }
     Ok(out)
+}
+
+/// A bare array: table-v1 text, or `table-v2 @0` with one bucket block when
+/// that is strictly shorter. Rejections keep their table-v1 reason, except
+/// that a bucket block failing the gain check reports `InsufficientGain`.
+fn encode_bare(input: &str, opts: &TableOptions) -> Result<String, Reason> {
+    // ponytail: the input is minified twice, once inside `super::encode` and
+    // once here. Each pass is linear, so the cost is one extra linear pass.
+    // Share the minified text if profiling shows it matters.
+    let v1 = super::encode(input, opts);
+    let Some(minified) = minify(input, opts.max_depth)
+        .ok()
+        .and_then(|m| String::from_utf8(m).ok())
+    else {
+        return v1;
+    };
+    let Some(block) = bucket::encode(&minified, "@0", opts.max_rows) else {
+        return v1;
+    };
+    let out = format!("{MARKER} @0\n@0 {block}");
+    if v1.as_ref().is_ok_and(|t| t.len() <= out.len()) {
+        return v1;
+    }
+    if !enough_gain(&minified, &out, opts) {
+        return v1.or(Err(Reason::InsufficientGain));
+    }
+    Ok(out)
+}
+
+/// The shorter of the table block and the bucket block for one minified
+/// array labelled `label`; the table block on a tie. `None` when neither
+/// applies.
+fn encode_array(array: &str, label: &str, max_rows: usize) -> Option<String> {
+    [
+        encode_block(array, 2, max_rows),
+        bucket::encode(array, label, max_rows),
+    ]
+    .into_iter()
+    .flatten()
+    .min_by_key(String::len)
 }
 
 /// Byte spans of the member values of the minified top-level object that are
@@ -133,7 +175,12 @@ pub fn decode(text: &str) -> Option<String> {
         }
         i += block_start.len();
         out.push_str(&skeleton[copied..j - 1]);
-        out.push_str(&decode_block(rest, &mut i)?);
+        let block = if bucket::is_bucket(&rest[i..]) {
+            bucket::decode(rest, &mut i, &label)?
+        } else {
+            decode_block(rest, &mut i)?
+        };
+        out.push_str(&block);
         (copied, j, holes) = (end, end, holes + 1);
     }
     if holes == 0 || i != rest.len() {
