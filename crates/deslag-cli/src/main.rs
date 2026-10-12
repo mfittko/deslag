@@ -521,10 +521,10 @@ mod tests {
         bash["tool_response"]["stdout"] = PRETTY.into();
         for event in [bash, fixture("posttooluse-mcp-text.json")] {
             let bytes = serde_json::to_vec(&event).unwrap();
-            assert_eq!(
-                claude_hook(bytes.as_slice(), true, || false, |_| None),
-                Ok(None)
-            );
+            // The owner gate runs before any settings lookup or conflict scan.
+            let env =
+                |key: &str| -> Option<OsString> { panic!("env read before the owner gate: {key}") };
+            assert_eq!(claude_hook(bytes.as_slice(), true, || false, env), Ok(None));
             // Without the flag the gate is never consulted.
             let gate = || panic!("owner read without --minify-json");
             assert_eq!(
