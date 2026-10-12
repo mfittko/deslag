@@ -3,7 +3,8 @@
 
 use std::collections::BTreeSet;
 
-/// Non-inferiority margin: -2 percentage points.
+/// Non-inferiority margin magnitude: 2 percentage points. The threshold is
+/// `-MARGIN` on the arm-minus-baseline difference.
 pub const MARGIN: f64 = 0.02;
 /// One-sided 95% normal quantile.
 const Z: f64 = 1.6449;
