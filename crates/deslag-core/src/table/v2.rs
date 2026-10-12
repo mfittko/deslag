@@ -54,10 +54,9 @@ pub(super) fn encode_object(
         let array = &min[span.clone()];
         let hole = format!("@{holes}");
         let child = sub::child(label, holes);
-        let Some(block) = encode_array(array, &child, opts.max_rows) else {
+        let Some(block) = encode_array(array, &child, level, opts) else {
             continue;
         };
-        let block = sub::apply(&block, &child, level, opts);
         // The hole costs its text, its block label, a space and a line break.
         // Per-hole selection is this strict byte comparison only: no permille
         // or token threshold. The gain check runs once on the whole text.
@@ -78,9 +77,12 @@ pub(super) fn encode_object(
 }
 
 /// A bare array: table-v1 text, or `table-v2 @0` with one block when that is
-/// strictly shorter. The block is the table-v1 table with sub-blocks, or a
-/// bucket block, whichever is shorter. Rejections keep their table-v1 reason,
-/// except that a block failing the gain check reports `InsufficientGain`.
+/// strictly shorter. A table block without sub-blocks is never strictly
+/// shorter in bytes, because `table-v2 @0\n@0 ` is longer than `table-v1 `.
+/// Selection compares bytes only, so a longer bucket block never reaches the
+/// gain check, even when it would pass the token check. Rejections keep their
+/// table-v1 reason, except that a block failing the gain check reports
+/// `InsufficientGain`.
 fn encode_bare(input: &str, opts: &TableOptions) -> Result<String, Reason> {
     // ponytail: the input is minified twice, once inside `super::encode` and
     // once here. Each pass is linear, so the cost is one extra linear pass.
@@ -92,16 +94,7 @@ fn encode_bare(input: &str, opts: &TableOptions) -> Result<String, Reason> {
     else {
         return v1;
     };
-    // The table block counts only when sub-blocks changed it.
-    let table = encode_block(&minified, 2, opts.max_rows)
-        .and_then(|block| Some(sub::apply(&block, "@0", 0, opts)).filter(|b| *b != block));
-    let buckets =
-        bucket::encode(&minified, "@0", opts.max_rows).map(|b| sub::apply(&b, "@0", 0, opts));
-    let Some(block) = [table, buckets]
-        .into_iter()
-        .flatten()
-        .min_by_key(String::len)
-    else {
+    let Some(block) = encode_array(&minified, "@0", 0, opts) else {
         return v1;
     };
     let out = format!("{MARKER} @0\n@0 {block}");
@@ -114,16 +107,25 @@ fn encode_bare(input: &str, opts: &TableOptions) -> Result<String, Reason> {
     Ok(out)
 }
 
-/// The shorter of the table block and the bucket block for one minified
-/// array labelled `label`; the table block on a tie. `None` when neither
-/// applies.
-pub(super) fn encode_array(array: &str, label: &str, max_rows: usize) -> Option<String> {
+/// The block for one minified array labelled `label` at nesting `level`.
+/// Sub-tables apply to the table block and to the bucket block, then the
+/// shorter wins, the table block on a tie. `None` when neither applies.
+// ponytail: both candidates recurse, so text at nesting level `k` is encoded
+// up to 2^k times, at most 2^MAX_NESTING. Still linear. Cache sub-blocks by
+// (text, label, level) if profiling shows it matters.
+pub(super) fn encode_array(
+    array: &str,
+    label: &str,
+    level: usize,
+    opts: &TableOptions,
+) -> Option<String> {
     [
-        encode_block(array, 2, max_rows),
-        bucket::encode(array, label, max_rows),
+        encode_block(array, 2, opts.max_rows),
+        bucket::encode(array, label, opts.max_rows),
     ]
     .into_iter()
     .flatten()
+    .map(|block| sub::apply(&block, label, level, opts))
     .min_by_key(String::len)
 }
 
