@@ -95,7 +95,7 @@ expect_fail "check-versions rejects a fuzz/Cargo.lock that pins another deslag-c
 set_fuzz_lock 0.1.0
 expect_ok "check-versions accepts a matching fuzz/Cargo.lock" "$r" "$here/check-versions.sh"
 command mv -f "$r/fuzz/Cargo.lock" "$r/fuzz/Cargo.lock.bak"
-expect_fail "check-versions fails without fuzz/Cargo.lock" "fuzz/Cargo.lock" "$r" "$here/check-versions.sh"
+expect_fail "check-versions fails without fuzz/Cargo.lock" "fuzz/Cargo.lock is missing" "$r" "$here/check-versions.sh"
 command mv -f "$r/fuzz/Cargo.lock.bak" "$r/fuzz/Cargo.lock"
 set_version() {
   sed "s/^version = .*/version = \"$1\"/" "$r/Cargo.toml" >"$r/Cargo.toml.new" && command mv -f "$r/Cargo.toml.new" "$r/Cargo.toml"
@@ -297,7 +297,7 @@ mkdir -p "$tmp/fakecargo-fuzz"
 cat >"$tmp/fakecargo-fuzz/cargo" <<EOF
 #!/bin/sh
 case " \$* " in *" fuzz/Cargo.toml "*) echo "cargo: simulated fuzz failure" >&2; exit 101 ;; esac
-exec $(command -v cargo) "\$@"
+exec "$(command -v cargo)" "\$@"
 EOF
 chmod +x "$tmp/fakecargo-fuzz/cargo"
 expect_fail "bump fails when the fuzz lock update fails" "simulated fuzz failure" "$r" env PATH="$tmp/fakecargo-fuzz:$PATH" "$here/bump.sh" 0.2.0
@@ -492,6 +492,8 @@ expect_eq "publish leaves no release after a failed create" "$before" "$(snapsho
 : >"$FAKE_GH_LOG"
 expect_fail "publish rejects an unknown action" "unknown action" "$r" env PATH="$tmp/pubbin:$PATH" "$here/publish.sh" 4.0.0 replace
 expect_eq "publish calls no gh on an unknown action" "" "$(cat "$FAKE_GH_LOG")"
+expect_fail "publish fails without archives" "no archives" "$tmp" env PATH="$tmp/pubbin:$PATH" "$here/publish.sh" 4.0.0 create
+expect_eq "publish calls no gh without archives" "" "$(cat "$FAKE_GH_LOG")"
 
 if [ "$failures" -ne 0 ]; then echo "$failures test(s) failed" >&2; exit 1; fi
 echo "all release script tests passed"

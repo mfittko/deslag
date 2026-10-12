@@ -29,6 +29,10 @@ if ! [[ $cargo_version =~ $semver ]]; then
   exit 1
 fi
 # The fuzz crate is its own workspace with its own lock file.
+if [ ! -f fuzz/Cargo.lock ]; then
+  echo "error: fuzz/Cargo.lock is missing" >&2
+  exit 1
+fi
 fuzz_version=$(awk '
   /^\[\[package\]\]/ { in_core = 0 }
   $0 == "name = \"deslag-core\"" { in_core = 1 }

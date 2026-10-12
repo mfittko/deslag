@@ -11,6 +11,10 @@ version=${1:?usage: publish.sh <version> <action>}
 action=${2:?usage: publish.sh <version> <action>}
 tag=v$version
 assets=(dist/*.tar.gz dist/SHA256SUMS)
+if [ ! -f "${assets[0]}" ]; then
+  echo "error: no archives in dist/" >&2
+  exit 1
+fi
 case $action in
   skip)
     echo "release $tag already has every asset; nothing to publish" >&2
