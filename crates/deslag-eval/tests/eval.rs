@@ -193,6 +193,17 @@ fn report_renders_format_comparison_and_controls() {
         md.contains("| Markdown-KV | table-mdkv | 11 | 11/11 (100.0%) |"),
         "{md}"
     );
+    // The mock reports no usage, so every Paired savings row has n/a Claude columns.
+    let savings = md.split("### Paired savings").nth(1).unwrap();
+    let savings = savings.split("\n### ").next().unwrap();
+    let rows: Vec<&str> = savings
+        .lines()
+        .filter(|l| l.starts_with("| ") && !l.starts_with("| Arm") && !l.starts_with("| ---"))
+        .collect();
+    assert!(!rows.is_empty(), "{savings}");
+    for r in rows {
+        assert!(r.ends_with("| 0 | n/a | n/a | n/a | n/a | n/a |"), "{r}");
+    }
     assert!(md.contains("| evidence_drop | drop-evidence | 2 | 2/2 (100.0%) | 0/2 (0.0%) | 0 | 2 | evidence loss detected |"), "{md}");
     assert!(
         md.contains(
