@@ -177,7 +177,7 @@ At each unit, in input order:
 
 ## table-v1
 
-`table-v1` is a lossless tabular encoding for a JSON array of objects. Uniform nested objects flatten to dotted columns. The encoder is `deslag_core::table::encode`. The decoder is `deslag_core::table::decode`. The transform identity is `json-table`, format version 1. The transform version was 1 when table-v1 was the only table format. It is 2 since table-v2, and `compress` still emits table-v1 for a bare top-level array unless a table-v2 bucket block is shorter (see table-v2).
+`table-v1` is a lossless tabular encoding for a JSON array of objects. Uniform nested objects flatten to dotted columns. The encoder is `deslag_core::table::encode`. The decoder is `deslag_core::table::decode`. The transform identity is `json-table`, format version 1. The transform version was 1 when table-v1 was the only table format. It was 2 with table-v2 wrapped arrays and is 3 since bucket blocks. `compress` still emits table-v1 for a bare top-level array unless a table-v2 bucket block is shorter (see table-v2).
 
 For every eligible input `x`, `decode(encode(x))` equals the minified form of `x` byte for byte. The minified form is the output of the JSON minifier: the same members in the same order, with every lexeme unchanged.
 
@@ -366,7 +366,7 @@ table-v1 [2]{id:int,name:str,meta.region:str}
 
 When the switch is on, `compress` calls `encode` with `max_rows` set to `Limits::max_table_rows` (default 20000), `max_depth` set to `Limits::max_json_depth` and the context's token counter. The other thresholds keep their `TableOptions::default()` values. The size limits and mode checks apply first, as for the minifier.
 
-- If the input is eligible, `compress` decodes the encoded text and compares it with the minified original. A mismatch fails with `invalid_candidate` and validation outcome `failed`. Otherwise the report has transform id `json-table`, transform version 2 and format version 1, or format version 2 for table-v2 text. The byte and token fields are filled as for the minifier. Observe mode emits the original with outcome `would_change`.
+- If the input is eligible, `compress` decodes the encoded text and compares it with the minified original. A mismatch fails with `invalid_candidate` and validation outcome `failed`. Otherwise the report has transform id `json-table`, transform version 3 and format version 1, or format version 2 for table-v2 text. The byte and token fields are filled as for the minifier. Observe mode emits the original with outcome `would_change`.
 - If the input is ineligible and `json_minify` is true, `compress` runs the JSON minifier unchanged and reports it as `json-minify`.
 - If the input is ineligible and `json_minify` is false, `compress` skips with the table encoder's reason and transform id `json-table`. The format version is `null`, because no candidate was built.
 - If `exact_line_runs` or `line_templates` is true, input that the JSON transforms reject as `unsupported_format` goes to the line codec as described in its Integration section. The report has transform id `line-templates` when `line_templates` is true. Otherwise it has transform id `exact-line-runs`. The report names one selected transform: the table encoder (table-v1 or table-v2), else the minifier, else the line codec. More than one transform can run. When `json_minify` is true, input that the table encoder rejects falls through to the minifier. An eligible table encoder candidate is always validated against the minified original.
@@ -375,7 +375,7 @@ When the switch is on, `compress` calls `encode` with `max_rows` set to `Limits:
 
 ## table-v2
 
-`table-v2` encodes a JSON document whose arrays of objects sit inside a wrapper object, for example `{"results":[...],"total":1000}`, and arrays whose objects come in several kinds. The text is a skeleton of the minified document with holes, followed by one block per hole. A block is a table block, which uses the table-v1 header and record rules, or a bucket block, which splits a heterogeneous array into one table block per discriminator value. The encoder is `deslag_core::table::v2::encode`. The decoder is `deslag_core::table::v2::decode`. The transform identity is `json-table`, transform version 2, format version 2.
+`table-v2` encodes a JSON document whose arrays of objects sit inside a wrapper object, for example `{"results":[...],"total":1000}`, and arrays whose objects come in several kinds. The text is a skeleton of the minified document with holes, followed by one block per hole. A block is a table block, which uses the table-v1 header and record rules, or a bucket block, which splits a heterogeneous array into one table block per discriminator value. The encoder is `deslag_core::table::v2::encode`. The decoder is `deslag_core::table::v2::decode`. The transform identity is `json-table`, transform version 3, format version 2.
 
 For every eligible input `x`, `decode(encode(x))` equals the minified form of `x` byte for byte, as for table-v1. Every byte of the wrapper outside the encoded arrays stays in the skeleton unchanged.
 
@@ -450,7 +450,7 @@ This decodes to:
 
 The decoder returns no value for a bucket block with any of these:
 
-- a `count` of 0 or with a leading zero, or a missing, empty or dotted `name`,
+- a `count` of 0 or with a leading zero, or a missing or empty `name`, or one that is not a table-v1 name,
 - an order line with a wrong number of indexes, an index that is empty, padded, written with a leading zero or out of range,
 - a bucket table whose row count does not match the order line, whose header lacks the discriminator column, or that table-v1 would reject,
 - a missing, extra or misnumbered bucket label.
@@ -460,7 +460,7 @@ The decoder does not compare discriminator values. Encoder output has one distin
 The encoder builds a bucket block for an array with at least two and at most `max_rows` items, every item an object. It picks the discriminator deterministically:
 
 1. The candidates are the keys of the first item, in key order, that hold a string in every item. Empty keys and keys that are not table-v1 names are skipped. Only the first 8 candidates are tried, so encoding stays linear in the input.
-2. A candidate applies when its values form at least two buckets and every bucket passes every row of the table-v1 eligibility table except the gain row, with a one-row minimum. Rows are grouped by their raw string lexeme.
+2. A candidate applies when its values form at least two buckets, fewer buckets than items, and every bucket passes every row of the table-v1 eligibility table except the gain row, with a one-row minimum. Rows are grouped by their raw string lexeme.
 3. Among applicable candidates the shortest bucket block wins. A tie goes to the earlier candidate.
 
 A bucket block replaces a table block only when it is strictly shorter. A homogeneous array therefore keeps its table block.
@@ -503,8 +503,8 @@ Known limit: per-hole selection uses only the strict byte comparison above. It a
 
 ### Integration
 
-`compress` calls `table::v2::encode` when `json_table` is true, and validates the candidate with `table::v2::decode`. The report's format version is 2 for table-v2 text and 1 for table-v1 text. The transform version is 2 for both. All other rules in the table-v1 Pipeline and configuration section apply unchanged.
+`compress` calls `table::v2::encode` when `json_table` is true, and validates the candidate with `table::v2::decode`. The report's format version is 2 for table-v2 text and 1 for table-v1 text. The transform version is 3 for both. All other rules in the table-v1 Pipeline and configuration section apply unchanged.
 
 ### Reserved extensions
 
-A table-v2 block whose header does not start with `[` is invalid in this version. A later revision under the same marker adds a column type for string cells that hold JSON. A bare `@` cell in a `str` column stays string text in every revision.
+A table-v2 block whose header does not start with `[` is invalid in this version. A header that starts with `[` and continues after its count with anything other than `]{` or `] by ` is also invalid. A later revision under the same marker adds a column type for string cells that hold JSON. A bare `@` cell in a `str` column stays string text in every revision.
