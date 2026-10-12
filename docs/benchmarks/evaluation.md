@@ -15,7 +15,7 @@ This file holds live run 1 (pilot corpus), the predeclared live run 2, a two-cal
 | Live run 1 controls | `drop-evidence` lost the evidence on both evidence-drop tasks; every arm left both incompressible tasks unchanged |
 | table-v1 CSV vs Markdown-KV | live run 1: 11/11 for both formats; one run on one model cannot rank them, and CSV does not become a default from it |
 | Corpus size per arm (full corpus) | non-control pairs: json-minify 106, table-csv 105, table-mdkv 105, table-v2 105, lines-v1 106, lines-v2 105; changed non-control pairs (the transform changed the payload): json-minify 106, table-csv 104, table-mdkv 104, table-v2 105, lines-v1 104, lines-v2 105; 935 runs |
-| Live run 2 | predeclared in Live runs, not yet run |
+| Live run 2 | predeclared in Live runs; pending |
 | Mock dry run | below, full corpus, plumbing evidence only |
 | Generated | live run 1 at commit 2627754 (v0.1.0-alpha.2), 2026-10-12; mock output reproduced on the full corpus generated with seed 7700 at commit 4b2d4e1 (`tests/evaluations/generated/manifest.json` sha256 `e620eeec695f7a909b58eb4e087d22e21241286f2681c5b824a820588171d848`) |
 
@@ -83,7 +83,7 @@ Estimate with the default assumptions, from the same command without the assumpt
 | Estimated cost | USD 13.06 |
 | Cap if every call stays within --per-run-usd (935 runs at 0.3) | USD 280.50 |
 
-The default estimate exceeds `--budget-usd 3.00`. The run-2 estimate of USD 2.59 is below USD 2.70, the point at which the runner stops (the budget minus the per-run cap). The runner still stops before any call that could exceed the budget.
+The default estimate exceeds `--budget-usd 3.00`. The run-2 estimate of USD 2.59 is below USD 2.70, the point at which the runner stops (the budget minus the per-run cap). Before each call, the runner stops when the spent amount plus the per-run cap would exceed the budget.
 
 After a run, add its report as a new section above the mock dry run, with the client version and the total spend, and update the Status table.
 
@@ -375,7 +375,7 @@ Per-arm summary for the full corpus (the pilot and the generated tasks), from `c
 | lines-v2 | 117 | 109 | 83522 | 67486 |
 | drop-evidence | 8 | 8 | 4665 | 4506 |
 
-The same command prints one row per (task, arm), about 935 rows, with bytes, estimated tokens and the changed flag. Add `> tmp/eval/variants.md` to keep the rows.
+The same command prints one row per (task, arm), 935 rows, with bytes, estimated tokens and the changed flag. Add `> tmp/eval/variants.md` to keep the rows.
 
 ### Pilot payload sizes
 

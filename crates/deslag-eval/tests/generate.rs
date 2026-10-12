@@ -7,7 +7,7 @@ use std::{
     process::{Command, Output},
 };
 
-use deslag_eval::generate::{Pick, Query, check};
+use deslag_eval::generate::{Pick, Query, check, check_buried};
 use serde_json::{Value, json};
 
 const BIN: &str = env!("CARGO_BIN_EXE_deslag-eval");
@@ -65,12 +65,21 @@ fn regenerating_the_committed_corpus_is_byte_identical() {
 #[test]
 fn another_seed_changes_the_corpus() {
     let (a, b) = (fresh_dir("seed-a"), fresh_dir("seed-b"));
-    for (seed, out) in [("1", &a), ("2", &b)] {
+    for (seed, out) in [("1", &a), ("3", &b)] {
         let o = eval(&["generate", "--seed", seed, "--out", out.to_str().unwrap()]);
         assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     }
     let read = |d: &Path| std::fs::read(d.join("inputs/gen-json-000.json")).unwrap();
     assert_ne!(read(&a), read(&b));
+}
+
+#[test]
+fn generate_refuses_a_seed_with_a_shallow_buried_answer() {
+    // Seed 2 puts the gen-json-048 answer at row 60 of 101.
+    let out = fresh_dir("seed-shallow");
+    let o = eval(&["generate", "--seed", "2", "--out", out.to_str().unwrap()]);
+    assert_eq!(o.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&o.stderr).contains("gen-json-048"));
 }
 
 #[test]
@@ -180,6 +189,26 @@ fn buried_json_tasks_are_lookups_with_the_answer_in_the_last_40_percent() {
         assert!(at.len() == 1 && at[0] * 10 >= rows.len() * 6, "{q} {at:?}");
     }
     assert!(buried >= 5, "{buried} buried JSON tasks");
+}
+
+#[test]
+fn self_check_refuses_a_buried_answer_above_60_percent_depth() {
+    let table = |rows: usize, at: usize| {
+        let v: Vec<Value> = (0..rows)
+            .map(|i| json!({"id": if i == at { "hit" } else { "row" }}))
+            .collect();
+        serde_json::to_string(&v).unwrap()
+    };
+    let q = Query::Json {
+        conds: vec![("id", json!("hit"))],
+        pick: Pick::Field("id"),
+    };
+    for (rows, at) in [(100, 60), (101, 61), (102, 62)] {
+        assert_eq!(check_buried(&table(rows, at), &q), Ok(()), "{rows} {at}");
+    }
+    for (rows, at) in [(101, 60), (102, 61)] {
+        assert!(check_buried(&table(rows, at), &q).is_err(), "{rows} {at}");
+    }
 }
 
 /// Writes a one-task manifest with `extra` top-level members and returns its path.

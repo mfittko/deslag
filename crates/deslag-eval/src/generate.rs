@@ -187,6 +187,25 @@ pub fn check(input: &str, q: &Query, answer: &str) -> Result<(), String> {
     }
 }
 
+/// Refuses a buried table whose answer row sits above 60% depth:
+/// every row that matches the conditions needs index * 10 >= rows * 6.
+pub fn check_buried(input: &str, q: &Query) -> Result<(), String> {
+    let Query::Json { conds, .. } = q else {
+        return Err("a buried table needs a JSON query".into());
+    };
+    let doc: Value = serde_json::from_str(input).map_err(|e| e.to_string())?;
+    let rows = doc.as_array().ok_or("a buried table needs a root array")?;
+    for (at, r) in rows.iter().enumerate() {
+        if conds.iter().all(|(k, v)| r.get(*k) == Some(v)) && at * 10 < rows.len() * 6 {
+            return Err(format!(
+                "answer row {at} of {} is above 60% depth",
+                rows.len()
+            ));
+        }
+    }
+    Ok(())
+}
+
 struct Rng(u64);
 
 impl Rng {
@@ -763,6 +782,9 @@ pub fn run(seed: u64, out: &Path) -> Result<(), String> {
     gens.extend((0..6).map(|k| evidence_drop(k, &mut rng)));
     for g in &gens {
         check(&g.input, &g.query, &g.answer).map_err(|e| format!("task {}: {e}", g.id))?;
+        if g.category == "buried_evidence" && g.ext == "json" {
+            check_buried(&g.input, &g.query).map_err(|e| format!("task {}: {e}", g.id))?;
+        }
     }
     let inputs = out.join("inputs");
     fs::create_dir_all(&inputs).map_err(|e| format!("{}: {e}", inputs.display()))?;
