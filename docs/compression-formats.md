@@ -402,23 +402,26 @@ text     = "table-v2 " skeleton 1*( LF label " " block )
 skeleton = minified JSON with each encoded array replaced by a hole
 hole     = label
 label    = "@" index
+label-path = label *( "." index )
 index    = "0" / %x31-39 *DIGIT
 block    = table / buckets
-table    = "[" count "]{" column *( "," column ) "}" *( LF record ) *( LF label "." index " " sub )
-buckets  = "[" count "] by " name LF order 1*( LF label "." index " " table )
+table    = "[" count "]{" v2-column *( "," v2-column ) "}" *( LF record ) *( LF label-path "." index " " sub )
+v2-column = path ":" v2-type
+v2-type  = type / "json"
+buckets  = "[" count "] by " name LF order 1*( LF label-path "." index " " table )
 order    = index *( "," index )
-sub      = block / "= " skeleton 1*( LF label "." index " " block )
+sub      = block / "= " skeleton 1*( LF label-path "." index " " block )
 ```
 
-The `*( LF label "." index " " sub )` part of `table` and the `sub` rule apply only to tables with a `json` column. Sub-tables below specifies them.
+The `*( LF label-path "." index " " sub )` part of `table`, the `json` type and the `sub` rule apply only to tables with a `json` column. Sub-tables below specifies them. A `label-path` is the label of the enclosing block: `@n` for a top-level block, and a longer path such as `@0.1`, `@0.0.2` or `@0.0.0.0.0` for a bucket table, a sub-block or a hole block of a skeleton block.
 
 - The first line is `table-v2`, one space and the skeleton. Minified JSON holds no raw line break, so the skeleton is exactly the rest of the first line.
 - A hole is a label outside any JSON string in the skeleton. A `@` inside a string is text. A `@` cannot occur outside a string in valid JSON, so holes are unambiguous.
 - Holes are numbered `@0`, `@1`, `@2` and so on, in skeleton order. Each index occurs once. There is at least one hole.
 - Blocks follow in hole order. Each block starts on a new line with its label and one space.
-- `count` and `column` are the table-v1 header grammar rules. A `record` is one table-v1 record, as defined in table-v1 Rows.
-- A `table` block is a table-v1 text without the `table-v1 ` prefix: the header `[count]{columns}` with the table-v1 `count` and `column` rules, then exactly `count` records, each after a `\n`, with the table-v1 row, type and cell rules. A block ends after exactly `count` records. Any record line, bare or quoted, may start with `@`, so a decoder finds the end of a block by counting records.
-- The text ends after the last record of the last block. There is no trailing line break unless the last record is empty.
+- `count`, `path` and `type` are the table-v1 header grammar rules. A table-v2 column is a `v2-column`: its `v2-type` is a table-v1 `type` or `json`. A `record` is one table-v1 record, as defined in table-v1 Rows.
+- A `table` block is a table-v1 text without the `table-v1 ` prefix: the header `[count]{columns}` with the table-v1 `count` rule and the `v2-column` rule, then exactly `count` records, each after a `\n`, with the table-v1 row, type and cell rules. A table block without a `json` column ends after exactly `count` records. A table block with a `json` column ends after its last sub-block, or after its `count` records when it has no reference cell. Any record line, bare or quoted, may start with `@`, so a decoder finds the end of the records by counting them.
+- The text ends after the last line of the last block, including its bucket tables and sub-blocks. That line is a record. There is no trailing line break unless that record is empty.
 - A block whose header line has `] by ` right after its count is a bucket block. Bucket blocks are specified in Bucket blocks below.
 
 ### Bucket blocks
@@ -448,7 +451,7 @@ This decodes to:
 - The header is `[count] by name`. `count` is the number of rows, at least 1. `name` is the discriminator: a non-empty table-v1 `name`, so it holds no `.`.
 - The order line follows the header. It holds `count` bucket indexes joined by `,`, one per row in original order. Each index has no leading zeros.
 - Buckets are numbered in order of their first row: each index is at most one more than the largest index before it, and the first is `0`. So every bucket has at least one row.
-- One table block follows per bucket, in bucket order. Bucket `k` of the block labelled `@n` starts on a new line with `@n.k` and one space. Its `count` equals the number of times `k` occurs in the order line. Its columns include the discriminator `name` as a column path.
+- One table block follows per bucket, in bucket order. Bucket `k` of the bucket block labelled `L` starts on a new line with `L.k` and one space. `L` is `@n` for a top-level block, so its bucket tables are `@n.k`. Its `count` equals the number of times `k` occurs in the order line. Its columns include the discriminator `name` as a column path.
 - The decoder takes row `i` from bucket `order[i]`, in each bucket's record order, and joins the rows into one array.
 
 The decoder returns no value for a bucket block with any of these:
@@ -458,7 +461,7 @@ The decoder returns no value for a bucket block with any of these:
 - a bucket table whose row count does not match the order line, whose header lacks the discriminator column, or that table-v1 would reject,
 - a missing, extra or misnumbered bucket label.
 
-The decoder does not compare discriminator values. Encoder output has one distinct value per bucket, but a text whose rows disagree still decodes. A bucket block may have one bucket. Bucket tables never nest.
+The decoder does not compare discriminator values. Encoder output has one distinct value per bucket, but a text whose rows disagree still decodes. A bucket block may have one bucket. A bucket table is always a table block, never a bucket block. A bucket block can itself be a sub-block or the hole block of a skeleton block, so `L` can have several segments: a bucket block labelled `@0.0` has the bucket tables `@0.0.0`, `@0.0.1` and so on. A bucket table may hold a `json` column, and its sub-blocks follow it as Sub-tables describes.
 
 The encoder builds a bucket block for an array with at least two and at most `max_rows` items, every item an object. It picks the discriminator deterministically:
 
@@ -494,7 +497,7 @@ Column type `json` is valid only in a table-v2 table block, including a bucket t
 - Every other cell reads as in a `str` column: a quoted cell is a string, `null` is `null`, the empty cell is a missing field, and other bare text is a string.
 - So a string whose text is `@` followed by digits is always quoted in a `json` column. A bare `@` cell in a `str` column stays string text.
 
-Reference cells are numbered `@0`, `@1`, `@2` and so on, per table, in record order and then column order. After the last record of the table come the sub-blocks, one per reference cell, in that order. Sub-block `k` of the table labelled `L` starts on a new line with `L.k` and one space. A table in a bucket block is labelled `@n.b`, so its sub-blocks are labelled `@n.b.k`.
+Reference cells are numbered `@0`, `@1`, `@2` and so on, per table, in record order and then column order. After the last record of the table come the sub-blocks, one per reference cell, in that order. Sub-block `k` of the table labelled `L` starts on a new line with `L.k` and one space. A table in a bucket block is labelled `@n.b`, so its sub-blocks are labelled `@n.b.k`. Every label is a `label-path` from Text grammar, so a label grows by one segment per sub-block, bucket table or skeleton hole.
 
 A sub-block is one of these:
 

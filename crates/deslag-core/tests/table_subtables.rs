@@ -408,3 +408,29 @@ fn sub_tables_never_lengthen_a_block() {
     let encoded = round_trip(&format!(r#"{{"rows":{rows}}}"#));
     assert!(encoded.contains("{id:int,data:json}"), "{encoded}");
 }
+
+#[test]
+fn sub_blocks_hold_bucket_blocks() {
+    // Kinds `a` and `b` disagree on the type of `n`, so the inner array buckets.
+    let items: Vec<String> = (0..6)
+        .map(|i| {
+            let (kind, n) = if i % 2 == 0 {
+                ("a", format!("{i}"))
+            } else {
+                ("b", format!("\"s{i}\""))
+            };
+            format!(r#"{{"type":"{kind}","n":{n},"w":"x{i}"}}"#)
+        })
+        .collect();
+    let bucketed = format!("[{}]", items.join(","));
+    let encoded = round_trip(&rows_with(2, |_| lexeme(&bucketed)));
+    assert!(
+        encoded.contains("\n@0.0 [6] by type\n0,1,0,1,0,1\n@0.0.0 [3]{type:str,n:int,w:str}\n"),
+        "{encoded}"
+    );
+    assert!(
+        encoded.contains("\n@0.0.1 [3]{type:str,n:str,w:str}\n"),
+        "{encoded}"
+    );
+    assert!(encoded.contains("\n@0.1.1 [3]"), "{encoded}");
+}
