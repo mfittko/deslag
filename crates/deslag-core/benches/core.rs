@@ -182,12 +182,42 @@ fn lines_input(kind: Kind, size: usize) -> String {
     }
 }
 
-fn ctx(json_minify: bool, json_table: bool, exact_line_runs: bool) -> CompressionContext<'static> {
+/// Log lines that differ only in timestamp, request id and duration.
+fn templates_repetitive(size: usize) -> String {
+    let mut s = String::new();
+    let mut i = 0u64;
+    while s.len() < size {
+        s.push_str(&format!(
+            "2026-10-12T08:{:02}:{:02}Z INFO request id=r{} served in {}ms\n",
+            i / 60 % 60,
+            i % 60,
+            i * 7919 % 100_000,
+            i * 31 % 997
+        ));
+        i += 1;
+    }
+    s
+}
+
+fn templates_input(kind: Kind, size: usize) -> String {
+    match kind {
+        Kind::Repetitive => templates_repetitive(size),
+        Kind::Incompressible => lines_incompressible(size),
+    }
+}
+
+fn ctx(
+    json_minify: bool,
+    json_table: bool,
+    exact_line_runs: bool,
+    line_templates: bool,
+) -> CompressionContext<'static> {
     CompressionContext {
         mode: Mode::Safe,
         json_minify,
         json_table,
         exact_line_runs,
+        line_templates,
         ..FIRST_SLICE_JSON_MINIFY_CONTEXT
     }
 }
@@ -201,7 +231,7 @@ fn full_compress(input: &str) -> usize {
     let ctx = CompressionContext {
         token_counter: Some(&counter),
         limits: deslag_core::Limits::default(),
-        ..ctx(true, true, true)
+        ..ctx(true, true, true, true)
     };
     output_len(input, &ctx)
 }
@@ -212,21 +242,26 @@ struct Stage {
     run: fn(&str) -> usize,
 }
 
-const STAGES: [Stage; 5] = [
+const STAGES: [Stage; 6] = [
     Stage {
         name: "minify scan",
         input: json_input,
-        run: |s| output_len(s, &ctx(true, false, false)),
+        run: |s| output_len(s, &ctx(true, false, false, false)),
     },
     Stage {
         name: "table-v1 encode",
         input: table_input,
-        run: |s| output_len(s, &ctx(false, true, false)),
+        run: |s| output_len(s, &ctx(false, true, false, false)),
     },
     Stage {
         name: "exact-line-runs",
         input: lines_input,
-        run: |s| output_len(s, &ctx(false, false, true)),
+        run: |s| output_len(s, &ctx(false, false, true, false)),
+    },
+    Stage {
+        name: "line-templates",
+        input: templates_input,
+        run: |s| output_len(s, &ctx(false, false, false, true)),
     },
     Stage {
         name: "token estimate",
