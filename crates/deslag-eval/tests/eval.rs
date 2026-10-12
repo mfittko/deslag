@@ -670,8 +670,8 @@ fn run_refuses_an_existing_out_path() {
 }
 
 /// Live-backend runs against a fake `claude` script. `mode` selects its reply:
-/// `ok` (no cost field), `is_error`, `bad` (malformed JSON, exit 1), `pricey`
-/// or `cost-<json number>`.
+/// `ok` (no cost field), `is_error`, `bad` (malformed JSON, exit 1), `pricey`,
+/// `cost-<json number>` or `version-fail` (`--version` exits 1).
 #[cfg(unix)]
 fn fake_live_run(mode: &str, out_exists: bool) -> (Output, Vec<Value>, PathBuf) {
     use std::os::unix::fs::PermissionsExt;
@@ -684,7 +684,10 @@ fn fake_live_run(mode: &str, out_exists: bool) -> (Output, Vec<Value>, PathBuf) 
     std::fs::write(
         &script,
         r#"#!/bin/sh
-if [ "$1" = "--version" ]; then echo "9.9.9 (fake)"; exit 0; fi
+if [ "$1" = "--version" ]; then
+  [ "$FAKE_CLAUDE_MODE" = version-fail ] && exit 1
+  echo "9.9.9 (fake)"; exit 0
+fi
 # Fail unless the cost cap and isolation args are present.
 budget=; tools=; mcp=; prev=
 for a in "$@"; do
@@ -811,6 +814,27 @@ fn live_backend_counts_only_a_valid_reported_cost() {
             }
         }
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn report_ignores_a_negative_reported_cost() {
+    let (_, _, out) = fake_live_run("cost--1.0", false);
+    let o = eval(&["report", out.to_str().unwrap()]);
+    let md = String::from_utf8_lossy(&o.stdout);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    assert!(md.contains("| reported cost, USD | n/a |"), "{md}");
+}
+
+#[cfg(unix)]
+#[test]
+fn live_backend_refuses_a_failed_version_check() {
+    let (o, lines, out) = fake_live_run("version-fail", false);
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert_eq!(o.status.code(), Some(2), "{err}");
+    assert!(err.contains("claude --version failed"), "{err}");
+    assert!(lines.is_empty());
+    assert!(!out.exists());
 }
 
 #[cfg(unix)]

@@ -99,8 +99,13 @@ fn kinds(rows: &[&Value]) -> Vec<String> {
 }
 
 /// Sum of a reported numeric field, or `n/a` when no run reported it.
+/// A negative or non-finite value counts as unreported, as in the run budget.
 fn reported(rows: &[&Value], key: &str) -> String {
-    let vals: Vec<f64> = rows.iter().filter_map(|r| r[key].as_f64()).collect();
+    let vals: Vec<f64> = rows
+        .iter()
+        .filter_map(|r| r[key].as_f64())
+        .filter(|x| x.is_finite() && *x >= 0.0)
+        .collect();
     match (vals.is_empty(), key) {
         (true, _) => "n/a".into(),
         (false, "cost_usd") => format!("{:.4}", vals.iter().sum::<f64>()),

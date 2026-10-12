@@ -384,7 +384,12 @@ fn run(args: &[String]) -> Result<(), String> {
             .arg("--version")
             .output()
             .map_err(|e| format!("cannot start claude: {e}"))?;
-        String::from_utf8_lossy(&v.stdout).trim().to_string()
+        let version = String::from_utf8_lossy(&v.stdout).trim().to_string();
+        // A failed or silent version check means the client cannot be trusted with paid calls.
+        if !v.status.success() || version.is_empty() {
+            return Err(format!("claude --version failed: {}", v.status));
+        }
+        version
     } else {
         format!("deslag-eval {}", deslag_core::VERSION)
     };
