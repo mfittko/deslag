@@ -12,14 +12,6 @@ use crate::score::{shuffle, splitmix64};
 
 const JSON_ARMS: [&str; 4] = ["json-minify", "table-csv", "table-mdkv", "table-v2"];
 const LINE_ARMS: [&str; 2] = ["lines-v1", "lines-v2"];
-const ALL_ARMS: [&str; 6] = [
-    "json-minify",
-    "table-csv",
-    "table-mdkv",
-    "table-v2",
-    "lines-v1",
-    "lines-v2",
-];
 const ID_CHARS: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const HEX: &[u8] = b"0123456789abcdef";
 const ADJ: [&str; 12] = [
@@ -181,10 +173,12 @@ pub fn check(input: &str, q: &Query, answer: &str) -> Result<(), String> {
             "number {answer:?} is not a whole value in the payload"
         ));
     }
-    match answer.split(',').find(|i| !input.contains(*i)) {
-        Some(i) => Err(format!("answer item {i:?} is not in the payload")),
-        None => Ok(()),
-    }
+    answer
+        .split(',')
+        .find(|i| !input.contains(*i))
+        .map_or(Ok(()), |i| {
+            Err(format!("answer item {i:?} is not in the payload"))
+        })
 }
 
 /// Refuses a buried table whose answer row sits above 60% depth:
@@ -251,15 +245,20 @@ struct Gen {
     question: String,
     answer: String,
     rule: &'static str,
-    arms: &'static [&'static str],
+    arms: Vec<&'static str>,
     evidence: Option<String>,
     query: Query,
 }
 
 type Qa = (String, String, Query);
 
-fn task(id: String, category: &'static str, ext: &'static str, input: String, qa: Qa) -> Gen {
-    let (question, answer, query) = qa;
+fn task(
+    id: String,
+    category: &'static str,
+    (ext, rule, arms): (&'static str, &'static str, &[&'static str]),
+    input: String,
+    (question, answer, query): Qa,
+) -> Gen {
     Gen {
         id,
         category,
@@ -268,11 +267,31 @@ fn task(id: String, category: &'static str, ext: &'static str, input: String, qa
         input,
         question,
         answer,
-        rule: "exact",
-        arms: &JSON_ARMS,
+        rule,
+        arms: arms.to_vec(),
         evidence: None,
         query,
     }
+}
+
+fn json_query(conds: Vec<(&'static str, Value)>, pick: Pick) -> Query {
+    Query::Json { conds, pick }
+}
+
+fn scan(contains: &str, after: &str, end: &'static str) -> Query {
+    Query::Scan {
+        contains: contains.into(),
+        after: after.into(),
+        end,
+    }
+}
+
+fn max_of(
+    conds: Vec<(&'static str, Value)>,
+    num: &'static str,
+    name: Option<&'static str>,
+) -> Query {
+    json_query(conds, Pick::Max { num, name })
 }
 
 fn quoted(s: &str) -> String {
@@ -282,16 +301,14 @@ fn quoted(s: &str) -> String {
 /// Pretty-prints objects with 2-space indent over raw lexemes: key order is
 /// the given order and number lexemes survive.
 fn pretty(rows: &[Vec<(&str, String)>]) -> String {
-    let objects: Vec<String> = rows
-        .iter()
-        .map(|fields| {
-            let lines: Vec<String> = fields
-                .iter()
-                .map(|(k, v)| format!("    \"{k}\": {v}"))
-                .collect();
-            format!("  {{\n{}\n  }}", lines.join(",\n"))
-        })
-        .collect();
+    let object = |fields: &Vec<(&str, String)>| {
+        let lines: Vec<_> = fields
+            .iter()
+            .map(|(k, v)| format!("    \"{k}\": {v}"))
+            .collect();
+        format!("  {{\n{}\n  }}", lines.join(",\n"))
+    };
+    let objects: Vec<String> = rows.iter().map(object).collect();
     format!("[\n{}\n]\n", objects.join(",\n"))
 }
 
@@ -350,11 +367,8 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
     // A buried table only gets lookup questions: forms 0 to 2.
     let buried = si == 6;
     let form = rng.below(if buried { 3 } else { 7 });
-    let n = if buried {
-        100 + rng.below(3)
-    } else {
-        10 + rng.below(5)
-    };
+    let (base, spread) = if buried { (100, 3) } else { (10, 5) };
+    let n = base + rng.below(spread);
     let (decimal, ragged) = (s.frac, form == 6 || rng.below(3) == 0);
     let names = rng.names(n);
     let mut rows = Vec::new();
@@ -366,13 +380,11 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
             (true, 3..) => Some(team),
             _ => None,
         };
-        let id = format!("{}_{}", s.prefix, rng.code(8, ID_CHARS));
-        let num = num(rng, decimal, i, false);
         rows.push(Row {
-            id,
+            id: format!("{}_{}", s.prefix, rng.code(8, ID_CHARS)),
             name,
             status: s.status[0].into(),
-            num,
+            num: num(rng, decimal, i, false),
             note,
         });
     }
@@ -394,18 +406,12 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
                 t0.name
             ),
             t0.id.clone(),
-            Query::Json {
-                conds: vec![(name, string(&t0.name))],
-                pick: Pick::Field(id),
-            },
+            json_query(vec![(name, string(&t0.name))], Pick::Field(id)),
         ),
         1 => (
             format!("What is the {name} of the {noun} with {id} {}?", t0.id),
             t0.name.clone(),
-            Query::Json {
-                conds: vec![(id, string(&t0.id))],
-                pick: Pick::Field(name),
-            },
+            json_query(vec![(id, string(&t0.id))], Pick::Field(name)),
         ),
         2 => {
             let lexeme = top(rng, 3);
@@ -413,10 +419,10 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
             (
                 format!("What is the {id} of the {noun} with {numk} {lexeme}?"),
                 special[0].id.clone(),
-                Query::Json {
-                    conds: vec![(numk, serde_json::from_str(&lexeme).unwrap())],
-                    pick: Pick::Field(id),
-                },
+                json_query(
+                    vec![(numk, serde_json::from_str(&lexeme).unwrap())],
+                    Pick::Field(id),
+                ),
             )
         }
         3 => {
@@ -431,10 +437,7 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
                     s.status[2]
                 ),
                 ids.join(","),
-                Query::Json {
-                    conds: vec![(status, string(s.status[2]))],
-                    pick: Pick::Set(id),
-                },
+                json_query(vec![(status, string(s.status[2]))], Pick::Set(id)),
             )
         }
         4 => {
@@ -442,13 +445,7 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
             (
                 format!("Which {noun} has the highest {numk} value? Answer with its {name}."),
                 special[0].name.clone(),
-                Query::Json {
-                    conds: vec![],
-                    pick: Pick::Max {
-                        num: numk,
-                        name: Some(name),
-                    },
-                },
+                max_of(vec![], numk, Some(name)),
             )
         }
         6 => {
@@ -467,10 +464,7 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
                     "List the {id} values of all {plural} whose {note} is null, comma-separated. A row with no {note} field does not count.",
                 ),
                 ids.join(","),
-                Query::Json {
-                    conds: vec![(note, Value::Null)],
-                    pick: Pick::Set(id),
-                },
+                json_query(vec![(note, Value::Null)], Pick::Set(id)),
             )
         }
         _ => {
@@ -484,13 +478,7 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
                     s.status[0]
                 ),
                 special[1].num.clone(),
-                Query::Json {
-                    conds: vec![(status, string(s.status[0]))],
-                    pick: Pick::Max {
-                        num: numk,
-                        name: None,
-                    },
-                },
+                max_of(vec![(status, string(s.status[0]))], numk, None),
             )
         }
     };
@@ -514,34 +502,27 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
             f
         })
         .collect();
-    let mut g = task(
-        format!("gen-json-{t:03}"),
-        s.category,
-        "json",
-        pretty(&objects),
-        qa,
-    );
-    g.rule = match form {
+    let rule = match form {
         3 | 6 => "set",
         5 => "number",
         _ => "exact",
     };
-    g
+    task(
+        format!("gen-json-{t:03}"),
+        s.category,
+        ("json", rule, &JSON_ARMS),
+        pretty(&objects),
+        qa,
+    )
 }
 
 fn log_task(t: usize, rng: &mut Rng) -> Gen {
     let kind = [0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2, 3][t % 16];
     let buried = kind == 3;
-    let n = if buried {
-        100 + rng.below(5)
-    } else {
-        12 + rng.below(11)
-    };
-    let p = if buried {
-        n * 6 / 10 + rng.below(n - n * 6 / 10)
-    } else {
-        rng.below(n)
-    };
+    let (base, spread) = if buried { (100, 5) } else { (12, 11) };
+    let n = base + rng.below(spread);
+    let lo = if buried { n * 6 / 10 } else { 0 };
+    let p = lo + rng.below(n - lo);
     let d = (p + 1 + rng.below(n - 1)) % n;
     let names = rng.names(n + 2);
     let a = match kind {
@@ -553,12 +534,9 @@ fn log_task(t: usize, rng: &mut Rng) -> Gen {
     let dc = near(&a);
     let art = format!("deslag-{}", names[n + 1]);
     let hms = |i: usize| {
-        format!(
-            "{:02}:{:02}:{:02}",
-            10 + i * 7 / 3600,
-            i * 7 / 60 % 60,
-            i * 7 % 60
-        )
+        let sec = i * 7;
+        let (h, m, s) = (10 + sec / 3600, sec / 60 % 60, sec % 60);
+        format!("{h:02}:{m:02}:{s:02}")
     };
     let mut lines = Vec::new();
     for i in 0..n {
@@ -607,49 +585,42 @@ fn log_task(t: usize, rng: &mut Rng) -> Gen {
         lines.splice(at..at, vec![msg.to_string(); run]);
     }
     let input = lines.join("\n") + "\n";
-    let scan = |contains: &str, after: &str| Query::Scan {
-        contains: contains.into(),
-        after: after.into(),
-        end: " ",
-    };
     let (category, question, query) = match kind {
         0 => (
             "logs",
             "Which request_id failed with status 503?".to_string(),
-            scan("status=503 ", "request_id="),
+            scan("status=503 ", "request_id=", " "),
         ),
         1 => (
             "logs",
             "Which client IP address received the only 403 response?".into(),
-            scan("\" 403 ", ""),
+            scan("\" 403 ", "", " "),
         ),
         2 => (
             "failure_diagnosis",
             "Which test failed? Answer with the full test path.".into(),
-            scan(" ... FAILED", "test "),
+            scan(" ... FAILED", "test ", " "),
         ),
         _ => (
             "buried_evidence",
             format!("What sha256 checksum is reported for the artifact {art}.tar.gz?"),
-            scan(&format!("artifact {art}.tar.gz "), "sha256="),
+            scan(&format!("artifact {art}.tar.gz "), "sha256=", " "),
         ),
     };
-    let mut g = task(
+    let rule = if buried { "exact_ci" } else { "exact" };
+    task(
         format!("gen-log-{t:03}"),
         category,
-        "log",
+        ("log", rule, &LINE_ARMS),
         input,
         (question, a, query),
-    );
-    g.arms = &LINE_ARMS;
-    g.rule = if buried { "exact_ci" } else { "exact" };
-    g
+    )
 }
 
 /// Incompressible controls: one prose line, or an already minimal JSON object.
 fn incompressible(k: usize, rng: &mut Rng) -> Gen {
     let id = format!("gen-ctl-incompressible-{k:02}");
-    let mut g = if k.is_multiple_of(2) {
+    let g = if k.is_multiple_of(2) {
         let date = format!("2026-{:02}-{:02}", 10 + rng.below(3), 1 + rng.below(28));
         let who = format!("{} {}", FIRST[rng.below(6)], LAST[rng.below(6)]);
         let lead = format!("on-call engineer for the week of {date} is ");
@@ -659,48 +630,38 @@ fn incompressible(k: usize, rng: &mut Rng) -> Gen {
             5 * (1 + rng.below(6)),
             ["Monday", "Tuesday", "Thursday"][rng.below(3)],
         );
-        let query = Query::Scan {
-            contains: lead.clone(),
-            after: lead,
-            end: ".",
-        };
-        let mut g = task(
+        let query = scan(&lead, &lead, ".");
+        task(
             id,
             "incompressible",
-            "txt",
+            ("txt", "exact_ci", &[&JSON_ARMS[..], &LINE_ARMS].concat()),
             input,
             (
                 format!("Who is the on-call engineer for the week of {date}?"),
                 who,
                 query,
             ),
-        );
-        g.rule = "exact_ci";
-        g
+        )
     } else {
         let (job, rows) = (rng.names(1).remove(0), 1000 + rng.below(90000));
         let input = format!("{{\"job\":\"{job}\",\"state\":\"succeeded\",\"rows\":{rows}}}");
-        let query = Query::Json {
-            conds: vec![],
-            pick: Pick::Field("rows"),
-        };
-        let mut g = task(
+        let query = json_query(vec![], Pick::Field("rows"));
+        task(
             id,
             "incompressible",
-            "json",
+            ("json", "number", &[&JSON_ARMS[..], &LINE_ARMS].concat()),
             input,
             (
                 format!("How many rows did the {job} job write?"),
                 rows.to_string(),
                 query,
             ),
-        );
-        g.rule = "number";
-        g
+        )
     };
-    g.control = Some("incompressible");
-    g.arms = &ALL_ARMS;
-    g
+    Gen {
+        control: Some("incompressible"),
+        ..g
+    }
 }
 
 /// Evidence-drop controls: one answer line holds the evidence string, which
@@ -708,7 +669,7 @@ fn incompressible(k: usize, rng: &mut Rng) -> Gen {
 fn evidence_drop(k: usize, rng: &mut Rng) -> Gen {
     let id = format!("gen-ctl-evidence-drop-{k:02}");
     let n = 20 + rng.below(12);
-    let mut g = if k.is_multiple_of(2) {
+    let g = if k.is_multiple_of(2) {
         let at = rng.below(n);
         let who = format!("svc-{}", rng.names(1).remove(0));
         let rows: Vec<_> = (0..n)
@@ -721,30 +682,24 @@ fn evidence_drop(k: usize, rng: &mut Rng) -> Gen {
                 ]
             })
             .collect();
-        let query = Query::Json {
-            conds: vec![("session", Value::String(format!("sess_k{at}")))],
-            pick: Pick::Field("revoked_by"),
-        };
-        let mut g = task(
-            id,
-            "evidence_drop",
-            "json",
-            pretty(&rows),
-            (
-                format!("Who revoked session sess_k{at}?"),
-                who.clone(),
-                query,
-            ),
+        let query = json_query(
+            vec![("session", Value::String(format!("sess_k{at}")))],
+            Pick::Field("revoked_by"),
         );
-        g.evidence = Some(format!("\"revoked_by\": \"{who}\""));
-        g.arms = &[
-            "drop-evidence",
-            "json-minify",
-            "table-csv",
-            "table-mdkv",
-            "table-v2",
-        ];
-        g
+        Gen {
+            evidence: Some(format!("\"revoked_by\": \"{who}\"")),
+            ..task(
+                id,
+                "evidence_drop",
+                (
+                    "json",
+                    "exact",
+                    &[&["drop-evidence"][..], &JSON_ARMS].concat(),
+                ),
+                pretty(&rows),
+                (format!("Who revoked session sess_k{at}?"), who, query),
+            )
+        }
     } else {
         let alert = format!("{}-latency-p99", ADJ[rng.below(12)]);
         let step = |i: usize| format!("2026-09-30T12:{i:02}:00Z");
@@ -753,24 +708,26 @@ fn evidence_drop(k: usize, rng: &mut Rng) -> Gen {
             .collect();
         lines.push(format!("{} rollback triggered by alert={alert}", step(n)));
         lines.push(format!("{} deploy step rollback ok", step(n + 1)));
-        let query = Query::Scan {
-            contains: "rollback triggered by".into(),
-            after: "alert=".into(),
-            end: " ",
-        };
-        let mut g = task(
-            id,
-            "evidence_drop",
-            "log",
-            lines.join("\n") + "\n",
-            ("Which alert triggered the rollback?".into(), alert, query),
-        );
-        g.evidence = Some("rollback triggered by".into());
-        g.arms = &["drop-evidence", "lines-v1", "lines-v2"];
-        g
+        let query = scan("rollback triggered by", "alert=", " ");
+        Gen {
+            evidence: Some("rollback triggered by".into()),
+            ..task(
+                id,
+                "evidence_drop",
+                (
+                    "log",
+                    "exact",
+                    &[&["drop-evidence"][..], &LINE_ARMS].concat(),
+                ),
+                lines.join("\n") + "\n",
+                ("Which alert triggered the rollback?".into(), alert, query),
+            )
+        }
     };
-    g.control = Some("evidence_drop");
-    g
+    Gen {
+        control: Some("evidence_drop"),
+        ..g
+    }
 }
 
 /// Writes `<out>/manifest.json` and `<out>/inputs/<task-id>.<ext>`.
@@ -781,9 +738,10 @@ pub fn run(seed: u64, out: &Path) -> Result<(), String> {
     gens.extend((0..6).map(|k| incompressible(k, &mut rng)));
     gens.extend((0..6).map(|k| evidence_drop(k, &mut rng)));
     for g in &gens {
-        check(&g.input, &g.query, &g.answer).map_err(|e| format!("task {}: {e}", g.id))?;
+        let tag = |e: String| format!("task {}: {e}", g.id);
+        check(&g.input, &g.query, &g.answer).map_err(tag)?;
         if g.category == "buried_evidence" && g.ext == "json" {
-            check_buried(&g.input, &g.query).map_err(|e| format!("task {}: {e}", g.id))?;
+            check_buried(&g.input, &g.query).map_err(tag)?;
         }
     }
     let inputs = out.join("inputs");
@@ -796,11 +754,10 @@ pub fn run(seed: u64, out: &Path) -> Result<(), String> {
             "id": g.id, "category": g.category, "input": format!("inputs/{file}"),
             "question": g.question, "answers": [g.answer], "rule": g.rule, "arms": g.arms,
         });
-        if let Some(c) = g.control {
-            t["control"] = json!(c);
-        }
-        if let Some(e) = &g.evidence {
-            t["evidence"] = json!(e);
+        for (key, value) in [("control", g.control), ("evidence", g.evidence.as_deref())] {
+            if let Some(v) = value {
+                t[key] = json!(v);
+            }
         }
         tasks.push(t);
     }
