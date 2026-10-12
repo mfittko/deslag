@@ -1,6 +1,7 @@
 //! Bounded execution: a parallel job limit and a processing budget.
 //!
-//! The executor is cooperative and fail-open. A caller that gets a
+//! The executor is fail-open. On budget expiry the caller stops waiting and
+//! the job runs to completion on its thread. A caller that gets a
 //! [`Rejected`] passes the original content through. Nothing queues.
 //! A permit stays held until the worker thread really ends, so work that
 //! outlives its budget still counts against the parallel job limit.
@@ -11,10 +12,11 @@ use std::time::Duration;
 /// Why [`BoundedExecutor::run`] returned no value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Rejected {
-    /// Every permit is held. No job was started.
+    /// No permit was free, or the worker thread could not start. No job ran.
     Busy,
     /// The job did not finish inside the processing budget. It keeps its permit until it ends.
     BudgetExceeded,
+    /// The job panicked. Its permit is released during unwind.
     Panicked,
 }
 
