@@ -306,7 +306,7 @@ Acceptance tests: semantic round-trip checks plus lexical-value checks; invalid/
 
 For sufficiently large homogeneous arrays of objects, represent the field names once and retain every row and value.
 
-Illustrative format, subject to freezing in `docs/compression-formats.md`. DF-012 froze table-v1 there. That specification supersedes the illustrative format and the initial eligibility list below. For example, it allows missing fields and key orders that are subsequences of the column order.
+Illustrative format, subject to freezing in `docs/compression-formats.md`. DF-012 froze table-v1 there, and table-v2 extends it to arrays inside a wrapper object. That specification supersedes the illustrative format and the initial eligibility list below. For example, it allows missing fields and key orders that are subsequences of the column order.
 
 ```json
 {

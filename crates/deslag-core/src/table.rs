@@ -10,6 +10,8 @@ use std::{collections::HashMap, fmt::Write, iter};
 
 use crate::{Limits, Reason, Scanner, TokenCounter, minify};
 
+pub mod v2;
+
 /// First token of every table-v1 header line.
 pub const MARKER: &str = "table-v1";
 
@@ -141,36 +143,14 @@ fn build(input: &str, opts: &TableOptions, kv: bool) -> Result<String, Reason> {
     }
     let minified = String::from_utf8(minify(input, opts.max_depth)?).map_err(|_| NO)?;
     let (rows, paths) = parse_rows(&minified).ok_or(NO)?;
-    if rows.len() < 2 || rows.len() > opts.max_rows {
-        return Err(NO);
-    }
-    let (cols, names, types) = layout(&rows, &paths).ok_or(NO)?;
-
-    let mut out = format!("{MARKER} [{}]{{", rows.len());
-    for (j, (col, ty)) in names.iter().zip(&types).enumerate() {
-        let sep = if j == 0 { "" } else { "," };
-        let _ = write!(out, "{sep}{col}:{}", ty.name());
-    }
-    out.push('}');
-    let header_len = out.len();
-    for row in &rows {
-        out.push('\n');
-        // Row keys are a subsequence of `cols`, so one pass aligns them.
-        let mut fields = row.iter().peekable();
-        for (j, col) in cols.iter().enumerate() {
-            if j > 0 {
-                out.push(',');
-            }
-            if let Some((_, v)) = fields.next_if(|(k, _)| k == col) {
-                push_cell(&mut out, v);
-            }
-        }
-    }
+    let mut out = format!("{MARKER} ");
+    push_block(&mut out, &rows, &paths, opts.max_rows).ok_or(NO)?;
     if !enough_gain(&minified, &out, opts) {
         return Err(Reason::InsufficientGain);
     }
     if kv {
-        out.truncate(header_len);
+        // Column names hold no line break, so the header is the first line.
+        out.truncate(out.find('\n').unwrap_or(out.len()));
         for row in &rows {
             out.push_str("\n-");
             for (j, (key, v)) in row.iter().enumerate() {
@@ -189,6 +169,44 @@ fn build(input: &str, opts: &TableOptions, kv: bool) -> Result<String, Reason> {
     Ok(out)
 }
 
+/// Encodes one minified JSON array as a block: the `[count]{columns}` header
+/// and its records. `None` when the array is ineligible.
+fn encode_block(array: &str, max_rows: usize) -> Option<String> {
+    let (rows, paths) = parse_rows(array)?;
+    let mut out = String::new();
+    push_block(&mut out, &rows, &paths, max_rows)?;
+    Some(out)
+}
+
+/// Writes the `[count]{columns}` header and one record per row. `None` when
+/// the rows are ineligible.
+fn push_block(out: &mut String, rows: &[Row], paths: &Paths, max_rows: usize) -> Option<()> {
+    if rows.len() < 2 || rows.len() > max_rows {
+        return None;
+    }
+    let (cols, names, types) = layout(rows, paths)?;
+    let _ = write!(out, "[{}]{{", rows.len());
+    for (j, (col, ty)) in names.iter().zip(&types).enumerate() {
+        let sep = if j == 0 { "" } else { "," };
+        let _ = write!(out, "{sep}{col}:{}", ty.name());
+    }
+    out.push('}');
+    for row in rows {
+        out.push('\n');
+        // Row keys are a subsequence of `cols`, so one pass aligns them.
+        let mut fields = row.iter().peekable();
+        for (j, col) in cols.iter().enumerate() {
+            if j > 0 {
+                out.push(',');
+            }
+            if let Some((_, v)) = fields.next_if(|(k, _)| k == col) {
+                push_cell(out, v);
+            }
+        }
+    }
+    Some(())
+}
+
 /// Writes a present field as a cell; a missing field is the empty cell.
 fn push_cell(out: &mut String, value: &Value) {
     match value {
@@ -201,14 +219,18 @@ fn push_cell(out: &mut String, value: &Value) {
 
 /// Decodes table-v1 text to minified JSON. `None` for malformed text.
 pub fn decode(text: &str) -> Option<String> {
-    let (header, body) = match text.split_once('\n') {
-        Some((h, b)) => (h, Some(b)),
-        None => (text, None),
-    };
-    let (count, specs) = header
-        .strip_prefix(MARKER)?
-        .strip_prefix(" [")?
-        .split_once("]{")?;
+    let block = text.strip_prefix(MARKER)?.strip_prefix(' ')?;
+    let mut i = 0;
+    let out = decode_block(block, &mut i)?;
+    (i == block.len()).then_some(out)
+}
+
+/// Decodes the block at `*i` of `text` to a minified JSON array and moves
+/// `*i` to the end of its last record. A block is a `[count]{columns}` header
+/// line and `count` records, each after a `\n`.
+fn decode_block(text: &str, i: &mut usize) -> Option<String> {
+    let header_end = text[*i..].find('\n').map_or(text.len(), |e| *i + e);
+    let (count, specs) = text[*i..header_end].strip_prefix('[')?.split_once("]{")?;
     // `0` or `[1-9][0-9]*`: one canonical spelling per count.
     if count.is_empty()
         || !count.bytes().all(|c| c.is_ascii_digit())
@@ -218,26 +240,18 @@ pub fn decode(text: &str) -> Option<String> {
     }
     let rows: usize = count.parse().ok()?;
     let cols = columns(specs.strip_suffix('}')?)?;
-    // A header with zero rows has no body; every row is one line after it.
-    if (rows == 0) != body.is_none() {
-        return None;
-    }
-    let body = body.unwrap_or("");
+    *i = header_end;
 
     let mut out = String::from("[");
-    let mut i = 0;
     for r in 0..rows {
-        let cells = parse_record(body, &mut i)?;
-        let last = r + 1 == rows;
-        let at_end = if last {
-            i == body.len()
-        } else {
-            body[i..].starts_with('\n')
-        };
-        if cells.len() != cols.len() || !at_end {
+        if !text[*i..].starts_with('\n') {
             return None;
         }
-        i += 1;
+        *i += 1;
+        let cells = parse_record(text, i)?;
+        if cells.len() != cols.len() {
+            return None;
+        }
         out.push_str(if r == 0 { "{" } else { ",{" });
         // True right after `{`, where the next member needs no comma.
         let mut opened = true;

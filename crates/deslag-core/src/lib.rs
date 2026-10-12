@@ -32,12 +32,14 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const JSON_MINIFY_ID: &str = "json-minify";
 /// Bumped whenever `minify_json` output can change for some input.
 pub const JSON_MINIFY_VERSION: u32 = 1;
-/// Stable transform identity for the table-v1 encoder.
+/// Stable transform identity for the table encoder.
 pub const JSON_TABLE_ID: &str = "json-table";
-/// Bumped whenever `table::encode` output can change for some input.
-pub const JSON_TABLE_VERSION: u32 = 1;
+/// Bumped whenever `table::v2::encode` output can change for some input.
+pub const JSON_TABLE_VERSION: u32 = 2;
 /// Format version of table-v1 output, as reported in `format_version`.
 pub const JSON_TABLE_FORMAT_VERSION: u32 = 1;
+/// Format version of table-v2 output, as reported in `format_version`.
+pub const JSON_TABLE_V2_FORMAT_VERSION: u32 = 2;
 /// Bumped whenever a [`CompressionReport`] field or its serialized form changes.
 pub const REPORT_SCHEMA_VERSION: u32 = 1;
 
@@ -99,8 +101,8 @@ pub enum Reason {
     /// `exact-line-runs` path, input that already starts with the `lines-v1`
     /// header, and on the `line-templates` path, input that already starts with
     /// the `lines-v1` or `lines-v2` header, so the codec never encodes its own
-    /// output. Also table-v1 shape ineligibility (see the eligibility table in
-    /// docs/compression-formats.md).
+    /// output. Also table encoder (table-v1 or table-v2) shape ineligibility
+    /// (see the eligibility tables in docs/compression-formats.md).
     UnsupportedFormat,
     DepthLimit,
     /// Consumers disagree on which duplicate wins. A duplicate in any object
@@ -157,7 +159,8 @@ pub struct Limits {
     /// Clamped to [`MAX_JSON_DEPTH_CEILING`], so no caller value can make the
     /// recursive scanner overflow the stack.
     pub max_json_depth: usize,
-    /// Arrays with more rows are never encoded as table-v1.
+    /// Applies per encoded array: an array with more rows is never encoded by
+    /// the table encoder (table-v1 or table-v2).
     pub max_table_rows: usize,
 }
 
@@ -213,20 +216,21 @@ pub trait TokenCounter {
 pub struct CompressionContext<'c> {
     pub mode: Mode,
     pub policy_version: u32,
-    /// Enables the JSON minifier. Also the fallback when table-v1 does not apply.
+    /// Enables the JSON minifier. Also the fallback when the table encoder
+    /// does not apply.
     pub json_minify: bool,
-    /// Enables the table-v1 encoder, tried before the minifier. Opt-in: it
-    /// is false in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
+    /// Enables the table encoder (table-v1 or table-v2), tried before the
+    /// minifier. Opt-in: it is false in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
     pub json_table: bool,
     /// Enables the exact line-run codec. With `json_minify` on, the codec
     /// handles text the JSON scanner rejects as `unsupported_format`. With
-    /// `json_minify` off, input table-v1 rejects as `unsupported_format` (all
-    /// input when `json_table` is off) goes to the codec. Other table-v1
-    /// rejections skip with their reason and the `json-table` id. When
-    /// `line_templates` is on, it takes precedence and the line-template codec
-    /// takes this codec's place. The codec skips input that already starts with
-    /// the `lines-v1` header as `unsupported_format`. `false` in
-    /// [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
+    /// `json_minify` off, input the table encoder rejects as
+    /// `unsupported_format` (all input when `json_table` is off) goes to the
+    /// codec. Other table encoder rejections skip with their reason and the
+    /// `json-table` id. When `line_templates` is on, it takes precedence and
+    /// the line-template codec takes this codec's place. The codec skips input
+    /// that already starts with the `lines-v1` header as `unsupported_format`.
+    /// `false` in [`FIRST_SLICE_JSON_MINIFY_CONTEXT`].
     pub exact_line_runs: bool,
     /// Enables the line-template codec. It takes the place of the line-run
     /// codec on the same routing and emits `lines-v2`, which also carries run
@@ -374,10 +378,10 @@ impl CompressionResult<'_> {
     }
 }
 
-/// Runs the enabled transforms under `ctx`: table-v1 first, then the JSON
-/// minifier, then the exact line-run codec for input the JSON transforms reject
-/// as unsupported_format. Any skip or failure returns the input borrowed, never
-/// a partial rewrite.
+/// Runs the enabled transforms under `ctx`: the table encoder (table-v1 or
+/// table-v2) first, then the JSON minifier, then the exact line-run codec for
+/// input the JSON transforms reject as unsupported_format. Any skip or failure
+/// returns the input borrowed, never a partial rewrite.
 pub fn compress<'a>(input: &'a str, ctx: &CompressionContext) -> CompressionResult<'a> {
     let start = Instant::now();
     let mut report = CompressionReport {
@@ -448,15 +452,19 @@ fn decide<'a>(
             token_counter: ctx.token_counter,
             ..TableOptions::default()
         };
-        match table::encode(input, &opts) {
+        match table::v2::encode(input, &opts) {
             Ok(text) => {
                 report.transform_id = JSON_TABLE_ID;
                 report.transform_version = JSON_TABLE_VERSION;
-                report.format_version = Some(JSON_TABLE_FORMAT_VERSION);
+                report.format_version = Some(if text.starts_with(table::v2::MARKER) {
+                    JSON_TABLE_V2_FORMAT_VERSION
+                } else {
+                    JSON_TABLE_FORMAT_VERSION
+                });
                 report.candidate_bytes = Some(text.len());
                 // The encoder validated `input`, so minifying it again succeeds.
                 let minified = minify(input, limits.max_json_depth)?;
-                if table::decode(&text).map(String::into_bytes) != Some(minified) {
+                if table::v2::decode(&text).map(String::into_bytes) != Some(minified) {
                     report.validation_outcome = ValidationOutcome::Failed;
                     return Err(Reason::InvalidCandidate);
                 }
@@ -484,10 +492,10 @@ fn decide<'a>(
         // Text the JSON transforms reject as unsupported_format is plain text. A
         // leading value rejected for duplicate_key, escaped_key or depth_limit
         // keeps the input on the JSON path, even when text lines follow. With
-        // json_minify off, input table-v1 rejects as unsupported_format (all
-        // input when json_table is off) arrives here. Other table-v1 rejections
-        // (insufficient_gain, duplicate_key, escaped_key, depth_limit) skip with
-        // that reason and the json-table id.
+        // json_minify off, input the table encoder (table-v1 or table-v2) rejects
+        // as unsupported_format (all input when json_table is off) arrives here.
+        // Other table encoder rejections (insufficient_gain, duplicate_key,
+        // escaped_key, depth_limit) skip with that reason and the json-table id.
         Err(Reason::UnsupportedFormat) if lines => {
             set_line_runs_identity(report, ctx);
             // Input that already starts with a header the codec emits is skipped as
