@@ -403,14 +403,15 @@ skeleton = minified JSON with each encoded array replaced by a hole
 hole     = label
 label    = "@" index
 index    = "0" / %x31-39 *DIGIT
-block    = header *( LF record )
+block    = "[" count "]{" column *( "," column ) "}" *( LF record )
 ```
 
 - The first line is `table-v2`, one space and the skeleton. Minified JSON holds no raw line break, so the skeleton is exactly the rest of the first line.
 - A hole is a label outside any JSON string in the skeleton. A `@` inside a string is text. A `@` cannot occur outside a string in valid JSON, so holes are unambiguous.
 - Holes are numbered `@0`, `@1`, `@2` and so on, in skeleton order. Each index occurs once. There is at least one hole.
 - Blocks follow in hole order. Each block starts on a new line with its label and one space.
-- A `block` is a table-v1 text without the `table-v1 ` prefix: the header `[count]{columns}` with the table-v1 header grammar, then exactly `count` records, each after a `\n`, with the table-v1 row, type and cell rules. A block ends after exactly `count` records. Any record line, bare or quoted, may start with `@`, so a decoder finds the end of a block by counting records.
+- `count` and `column` are the table-v1 header grammar rules. A `record` is one table-v1 record, as defined in table-v1 Rows.
+- A `block` is a table-v1 text without the `table-v1 ` prefix: the header `[count]{columns}` with the table-v1 `count` and `column` rules, then exactly `count` records, each after a `\n`, with the table-v1 row, type and cell rules. A block ends after exactly `count` records. Any record line, bare or quoted, may start with `@`, so a decoder finds the end of a block by counting records.
 - The text ends after the last record of the last block. There is no trailing line break unless the last record is empty.
 
 ### Decoder
