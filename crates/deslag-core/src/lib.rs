@@ -26,12 +26,14 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const JSON_MINIFY_ID: &str = "json-minify";
 /// Bumped whenever `minify_json` output can change for some input.
 pub const JSON_MINIFY_VERSION: u32 = 1;
-/// Stable transform identity for the table-v1 encoder.
+/// Stable transform identity for the table encoder.
 pub const JSON_TABLE_ID: &str = "json-table";
-/// Bumped whenever `table::encode` output can change for some input.
-pub const JSON_TABLE_VERSION: u32 = 1;
+/// Bumped whenever `table::v2::encode` output can change for some input.
+pub const JSON_TABLE_VERSION: u32 = 2;
 /// Format version of table-v1 output, as reported in `format_version`.
 pub const JSON_TABLE_FORMAT_VERSION: u32 = 1;
+/// Format version of table-v2 output, as reported in `format_version`.
+pub const JSON_TABLE_V2_FORMAT_VERSION: u32 = 2;
 /// Bumped whenever a [`CompressionReport`] field or its serialized form changes.
 pub const REPORT_SCHEMA_VERSION: u32 = 1;
 
@@ -431,15 +433,19 @@ fn decide<'a>(
             token_counter: ctx.token_counter,
             ..TableOptions::default()
         };
-        match table::encode(input, &opts) {
+        match table::v2::encode(input, &opts) {
             Ok(text) => {
                 report.transform_id = JSON_TABLE_ID;
                 report.transform_version = JSON_TABLE_VERSION;
-                report.format_version = Some(JSON_TABLE_FORMAT_VERSION);
+                report.format_version = Some(if text.starts_with(table::v2::MARKER) {
+                    JSON_TABLE_V2_FORMAT_VERSION
+                } else {
+                    JSON_TABLE_FORMAT_VERSION
+                });
                 report.candidate_bytes = Some(text.len());
                 // The encoder validated `input`, so minifying it again succeeds.
                 let minified = minify(input, limits.max_json_depth)?;
-                if table::decode(&text).map(String::into_bytes) != Some(minified) {
+                if table::v2::decode(&text).map(String::into_bytes) != Some(minified) {
                     report.validation_outcome = ValidationOutcome::Failed;
                     return Err(Reason::InvalidCandidate);
                 }
