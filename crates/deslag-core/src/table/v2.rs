@@ -77,10 +77,10 @@ pub(super) fn encode_object(
 }
 
 /// A bare array: table-v1 text, or `table-v2 @0` with one block when that is
-/// strictly shorter. A table block without sub-blocks never is in bytes,
-/// because `table-v2 @0\n@0 ` is longer than `table-v1 `. Selection compares
-/// bytes only, so a longer bucket block that would pass the token check is
-/// not tried. Rejections keep their
+/// strictly shorter. A table block without sub-blocks is never strictly
+/// shorter in bytes, because `table-v2 @0\n@0 ` is longer than `table-v1 `.
+/// Selection compares bytes only, so a longer bucket block never reaches the
+/// gain check, even when it would pass the token check. Rejections keep their
 /// table-v1 reason, except that a block failing the gain check reports
 /// `InsufficientGain`.
 fn encode_bare(input: &str, opts: &TableOptions) -> Result<String, Reason> {

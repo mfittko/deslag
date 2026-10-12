@@ -481,6 +481,8 @@ fn flips_with_sub_tables() -> String {
     format!("[{}]", items.join(","))
 }
 
+// The fixture sits clear of the label-length cost of reference cells and of
+// the nesting limit, which can make the blocks differ beyond their labels.
 #[test]
 fn bare_hole_and_sub_block_sites_pick_the_same_block() {
     let arr = flips_with_sub_tables();
