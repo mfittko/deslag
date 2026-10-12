@@ -3,7 +3,10 @@
 use std::{convert::Infallible, net::SocketAddr, time::Duration};
 
 use bytes::Bytes;
-use deslag_proxy::{Limits, Upstream, available_inspect_permits, serve_with};
+use deslag_proxy::{
+    Limits, Upstream, available_inspect_permits, serve_with,
+    session::{Mode, Store},
+};
 use http_body_util::Full;
 use hyper::{Request, Response, body::Incoming, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
@@ -191,7 +194,10 @@ async fn stalled_minify_uploads_release_permits_at_body_read_timeout() {
     };
     let upstream = Upstream::parse(&format!("http://{up}"))
         .unwrap()
-        .with_json_minification();
+        .with_json_minification(Store {
+            dir: std::env::temp_dir().join(format!("deslag-limits-{}", std::process::id())),
+            mode: Mode::Safe,
+        });
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(serve_with(listener, upstream, limits));

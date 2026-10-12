@@ -1,9 +1,16 @@
 //! Opt-in JSON minification of Bash tool results, against a local mock upstream.
 
-use std::{convert::Infallible, net::SocketAddr};
+use std::{
+    convert::Infallible,
+    net::SocketAddr,
+    sync::atomic::{AtomicU32, Ordering},
+};
 
 use bytes::Bytes;
-use deslag_proxy::{Upstream, serve};
+use deslag_proxy::{
+    Upstream, serve,
+    session::{Mode, Owner, Store, write_owner},
+};
 use http_body_util::{BodyExt, Full, channel::Channel};
 use hyper::{
     HeaderMap, Request, Response, body::Incoming, server::conn::http1, service::service_fn,
@@ -118,16 +125,35 @@ async fn mock() -> (SocketAddr, mpsc::UnboundedReceiver<Seen>) {
     (addr, rx)
 }
 
+/// With `minify`, the proxy owns compression in a fresh state directory and the
+/// session has started with a request that carries no tool results.
 async fn proxy(minify: bool) -> (SocketAddr, mpsc::UnboundedReceiver<Seen>) {
     let (upstream, seen) = mock().await;
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let mut upstream = Upstream::parse(&format!("http://{upstream}")).unwrap();
     if minify {
-        upstream = upstream.with_json_minification();
+        static N: AtomicU32 = AtomicU32::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "deslag-minify-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        write_owner(&dir, Owner::Proxy).unwrap();
+        let store = Store {
+            dir,
+            mode: Mode::Safe,
+        };
+        upstream = upstream.with_json_minification(store);
     }
     tokio::spawn(serve(listener, upstream));
-    (addr, seen)
+    let mut p = (addr, seen);
+    if minify {
+        let first = r#"{"model": "m", "messages": [{"role": "user", "content": "hi"}]}"#;
+        relay(&mut p, messages(), first).await;
+    }
+    p
 }
 
 /// Sends one request through the proxy and returns what the upstream received.
@@ -162,7 +188,9 @@ async fn relay(
 }
 
 fn messages() -> hyper::http::request::Builder {
-    Request::post("/v1/messages?beta=true").header("content-type", "application/json")
+    Request::post("/v1/messages?beta=true")
+        .header("content-type", "application/json")
+        .header("x-claude-code-session-id", "session-a")
 }
 
 #[tokio::test]

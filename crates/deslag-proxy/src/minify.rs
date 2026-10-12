@@ -2,19 +2,19 @@
 //!
 //! The request is never re-serialized. Each rewritten string lexeme is located
 //! by its byte span in the original body and spliced; all other bytes are
-//! forwarded unchanged. Every decision depends only on the tool_use block
-//! (`id`, `name`) and the tool_result block, which the client resends
-//! unchanged, so resending history yields the same bytes upstream.
+//! forwarded unchanged.
 //!
-//! Experimental. The rewrite is stateless and keeps no replay manifest yet.
-//! Enabling, disabling or upgrading `--minify-json` mid-session rewrites
-//! already-submitted history on resend. Start a new session after any such
-//! change. Do not enable the hook and proxy flags at the same time: one
-//! component owns compression. Requests with `content-encoding` pass through,
-//! so a client that compresses only some requests would see drift. Requests
-//! with a body-integrity header or with trailers also pass through. Trailers
-//! are not forwarded upstream. `/v1/messages/count_tokens` is not rewritten,
-//! so its counts can overstate.
+//! Only requests with an `x-claude-code-session-id` header are rewritten, and
+//! only in sessions the proxy owns. Every tool result gets one decision,
+//! `unchanged` or json-min v1, pinned in the session manifest (see `session`)
+//! before the request is forwarded. Resent history replays its pinned
+//! decision, so its bytes upstream stay the same across resend, restart,
+//! disable and model switch. Missing or inconsistent replay state rejects the
+//! request with `400` and is never forwarded. Requests with `content-encoding`
+//! pass through, so a client that compresses only some requests would see
+//! drift. Requests with a body-integrity header or with trailers also pass
+//! through. Trailers are not forwarded upstream. `/v1/messages/count_tokens`
+//! is not rewritten, so its counts can overstate.
 
 use std::{
     collections::HashSet,
@@ -35,6 +35,8 @@ use hyper::{
 use serde::de::{Deserialize, Deserializer, Error, MapAccess, Visitor};
 use serde_json::value::RawValue;
 use tokio::{sync::Semaphore, time::Duration};
+
+use crate::session::{Candidate, ReplayError, Store};
 
 /// ponytail: at or above the Anthropic Messages request limit (32 MB), so every
 /// request the provider accepts is inspected and the decision never depends on
@@ -115,41 +117,55 @@ impl Body for ReqBody {
     }
 }
 
-/// Returns the request to forward. With `enabled`, an uncompressed
-/// `POST /v1/messages` body is buffered and its Bash tool results minified.
+/// Status, error type and message of a request the proxy answers itself.
+pub(crate) type Reject = (StatusCode, &'static str, &'static str);
+
+const READ_FAILED: &str = "deslag: request body read failed";
+const STATE_FAILED: Reject = (
+    StatusCode::INTERNAL_SERVER_ERROR,
+    "api_error",
+    "deslag: session state write failed",
+);
+const SCOPE_HEADER: &str = "x-claude-code-session-id";
+
+/// Returns the request to forward. With a `store`, an uncompressed
+/// `POST /v1/messages` body is buffered and its tool results replayed.
 /// Anything else streams through untouched. A failed buffered read is `400`.
 /// A buffered read that exceeds `read_timeout` after its permit is granted is
-/// `408`: the request is rejected, never forwarded unrewritten.
+/// `408`: the request is rejected, never forwarded unrewritten. Replay errors
+/// are `400`, a failed state commit is `500`; neither is forwarded.
 pub(crate) async fn prepare(
     req: Request<Incoming>,
-    enabled: bool,
+    store: Option<&Store>,
     read_timeout: Duration,
-) -> Result<Request<ReqBody>, StatusCode> {
-    let eligible = enabled
-        && req.method() == Method::POST
+) -> Result<Request<ReqBody>, Reject> {
+    let eligible = req.method() == Method::POST
         && req.uri().path() == "/v1/messages"
         && !req.headers().contains_key(header::CONTENT_ENCODING)
         && !INTEGRITY_HEADERS
             .iter()
             .any(|h| req.headers().contains_key(*h));
     let (parts, body) = req.into_parts();
-    if !eligible {
+    let Some(store) = store.filter(|_| eligible) else {
         let body = ReqBody {
             prefix: None,
             rest: Some(body),
             trailers: None,
         };
         return Ok(Request::from_parts(parts, body));
-    }
+    };
     let _permit = INSPECT_PERMITS
         .acquire()
         .await
         .expect("semaphore is never closed");
     // The deadline starts at the permit, so time spent queued does not count.
-    match tokio::time::timeout(read_timeout, buffer(parts, body)).await {
-        Ok(Ok(req)) => Ok(req),
-        Ok(Err(_)) => Err(StatusCode::BAD_REQUEST),
-        Err(_) => Err(StatusCode::REQUEST_TIMEOUT),
+    match tokio::time::timeout(read_timeout, buffer(parts, body, store.clone())).await {
+        Ok(result) => result,
+        Err(_) => Err((
+            StatusCode::REQUEST_TIMEOUT,
+            "invalid_request_error",
+            READ_FAILED,
+        )),
     }
 }
 
@@ -158,12 +174,23 @@ pub(crate) async fn prepare(
 /// `content-digest` can pin its bytes. The trailers are kept in the body, but
 /// they do not reach the upstream: the hop-by-hop strip removes the `trailer`
 /// header, and a `content-length` body carries no trailers over HTTP/1.1.
-async fn buffer(mut parts: Parts, mut body: Incoming) -> Result<Request<ReqBody>, hyper::Error> {
+async fn buffer(
+    mut parts: Parts,
+    mut body: Incoming,
+    store: Store,
+) -> Result<Request<ReqBody>, Reject> {
     let hint = body.size_hint().exact().unwrap_or(0);
     let mut buf = Vec::with_capacity(hint.min(MAX_INSPECT_BYTES as u64 + 1) as usize);
     let mut trailers: Option<HeaderMap> = None;
     while let Some(frame) = body.frame().await {
-        let data = match frame?.into_data() {
+        let frame = frame.map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                "invalid_request_error",
+                READ_FAILED,
+            )
+        })?;
+        let data = match frame.into_data() {
             Ok(data) => data,
             Err(frame) => {
                 if let Ok(t) = frame.into_trailers() {
@@ -183,78 +210,152 @@ async fn buffer(mut parts: Parts, mut body: Incoming) -> Result<Request<ReqBody>
             return Ok(Request::from_parts(parts, body));
         }
     }
-    if trailers.is_some() {
-        let body = ReqBody {
-            prefix: Some(buf.into()),
-            rest: None,
-            trailers,
-        };
-        return Ok(Request::from_parts(parts, body));
-    }
-    if let Some(rewritten) = rewrite(&buf) {
-        buf = rewritten;
-        parts
-            .headers
-            .insert(header::CONTENT_LENGTH, buf.len().into());
+    let scope = parts
+        .headers
+        .get(SCOPE_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned);
+    if let (Some(scope), None) = (scope, &trailers) {
+        // Manifest IO blocks, so the replay runs off the async workers.
+        let (back, result) = tokio::task::spawn_blocking(move || {
+            let result = rewrite(&buf, &store, &scope);
+            (buf, result)
+        })
+        .await
+        .map_err(|_| STATE_FAILED)?;
+        buf = back;
+        if let Some(rewritten) = result.map_err(reject)? {
+            buf = rewritten;
+            parts
+                .headers
+                .insert(header::CONTENT_LENGTH, buf.len().into());
+        }
     }
     let body = ReqBody {
         prefix: Some(buf.into()),
         rest: None,
-        trailers: None,
+        trailers,
     };
     Ok(Request::from_parts(parts, body))
 }
 
-/// Minifies the string content of tool_result blocks that answer a Bash
-/// tool_use. Returns `None` when nothing changed or the body is not a JSON object.
-fn rewrite(body: &[u8]) -> Option<Vec<u8>> {
+fn reject(e: ReplayError) -> Reject {
+    let message = match e {
+        ReplayError::Io(_) => return STATE_FAILED,
+        ReplayError::MissingManifest => {
+            "deslag: no replay state for this session history; start a new session"
+        }
+        ReplayError::UnsupportedManifest => {
+            "deslag: unsupported replay state version; start a new session"
+        }
+        ReplayError::DigestMismatch(_) => "deslag: a sent tool result changed; start a new session",
+        ReplayError::UndecidedHistory(_) => {
+            "deslag: history holds a tool result with no recorded decision; start a new session"
+        }
+        ReplayError::RetiredTransform(_) => {
+            "deslag: a pinned transform is not available in this version; start a new session"
+        }
+        ReplayError::CorruptDecision(_) => {
+            "deslag: replay state holds an invalid decision; start a new session"
+        }
+    };
+    (StatusCode::BAD_REQUEST, "invalid_request_error", message)
+}
+
+/// Replays the session's decisions on the tool results and splices json-min
+/// output where they encode. `Ok(None)` forwards the body unchanged.
+fn rewrite(body: &[u8], store: &Store, scope: &str) -> Result<Option<Vec<u8>>, ReplayError> {
+    let Some((model, bash_ids, results)) = tool_results(body) else {
+        return Ok(None);
+    };
+    let candidates: Vec<Candidate> = results
+        .iter()
+        .map(|(id, newest, targets)| Candidate {
+            id,
+            newest: *newest,
+            texts: targets.iter().filter_map(|t| parse(t)).collect(),
+        })
+        .collect();
+    // Only a Bash result whose text json-min changes is encoded.
+    let encode = store.replay(scope, model, &candidates, |c| {
+        bash_ids.contains(c.id) && c.texts.iter().any(|t| minify(t).is_some())
+    })?;
+    let targets = results
+        .iter()
+        .zip(encode)
+        .filter(|(_, encode)| *encode)
+        .flat_map(|((_, _, targets), _)| targets.iter().copied());
+    Ok(splice(body, targets))
+}
+
+fn minify(text: &str) -> Option<String> {
+    compress(text, &FIRST_SLICE_JSON_MINIFY_CONTEXT).into_changed()
+}
+
+/// Model, Bash tool_use ids, and per tool result its id, whether it is in the
+/// last message, and its string targets in document order.
+type ToolResults<'a> = (
+    &'a str,
+    HashSet<&'a str>,
+    Vec<(&'a str, bool, Vec<&'a RawValue>)>,
+);
+
+/// `None` when the body is not a JSON object with a non-empty `messages` array.
+fn tool_results(body: &[u8]) -> Option<ToolResults<'_>> {
     let root: Obj = serde_json::from_slice(body).ok()?;
-    let messages: Vec<Obj> = parse::<Vec<&RawValue>>(root.get("messages")?)?
+    let raw = parse::<Vec<&RawValue>>(root.get("messages")?)?;
+    let last = raw.len().checked_sub(1)?;
+    let messages: Vec<(usize, Obj)> = raw
         .into_iter()
-        .filter_map(parse)
+        .enumerate()
+        .filter_map(|(i, m)| Some((i, parse(m)?)))
         .collect();
     let blocks = |role: &'static str| {
         messages
             .iter()
-            .filter(move |m| m.str("role") == Some(role))
-            .filter_map(|m| parse::<Vec<&RawValue>>(m.get("content")?))
-            .flatten()
-            .filter_map(parse::<Obj>)
+            .filter(move |(_, m)| m.str("role") == Some(role))
+            .filter_map(|(i, m)| Some((*i, parse::<Vec<&RawValue>>(m.get("content")?)?)))
+            .flat_map(|(i, blocks)| {
+                blocks
+                    .into_iter()
+                    .filter_map(parse::<Obj>)
+                    .map(move |b| (i, b))
+            })
     };
-    let bash_ids: HashSet<&str> = blocks("assistant")
-        .filter(|b| b.str("type") == Some("tool_use") && b.str("name") == Some("Bash"))
-        .filter_map(|b| b.str("id"))
+    let bash_ids = blocks("assistant")
+        .filter(|(_, b)| b.str("type") == Some("tool_use") && b.str("name") == Some("Bash"))
+        .filter_map(|(_, b)| b.str("id"))
         .collect();
-    let mut targets = Vec::new();
-    for block in blocks("user") {
-        if block.str("type") != Some("tool_result")
-            || !block
-                .str("tool_use_id")
-                .is_some_and(|id| bash_ids.contains(id))
-        {
-            continue;
-        }
-        let Some(content) = block.get("content") else {
+    let mut results = Vec::new();
+    for (i, block) in blocks("user") {
+        let (Some("tool_result"), Some(id)) = (block.str("type"), block.str("tool_use_id")) else {
             continue;
         };
-        match parse::<Vec<&RawValue>>(content) {
-            Some(items) => targets.extend(
-                items
+        let targets = match block.get("content") {
+            None => Vec::new(),
+            Some(content) => match parse::<Vec<&RawValue>>(content) {
+                Some(items) => items
                     .into_iter()
                     .filter_map(parse::<Obj>)
                     .filter(|item| item.str("type") == Some("text"))
-                    .filter_map(|item| item.get("text")),
-            ),
-            None => targets.push(content),
-        }
+                    .filter_map(|item| item.get("text"))
+                    .collect(),
+                None => vec![content],
+            },
+        };
+        results.push((id, i == last, targets));
     }
+    Some((root.str("model").unwrap_or_default(), bash_ids, results))
+}
+
+/// Replaces each string target that json-min changes. `None` when nothing changed.
+fn splice<'a>(body: &[u8], targets: impl Iterator<Item = &'a RawValue>) -> Option<Vec<u8>> {
     // Targets are in document order, so spans are increasing and disjoint.
     let mut out = Vec::with_capacity(body.len());
     let mut pos = 0;
     for raw in targets {
-        let Some(minified) = parse::<String>(raw)
-            .and_then(|s| compress(&s, &FIRST_SLICE_JSON_MINIFY_CONTEXT).into_changed())
-        else {
+        let Some(minified) = parse::<String>(raw).and_then(|s| minify(&s)) else {
             continue;
         };
         let start = (raw.get().as_ptr() as usize).checked_sub(body.as_ptr() as usize)?;
@@ -326,6 +427,7 @@ mod tests {
     use hyper::HeaderMap;
 
     use super::{ReqBody, rewrite};
+    use crate::session::{Mode, Store};
 
     #[tokio::test]
     async fn buffered_body_replays_its_trailers() {
@@ -350,7 +452,11 @@ mod tests {
             br#"{"messages":[]}"#,
             br#"{"messages":[{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"[ 1 ]"}]}]}"#,
         ] {
-            assert_eq!(rewrite(body), None);
+            let store = Store {
+                dir: std::env::temp_dir().join("deslag-no-such-state-dir"),
+                mode: Mode::Safe,
+            };
+            assert!(matches!(rewrite(body, &store, "s"), Ok(None)));
         }
     }
 }

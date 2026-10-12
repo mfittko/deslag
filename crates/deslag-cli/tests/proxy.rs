@@ -5,9 +5,12 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
+/// The binary with its state directory under the system temp dir, never the user's.
 fn deslag(args: &[&str]) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_deslag"));
+    let state = std::env::temp_dir().join(format!("deslag-cli-proxy-{}", std::process::id()));
     cmd.args(args)
+        .env("DESLAG_STATE_DIR", state)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -112,4 +115,21 @@ fn rejected_arguments_exit_2_with_message() {
         assert!(stderr.contains(expected), "{args:?}: {stderr}");
         assert!(output.stdout.is_empty(), "{args:?}");
     }
+}
+
+#[test]
+fn minify_json_without_a_state_directory_exits_2() {
+    let mut cmd = deslag(&[
+        "proxy",
+        "--upstream",
+        "https://api.anthropic.com",
+        "--minify-json",
+    ]);
+    for var in ["DESLAG_STATE_DIR", "XDG_STATE_HOME", "HOME"] {
+        cmd.env_remove(var);
+    }
+    let output = cmd.output().unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(2), "{stderr}");
+    assert!(stderr.contains("needs a state directory"), "{stderr}");
 }

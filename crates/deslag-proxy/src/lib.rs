@@ -2,7 +2,8 @@
 //!
 //! Request and response bodies stream through unchanged as hyper bodies; nothing
 //! is buffered, parsed or logged. The one exception is opt-in JSON minification,
-//! which buffers and patches `POST /v1/messages` request bodies (see `minify`).
+//! which buffers and patches `POST /v1/messages` request bodies (see `minify`)
+//! and keeps per-session replay state on disk (see [`session`]).
 //! The upstream authority comes only from configuration, never from the request
 //! target, `Host` header or credentials.
 
@@ -38,7 +39,7 @@ pub struct Upstream {
     scheme: &'static str,
     authority: String,
     base_path: String,
-    minify_json: bool,
+    replay: Option<session::Store>,
 }
 
 impl Upstream {
@@ -71,13 +72,14 @@ impl Upstream {
             scheme,
             authority: authority.to_string(),
             base_path: uri.path().trim_end_matches('/').to_string(),
-            minify_json: false,
+            replay: None,
         })
     }
 
-    /// Enables minification of JSON in Bash tool results of `POST /v1/messages`.
-    pub fn with_json_minification(mut self) -> Self {
-        self.minify_json = true;
+    /// Enables minification of JSON in Bash tool results of `POST /v1/messages`,
+    /// with per-session replay state in `store`.
+    pub fn with_json_minification(mut self, store: session::Store) -> Self {
+        self.replay = Some(store);
         self
     }
 
@@ -118,7 +120,7 @@ impl fmt::Debug for Upstream {
             .field("scheme", &self.scheme)
             .field("authority", &self.authority)
             .field("base_path", &base_path)
-            .field("minify_json", &self.minify_json)
+            .field("minify_json", &self.replay.is_some())
             .finish()
     }
 }
@@ -315,15 +317,9 @@ async fn forward(
             "unsupported request target",
         ));
     };
-    let mut req = match minify::prepare(req, upstream.minify_json, body_read_timeout).await {
+    let mut req = match minify::prepare(req, upstream.replay.as_ref(), body_read_timeout).await {
         Ok(req) => req,
-        Err(status) => {
-            return Ok(error(
-                status,
-                "invalid_request_error",
-                "deslag: request body read failed",
-            ));
-        }
+        Err((status, kind, message)) => return Ok(error(status, kind, message)),
     };
     *req.uri_mut() = target;
     // Upstream always speaks HTTP/1.1, whatever version the client used.

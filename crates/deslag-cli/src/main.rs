@@ -3,8 +3,10 @@
 use std::io::{self, Read, Write};
 use std::net::SocketAddr;
 use std::process::ExitCode;
+use std::time::SystemTime;
 
 use deslag_core::FIRST_SLICE_JSON_MINIFY_CONTEXT;
+use deslag_proxy::session::{self, Mode, Store};
 use deslag_proxy::{Upstream, serve};
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
@@ -72,7 +74,16 @@ fn proxy(args: &[&str]) -> Result<(), String> {
     }
     let mut upstream = Upstream::parse(upstream.ok_or(PROXY_USAGE)?)?;
     if minify_json {
-        upstream = upstream.with_json_minification();
+        let dir = session::state_dir().ok_or(
+            "--minify-json needs a state directory: set DESLAG_STATE_DIR, XDG_STATE_HOME or HOME",
+        )?;
+        session::prune(&dir, session::RETENTION, SystemTime::now())
+            .map_err(|e| format!("cannot prune session state in {}: {e}", dir.display()))?;
+        let store = Store {
+            dir,
+            mode: Mode::Safe,
+        };
+        upstream = upstream.with_json_minification(store);
     }
     let addr: SocketAddr = listen
         .parse()
