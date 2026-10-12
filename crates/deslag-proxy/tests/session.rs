@@ -384,3 +384,150 @@ fn pinned_decision_forms_are_validated() {
     }
     fs::remove_dir_all(dir).unwrap();
 }
+
+fn old(c: Candidate<'_>) -> Candidate<'_> {
+    Candidate { newest: false, ..c }
+}
+
+#[test]
+fn without_a_manifest_hook_and_none_owners_pass_through_without_writes() {
+    let dir = temp_dir();
+    let c = [candidate("toolu_1", "{ \"a\": 1 }")];
+    for owner in [Owner::Hook, Owner::None] {
+        write_owner(&dir, owner).unwrap();
+        let store = Store {
+            dir: dir.clone(),
+            mode: Mode::Safe,
+        };
+        for cs in [&c[..], &[]] {
+            let got = store.replay("s", "m", cs, |_| unreachable!()).unwrap();
+            assert_eq!(got, vec![false; cs.len()], "{owner:?}");
+        }
+        assert!(!manifest_path(&dir, "s").exists(), "{owner:?}");
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn proxy_owner_with_tool_results_and_no_manifest_is_missing_manifest() {
+    let dir = temp_dir();
+    let got = store(&dir).replay("s", "m", &[candidate("toolu_1", "x")], |_| unreachable!());
+    assert!(matches!(got, Err(ReplayError::MissingManifest)), "{got:?}");
+    assert!(!manifest_path(&dir, "s").exists());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn corrupt_manifest_with_tool_results_is_missing_manifest() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    let path = manifest_path(&dir, "s");
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let mut array = manifest(&dir, "s");
+    array["decisions"] = json!([]);
+    for bytes in [b"{ not json".to_vec(), array.to_string().into_bytes()] {
+        fs::write(&path, &bytes).unwrap();
+        let got = store.replay("s", "m", &[candidate("toolu_1", "x")], |_| unreachable!());
+        assert!(matches!(got, Err(ReplayError::MissingManifest)), "{got:?}");
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn version_2_manifest_with_tool_results_is_unsupported() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let mut m = manifest(&dir, "s");
+    m["version"] = json!(2);
+    fs::write(manifest_path(&dir, "s"), m.to_string()).unwrap();
+    let got = store.replay("s", "m", &[candidate("toolu_1", "x")], |_| unreachable!());
+    assert!(
+        matches!(got, Err(ReplayError::UnsupportedManifest)),
+        "{got:?}"
+    );
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn manifest_with_a_foreign_owner_or_no_mode_is_missing_manifest() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let base = manifest(&dir, "s");
+    let mut hook = base.clone();
+    hook["owner"] = json!("hook");
+    let mut no_owner = base.clone();
+    no_owner.as_object_mut().unwrap().remove("owner");
+    let mut no_mode = base.clone();
+    no_mode.as_object_mut().unwrap().remove("mode");
+    for m in [hook, no_owner, no_mode] {
+        fs::write(manifest_path(&dir, "s"), m.to_string()).unwrap();
+        let got = store.replay("s", "m", &[candidate("toolu_1", "x")], |_| unreachable!());
+        assert!(
+            matches!(got, Err(ReplayError::MissingManifest)),
+            "{m}: {got:?}"
+        );
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn mode_off_session_passes_through_without_writes() {
+    let dir = temp_dir();
+    let store = Store {
+        mode: Mode::Off,
+        ..store(&dir)
+    };
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let path = manifest_path(&dir, "s");
+    let before = fs::read(&path).unwrap();
+    assert_eq!(manifest(&dir, "s")["mode"], "off");
+    let c = [candidate("toolu_1", "{ \"a\": 1 }")];
+    assert_eq!(
+        store.replay("s", "m", &c, |_| unreachable!()).unwrap(),
+        [false]
+    );
+    assert_eq!(fs::read(&path).unwrap(), before);
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn unknown_result_outside_the_newest_message_is_undecided_history() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let got = store.replay(
+        "s",
+        "m",
+        &[old(candidate("toolu_1", "x"))],
+        |_| unreachable!(),
+    );
+    assert!(
+        matches!(&got, Err(ReplayError::UndecidedHistory(id)) if id == "toolu_1"),
+        "{got:?}"
+    );
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn after_a_switch_to_hook_pinned_results_replay_and_new_ones_stay_unchanged() {
+    let dir = temp_dir();
+    let store = store(&dir);
+    store.replay("s", "m", &[], |_| true).unwrap();
+    let first = [candidate("toolu_1", "{ \"a\": 1 }")];
+    assert_eq!(store.replay("s", "m", &first, |_| true).unwrap(), [true]);
+    write_owner(&dir, Owner::Hook).unwrap();
+    let c = [
+        old(candidate("toolu_1", "{ \"a\": 1 }")),
+        candidate("toolu_2", "{ \"b\": 2 }"),
+    ];
+    let got = store.replay("s", "m", &c, |_| panic!("decide under hook owner"));
+    assert_eq!(got.unwrap(), [true, false]);
+    let m = manifest(&dir, "s");
+    assert_eq!(m["decisions"]["toolu_1"]["encoded"]["transform"], ID);
+    assert_eq!(m["decisions"]["toolu_2"]["unchanged"], true);
+    assert!(m["decisions"]["toolu_2"].get("encoded").is_none());
+    fs::remove_dir_all(dir).unwrap();
+}
