@@ -2,6 +2,7 @@
 //! Includes process spawn, stdin/stdout pipes and exit. No thresholds.
 
 use std::io::Write;
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -36,10 +37,14 @@ fn event() -> Vec<u8> {
     serde_json::to_vec(&event).unwrap()
 }
 
-fn invoke(args: &[&str], input: &[u8]) -> Duration {
+fn invoke(dir: &Path, args: &[&str], input: &[u8]) -> Duration {
     let start = Instant::now();
     let mut child = Command::new(env!("CARGO_BIN_EXE_deslag"))
         .args(args)
+        // Isolate from the host Claude settings: the conflict scan reads them.
+        .env("CLAUDE_CONFIG_DIR", dir)
+        .env("CLAUDE_PROJECT_DIR", dir)
+        .env("HOME", dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -60,6 +65,9 @@ fn percentile(sorted: &[Duration], q: f64) -> Duration {
 
 fn main() {
     let input = event();
+    let dir = std::env::temp_dir().join(format!("deslag-bench-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
     println!(
         "### deslag hook claude, whole process ({} byte event, concurrency 1, warmup {WARMUP}, samples {SAMPLES})\n",
         input.len()
@@ -71,9 +79,9 @@ fn main() {
         ("--minify-json", &["hook", "claude", "--minify-json"]),
     ] {
         for _ in 0..WARMUP {
-            invoke(args, &input);
+            invoke(&dir, args, &input);
         }
-        let mut times: Vec<Duration> = (0..SAMPLES).map(|_| invoke(args, &input)).collect();
+        let mut times: Vec<Duration> = (0..SAMPLES).map(|_| invoke(&dir, args, &input)).collect();
         times.sort();
         println!(
             "| {mode} | {:?} | {:?} | {:?} |",
@@ -83,4 +91,5 @@ fn main() {
         );
     }
     println!();
+    let _ = std::fs::remove_dir_all(&dir);
 }
