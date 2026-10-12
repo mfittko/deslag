@@ -96,22 +96,37 @@ pub fn score(answer: &str, accepted: &[String], rule: Rule, tolerance: f64) -> E
     }
 }
 
-/// Lower one-sided 95% bound on arm-minus-baseline success over `n` pairs,
-/// Agresti-Min adjusted Wald for matched proportions. `b` counts pairs where
-/// only the baseline succeeded, `c` pairs where only the arm succeeded.
-pub fn lower_bound(n: u32, b: u32, c: u32) -> f64 {
+/// Agresti-Min adjusted difference (arm minus baseline) and its standard error
+/// over `n` pairs. `b` counts pairs where only the baseline succeeded, `c`
+/// pairs where only the arm succeeded.
+fn adjusted(n: u32, b: u32, c: u32) -> (f64, f64) {
     let n2 = f64::from(n) + 2.0;
     let (b, c) = (f64::from(b) + 0.5, f64::from(c) + 0.5);
     let var = ((b + c) - (c - b).powi(2) / n2) / (n2 * n2);
-    (c - b) / n2 - Z * var.sqrt()
+    ((c - b) / n2, var.sqrt())
 }
 
+/// Lower one-sided 95% bound on arm-minus-baseline success, Agresti-Min
+/// adjusted Wald for matched proportions.
+pub fn lower_bound(n: u32, b: u32, c: u32) -> f64 {
+    let (d, se) = adjusted(n, b, c);
+    d - Z * se
+}
+
+/// Upper one-sided 95% bound, the mirror of [`lower_bound`].
+pub fn upper_bound(n: u32, b: u32, c: u32) -> f64 {
+    let (d, se) = adjusted(n, b, c);
+    d + Z * se
+}
+
+/// `inferior` means the upper bound is below the margin, so inferiority is
+/// shown at the same level as a pass.
 pub fn verdict(n: u32, b: u32, c: u32) -> &'static str {
     if n == 0 {
         "no data"
     } else if lower_bound(n, b, c) > -MARGIN {
         "passes"
-    } else if (f64::from(c) - f64::from(b)) / f64::from(n) < -MARGIN {
+    } else if upper_bound(n, b, c) < -MARGIN {
         "inferior"
     } else {
         "not shown"

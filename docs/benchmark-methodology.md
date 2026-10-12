@@ -87,9 +87,10 @@ n' = n + 2
 d' = (c - b) / n'
 se = sqrt(((b + 0.5) + (c + 0.5) - (c - b)^2 / n') / n'^2)
 lower = d' - 1.6449 * se
+upper = d' + 1.6449 * se
 ```
 
-The arm passes when `lower > -0.02`. Otherwise the verdict is `not shown`. The verdict is `inferior` only when the unadjusted point estimate `(c - b) / n` is also below -0.02. A `not shown` verdict is no evidence of equivalence and no evidence of harm.
+The arm passes when `lower > -0.02`. The verdict is `inferior` when `upper < -0.02`, so inferiority beyond the margin is shown at the same one-sided 95% level. Otherwise the verdict is `not shown`. A `not shown` verdict is no evidence of equivalence and no evidence of harm.
 
 With zero discordant pairs, `lower = -1.6449 / (n + 2)`. That exceeds -0.02 only for `n >= 81`. A corpus with fewer than 81 paired tasks for an arm is inconclusive by construction. The initial corpus is such a pilot.
 

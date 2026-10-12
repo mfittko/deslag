@@ -84,14 +84,25 @@ fn agresti_min_bound_matches_hand_values() {
     let want = -2.0 / 102.0 - 1.6449 * (5.0_f64 - 4.0 / 102.0).sqrt() / 102.0;
     assert!((lower_bound(100, 3, 1) - want).abs() < 1e-12);
     assert!((want - (-0.055526)).abs() < 1e-5);
+    // n = 20, b = 8, c = 0: d' = -8/22, var = (9 - 64/22) / 22^2.
+    let want = -8.0 / 22.0 + 1.6449 * (9.0_f64 - 64.0 / 22.0).sqrt() / 22.0;
+    assert!((upper_bound(20, 8, 0) - want).abs() < 1e-12);
+    assert!((want - (-0.179109)).abs() < 1e-5);
 }
 
 #[test]
 fn minimum_pilot_size_is_81() {
     assert_eq!(verdict(80, 0, 0), "not shown");
     assert_eq!(verdict(81, 0, 0), "passes");
-    assert_eq!(verdict(10, 3, 0), "inferior");
     assert_eq!(verdict(0, 0, 0), "no data");
+}
+
+#[test]
+fn inferior_needs_the_upper_bound_below_the_margin() {
+    // Point estimate -30 pp, but the upper bound is about -0.3 pp.
+    assert!(upper_bound(10, 3, 0) > -0.02);
+    assert_eq!(verdict(10, 3, 0), "not shown");
+    assert_eq!(verdict(20, 8, 0), "inferior");
 }
 
 #[test]

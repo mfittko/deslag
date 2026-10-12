@@ -165,7 +165,7 @@ pub fn render(text: &str) -> Result<String, String> {
         })
         .collect()
     };
-    let note = "Non-control tasks. Agresti-Min lower one-sided 95% bound; an arm passes when the bound exceeds -2.0 pp. b: only baseline succeeded; c: only the arm succeeded.\n\n";
+    let note = "Non-control tasks. Agresti-Min lower one-sided 95% bound; an arm passes when the bound exceeds -2.0 pp and is inferior when the upper one-sided 95% bound is below -2.0 pp. b: only baseline succeeded; c: only the arm succeeded.\n\n";
     let head =
         "Arm|Pairs|Unchanged|b|c|Baseline success|Arm success|Difference pp|Lower bound pp|Verdict";
     let per_arm = scoped(&|s| s == "all", false);
