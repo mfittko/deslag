@@ -13,7 +13,9 @@
 //! resend, restart, disable and model switch. Missing or inconsistent replay
 //! state rejects the request with `400` and is never forwarded, while the
 //! owner is `proxy` or the session has a manifest. Requests with
-//! `content-encoding`, a body-integrity header or trailers pass through
+//! `content-encoding`, a body-integrity header, trailers or a body over
+//! `MAX_INSPECT_BYTES` pass through unreplayed: their pinned encoded results go
+//! out in original form, which drifts the prefix of that request. They are
 //! unrecorded, so their new tool results stay undecided. A later request in
 //! that session that resends them fails with `400`; start a new session.
 //! Trailers are not forwarded upstream. `/v1/messages/count_tokens` is not
@@ -36,7 +38,7 @@ use hyper::{
     http::request::Parts,
 };
 use serde::de::{Deserialize, Deserializer, Error, MapAccess, Visitor};
-use serde_json::value::RawValue;
+use serde_json::{Value, value::RawValue};
 use tokio::{sync::Semaphore, time::Duration};
 
 use crate::session::{Candidate, ReplayError, Store};
@@ -133,7 +135,7 @@ const STATE_FAILED: Reject = (
 const SCOPE_HEADER: &str = "x-claude-code-session-id";
 
 /// Returns the request to forward. With a `store`, an uncompressed
-/// `POST /v1/messages` body is buffered and its tool results replayed.
+/// `POST /v1/messages` body with a non-empty session id is buffered and its tool results replayed.
 /// Anything else streams through untouched. A failed buffered read is `400`.
 /// A buffered read that exceeds `read_timeout` after its permit is granted is
 /// `408`: the request is rejected, never forwarded unrewritten. The timeout
@@ -144,8 +146,11 @@ pub(crate) async fn prepare(
     store: Option<&Store>,
     read_timeout: Duration,
 ) -> Result<Request<ReqBody>, Reject> {
+    // Only a scoped request is replayed, so a request without a session id
+    // streams through and never takes an inspection permit.
     let eligible = req.method() == Method::POST
         && req.uri().path() == "/v1/messages"
+        && scope_of(req.headers()).is_some()
         && !req.headers().contains_key(header::CONTENT_ENCODING)
         && !INTEGRITY_HEADERS
             .iter()
@@ -178,13 +183,8 @@ pub(crate) async fn prepare(
             Ok(Ok(Buffered::Overflow(req))) => return Ok(req),
             Ok(Ok(Buffered::Complete(parts, buf, trailers))) => (parts, buf, trailers),
         };
-    let scope = parts
-        .headers
-        .get(SCOPE_HEADER)
-        .and_then(|v| v.to_str().ok())
-        .filter(|s| !s.is_empty())
-        .map(str::to_owned);
-    if let (Some(scope), None) = (scope, &trailers) {
+    if let (Some(scope), None) = (scope_of(&parts.headers), &trailers) {
+        let scope = scope.to_owned();
         // Manifest IO blocks, so the replay runs off the async workers. The
         // blocking task owns the permit, so the buffer stays counted against
         // `INSPECT_PERMITS` until the replay ends, even if this future is dropped.
@@ -210,6 +210,14 @@ pub(crate) async fn prepare(
         trailers,
     };
     Ok(Request::from_parts(parts, body))
+}
+
+/// The non-empty session id, or `None`.
+fn scope_of(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get(SCOPE_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .filter(|s| !s.is_empty())
 }
 
 /// A buffered request body.
@@ -291,9 +299,10 @@ fn rewrite(body: &[u8], store: &Store, scope: &str) -> Result<Option<Vec<u8>>, R
     };
     let candidates: Vec<Candidate> = results
         .iter()
-        .map(|(id, newest, targets)| Candidate {
+        .map(|(id, newest, content, targets)| Candidate {
             id,
             newest: *newest,
+            source: canonical(*content),
             texts: targets.iter().filter_map(|t| parse(t)).collect(),
         })
         .collect();
@@ -305,7 +314,7 @@ fn rewrite(body: &[u8], store: &Store, scope: &str) -> Result<Option<Vec<u8>>, R
         .iter()
         .zip(encode)
         .filter(|(_, encode)| *encode)
-        .flat_map(|((_, _, targets), _)| targets.iter().copied());
+        .flat_map(|((_, _, _, targets), _)| targets.iter().copied());
     Ok(splice(body, targets))
 }
 
@@ -313,12 +322,21 @@ fn minify(text: &str) -> Option<String> {
     compress(text, &FIRST_SLICE_JSON_MINIFY_CONTEXT).into_changed()
 }
 
+/// The complete tool-result content as compact JSON with sorted keys, so every
+/// block, text or not, is part of the source identity and whitespace and
+/// escapes are not. A missing content is the empty string.
+fn canonical(content: Option<&RawValue>) -> String {
+    content.map_or_else(String::new, |c| {
+        parse::<Value>(c).map_or_else(|| c.get().to_owned(), |v| v.to_string())
+    })
+}
+
 /// Model, Bash tool_use ids, and per tool result its id, whether it is in the
-/// last message, and its string targets in document order.
+/// last message, its whole content, and its string targets in document order.
 type ToolResults<'a> = (
     &'a str,
     HashSet<&'a str>,
-    Vec<(&'a str, bool, Vec<&'a RawValue>)>,
+    Vec<(&'a str, bool, Option<&'a RawValue>, Vec<&'a RawValue>)>,
 );
 
 /// `None` when the body is not a JSON object with a non-empty `messages` array.
@@ -352,7 +370,8 @@ fn tool_results(body: &[u8]) -> Option<ToolResults<'_>> {
         let (Some("tool_result"), Some(id)) = (block.str("type"), block.str("tool_use_id")) else {
             continue;
         };
-        let targets = match block.get("content") {
+        let content = block.get("content");
+        let targets = match content {
             None => Vec::new(),
             Some(content) => match parse::<Vec<&RawValue>>(content) {
                 Some(items) => items
@@ -364,7 +383,7 @@ fn tool_results(body: &[u8]) -> Option<ToolResults<'_>> {
                 None => vec![content],
             },
         };
-        results.push((id, i == last, targets));
+        results.push((id, i == last, content, targets));
     }
     Some((root.str("model").unwrap_or_default(), bash_ids, results))
 }

@@ -23,7 +23,7 @@ use std::{
 };
 
 use deslag_core::{JSON_MINIFY_ID, JSON_MINIFY_VERSION};
-use ring::digest::{Context, SHA256, digest};
+use ring::digest::{SHA256, digest};
 use serde_json::{Value, json};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -152,7 +152,9 @@ pub struct Candidate<'a> {
     pub id: &'a str,
     /// The result is in the last message of the request.
     pub newest: bool,
-    /// Decoded text targets; their digest identifies the source.
+    /// The complete content in canonical JSON; its digest identifies the source.
+    pub source: String,
+    /// Decoded text targets that `decide` inspects.
     pub texts: Vec<String>,
 }
 
@@ -233,7 +235,7 @@ impl Store {
         let mut encode = Vec::with_capacity(candidates.len());
         let mut dirty = false;
         for c in candidates {
-            let source = text_digest(&c.texts);
+            let source = hex(digest(&SHA256, c.source.as_bytes()).as_ref());
             let pinned = match decisions.get(c.id) {
                 // A non-object decision or one without a string digest is
                 // invalid state, never a changed result.
@@ -282,16 +284,6 @@ fn pinned(d: &Value, id: &str) -> Result<bool, ReplayError> {
         },
         _ => Err(ReplayError::CorruptDecision(id.into())),
     }
-}
-
-/// SHA-256 over length-prefixed texts, so target boundaries are part of the digest.
-fn text_digest(texts: &[String]) -> String {
-    let mut ctx = Context::new(&SHA256);
-    for t in texts {
-        ctx.update(&(t.len() as u64).to_le_bytes());
-        ctx.update(t.as_bytes());
-    }
-    hex(ctx.finish().as_ref())
 }
 
 fn hex(bytes: &[u8]) -> String {

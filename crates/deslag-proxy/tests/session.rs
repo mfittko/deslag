@@ -38,6 +38,7 @@ fn candidate<'a>(id: &'a str, text: &str) -> Candidate<'a> {
     Candidate {
         id,
         newest: true,
+        source: serde_json::to_string(text).unwrap(),
         texts: vec![text.to_owned()],
     }
 }

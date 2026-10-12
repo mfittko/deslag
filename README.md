@@ -35,7 +35,7 @@ With `--minify-json`, two more constants in `crates/deslag-proxy/src/minify.rs` 
 
 | Limit | Default | Effect |
 | --- | --- | --- |
-| `MAX_INSPECT_BYTES` | 32 MiB | A larger body is forwarded unrewritten: the buffered prefix, then the rest as it arrives. |
+| `MAX_INSPECT_BYTES` | 32 MiB | A larger body is forwarded unrewritten: the buffered prefix, then the rest as it arrives. Its pinned encoded results go out in original form, so that request loses the cached prefix, and its new results stay undecided. |
 | `INSPECT_PERMITS` | 4 | At most 4 requests buffer and rewrite at once. Further eligible requests wait for a permit. `BODY_READ_TIMEOUT` bounds how long a permit holder can wait for its body. The permit is held until the replay of the buffered body ends. |
 
 No limit applies to a response body after the upstream has answered, so long streams are never cut. Other request bodies stream and are not time-bounded: a client that never finishes its body keeps its slot. Zero or out-of-range limit values are rejected at startup.

@@ -379,6 +379,48 @@ async fn missing_or_corrupt_state_fails_explicitly() {
 }
 
 #[tokio::test]
+async fn changed_non_text_block_is_a_digest_mismatch() {
+    let image = |data: &str| json!({"type": "image", "source": {"type": "base64", "data": data}});
+    let text = json!({"type": "text", "text": R1});
+    let body = |content: Value| {
+        let messages = json!([
+            {"role": "user", "content": "inspect the data"},
+            {"role": "assistant", "content": [
+                {"type": "tool_use", "id": "toolu_1", "name": "Bash", "input": {"command": "cat x"}}
+            ]},
+            {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": "toolu_1", "content": content}
+            ]},
+            {"role": "user", "content": "next"}
+        ]);
+        json!({"model": "m", "messages": messages})
+    };
+    for (sent, resent) in [
+        (json!([text, image("a")]), json!([text, image("b")])),
+        (json!([image("a")]), json!([image("b")])),
+    ] {
+        let dir = temp_dir();
+        write_owner(&dir, Owner::Proxy).unwrap();
+        let mut p = Proxy::start(&dir, Mode::Safe).await;
+        p.turn("m", &[]).await.unwrap();
+        let mut first = body(sent.clone());
+        first["messages"].as_array_mut().unwrap().pop();
+        p.send(Some(SCOPE), serde_json::to_vec(&first).unwrap())
+            .await
+            .unwrap();
+        // Formatting is not part of the source identity; content is.
+        p.send(Some(SCOPE), serde_json::to_vec_pretty(&body(sent)).unwrap())
+            .await
+            .unwrap();
+        let got = p
+            .send(Some(SCOPE), serde_json::to_vec(&body(resent)).unwrap())
+            .await;
+        assert_rejected(got, "changed block");
+        fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+#[tokio::test]
 async fn off_session_stays_off_after_mode_change() {
     let dir = temp_dir();
     write_owner(&dir, Owner::Proxy).unwrap();
