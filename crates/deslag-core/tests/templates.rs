@@ -207,7 +207,7 @@ fn compress_reports_changed() {
     let r = compress(&input, &on(Mode::Safe));
     assert_eq!(r.report.outcome, Outcome::Changed);
     assert_eq!(r.report.transform_id, "line-templates");
-    assert_eq!(r.report.transform_version, 1);
+    assert_eq!(r.report.transform_version, 2);
     assert_eq!(r.report.format_version, Some(2));
     assert_eq!(r.report.validation_outcome, ValidationOutcome::Passed);
     assert_eq!(r.report.emitted_bytes, r.output.len());
@@ -230,7 +230,7 @@ fn templates_take_precedence_over_runs() {
     let r = compress(&input, &both);
     assert_eq!(r.report.outcome, Outcome::Changed);
     assert_eq!(r.report.transform_id, "line-templates");
-    assert_eq!(r.report.transform_version, 1);
+    assert_eq!(r.report.transform_version, 2);
     assert_eq!(r.report.format_version, Some(2));
     assert!(r.output.starts_with(HEADER));
     assert_eq!(decode_lines(&r.output, input.len()).unwrap(), input);
@@ -246,7 +246,7 @@ fn templates_route_with_json_table_on() {
     let r = compress(&input, &ctx);
     assert_eq!(r.report.outcome, Outcome::Changed);
     assert_eq!(r.report.transform_id, "line-templates");
-    assert_eq!(r.report.transform_version, 1);
+    assert_eq!(r.report.transform_version, 2);
     assert_eq!(r.report.format_version, Some(2));
     assert!(r.output.starts_with(HEADER));
     assert_eq!(decode_lines(&r.output, input.len()).unwrap(), input);
@@ -453,4 +453,70 @@ fn run_above_the_rows_does_not_block_the_group() {
         after_run.starts_with("12:00:01 200 /a\n#!deslag t999 "),
         "{after_run:.80}"
     );
+}
+
+fn rows(range: std::ops::Range<usize>) -> String {
+    range
+        .map(|i| format!("12:{:02}:{:02} 200 /a\n", i / 60, i % 60))
+        .collect()
+}
+
+#[test]
+fn back_to_back_outliers_do_not_block_the_group_below() {
+    let input = format!("12:00:00 500 /x\n12:00:00 404 /y\n{}", rows(0..1000));
+    let encoded = roundtrip(&input);
+    let longest = encoded
+        .split("\n#!deslag t")
+        .skip(1)
+        .filter_map(|group| group.split_once(' ')?.0.parse::<usize>().ok())
+        .max();
+    assert!(longest >= Some(990), "{encoded:.200}");
+}
+
+#[test]
+fn periodic_outliers_do_not_block_the_groups_between_them() {
+    let input: String = (0..20)
+        .map(|b| format!("99:99:99 503 /zz/{b}\n{}", rows(b * 49..(b + 1) * 49)))
+        .collect();
+    let encoded = roundtrip(&input);
+    assert_eq!(encoded.matches("\n#!deslag t49 0\n").count(), 20);
+}
+
+#[test]
+fn alternating_outliers_are_linear() {
+    let input: String = (0..100_000)
+        .map(|i| match i % 3 {
+            0 => format!("{i} {i} {i}\n"),
+            _ => format!("12:00:{i} 200 /a\n"),
+        })
+        .collect();
+    roundtrip(&input);
+}
+
+#[test]
+fn sporadic_short_runs_stay_in_the_group() {
+    let input: String = (0..600)
+        .map(|i| {
+            let line = format!(
+                "2024-01-01T12:{:02}:{:02} GET /api/items 200\n",
+                i / 60,
+                i % 60
+            );
+            if i % 10 == 5 { line.repeat(2) } else { line }
+        })
+        .collect();
+    let encoded = roundtrip(&input);
+    assert_eq!(encoded.matches("#!deslag t").count(), 1, "{encoded:.200}");
+    assert!(!encoded.contains("#!deslag x"), "{encoded:.200}");
+}
+
+#[test]
+fn escaped_unprofitable_group_is_linear() {
+    // Every row fits, adds no variable index and costs an escape, so no prefix
+    // pays and the dead-end break never fires: only the window bounds the scan.
+    let input: String = (0..20_000).map(|i| format!("  #!deslag{i}\n")).collect();
+    let start = std::time::Instant::now();
+    assert_eq!(roundtrip(&input), format!("{HEADER}{input}"));
+    let elapsed = start.elapsed();
+    assert!(elapsed.as_secs() < 5, "{elapsed:?}");
 }
