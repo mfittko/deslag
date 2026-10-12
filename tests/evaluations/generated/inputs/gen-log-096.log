@@ -1,0 +1,26 @@
+2026-09-30T10:00:00Z INFO request_id=req-ff887c status=500 upstream=alpha-team
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+2026-09-30T10:00:07Z INFO request_id=req-402557 status=200 upstream=beta-team
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+2026-09-30T10:00:14Z INFO request_id=req-402551 status=503 upstream=core-team
+2026-09-30T10:00:21Z INFO request_id=req-3159f1 status=200 upstream=data-team
+2026-09-30T10:00:28Z INFO request_id=req-a81ad2 status=200 upstream=edge-team
+2026-09-30T10:00:35Z INFO request_id=req-710dea status=200 upstream=infra-team
+2026-09-30T10:00:42Z INFO request_id=req-5675c7 status=404 upstream=alpha-team
+2026-09-30T10:00:49Z INFO request_id=req-6e23fb status=201 upstream=beta-team
+2026-09-30T10:00:56Z INFO request_id=req-14fc9d status=200 upstream=core-team
+2026-09-30T10:01:03Z INFO request_id=req-823c14 status=500 upstream=data-team
+2026-09-30T10:01:10Z INFO request_id=req-a137f2 status=404 upstream=edge-team
+2026-09-30T10:01:17Z INFO request_id=req-85f598 status=200 upstream=infra-team

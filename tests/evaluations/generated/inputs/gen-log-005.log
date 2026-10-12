@@ -1,0 +1,30 @@
+test billing::invoice::lunar_iguana ... ok
+waiting for upstream to accept connections
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+test billing::ledger::hazy_lemur ... ok
+test auth::session::brisk_heron ... ok
+test billing::invoice::jolly_gecko ... FAILED
+test search::index::hazy_egret ... ok
+test search::query::brisk_marmot ... ok
+test billing::invoice::keen_koala ... ok
+test billing::ledger::amber_gecko ... ok
+test auth::session::fuzzy_koala ... ok
+test auth::token::eager_jackal ... ok
+test billing::invoice::jolly_geck7 ... ok
+test search::query::lunar_badger ... ok
+test billing::invoice::calm_iguana ... ok
+test billing::ledger::fuzzy_egret ... ok
+failures:
+    billing::invoice::jolly_gecko
+test result: FAILED. 13 passed; 1 failed

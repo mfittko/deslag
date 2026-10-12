@@ -1,0 +1,25 @@
+2026-09-30T10:00:00Z INFO request_id=req-012cf6 status=500 upstream=alpha-team
+2026-09-30T10:00:07Z INFO request_id=req-027b5a status=404 upstream=beta-team
+2026-09-30T10:00:14Z INFO request_id=req-0dab5b status=200 upstream=core-team
+2026-09-30T10:00:21Z INFO request_id=req-c2f817 status=201 upstream=data-team
+flushing buffered writes
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+2026-09-30T10:00:28Z INFO request_id=req-5a710b status=200 upstream=edge-team
+2026-09-30T10:00:35Z INFO request_id=req-6d3c90 status=500 upstream=infra-team
+2026-09-30T10:00:42Z INFO request_id=req-e261ba status=404 upstream=alpha-team
+2026-09-30T10:00:49Z INFO request_id=req-e7a204 status=500 upstream=beta-team
+2026-09-30T10:00:56Z INFO request_id=req-48175c status=404 upstream=core-team
+2026-09-30T10:01:03Z INFO request_id=req-b0f99c status=503 upstream=data-team
+2026-09-30T10:01:10Z INFO request_id=req-b0f997 status=200 upstream=edge-team
+2026-09-30T10:01:17Z INFO request_id=req-b86b4f status=404 upstream=infra-team

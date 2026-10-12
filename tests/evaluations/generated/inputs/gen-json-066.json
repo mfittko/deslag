@@ -1,0 +1,90 @@
+[
+  {
+    "issue_id": "iss_A1ZMPY4T",
+    "title": "hazy-cedar",
+    "state": "stale",
+    "comments": 112,
+    "assignee": null
+  },
+  {
+    "issue_id": "iss_D0M2KSB4",
+    "title": "lunar-iguana",
+    "state": "closed",
+    "comments": 155,
+    "assignee": "alpha-team"
+  },
+  {
+    "issue_id": "iss_WPJT8ZRW",
+    "title": "ivory-marmot",
+    "state": "closed",
+    "comments": 138,
+    "assignee": null
+  },
+  {
+    "issue_id": "iss_FB7A9FDF",
+    "title": "hazy-egret",
+    "state": "stale",
+    "comments": 101,
+    "assignee": null
+  },
+  {
+    "issue_id": "iss_XD215DPE",
+    "title": "eager-jackal",
+    "state": "closed",
+    "comments": 177,
+    "assignee": "infra-team"
+  },
+  {
+    "issue_id": "iss_9XH3NM7T",
+    "title": "keen-egret",
+    "state": "stale",
+    "comments": 115,
+    "assignee": null
+  },
+  {
+    "issue_id": "iss_74TBVQJR",
+    "title": "eager-lemur",
+    "state": "closed",
+    "comments": 134,
+    "assignee": "edge-team"
+  },
+  {
+    "issue_id": "iss_8S0MHQX9",
+    "title": "dusty-badger",
+    "state": "closed",
+    "comments": 185
+  },
+  {
+    "issue_id": "iss_BK84HYQ3",
+    "title": "fuzzy-dingo",
+    "state": "closed",
+    "comments": 164,
+    "assignee": "data-team"
+  },
+  {
+    "issue_id": "iss_JTYQ93H1",
+    "title": "calm-iguana",
+    "state": "closed",
+    "comments": 171,
+    "assignee": "data-team"
+  },
+  {
+    "issue_id": "iss_W3RNQT0D",
+    "title": "eager-badger",
+    "state": "closed",
+    "comments": 148
+  },
+  {
+    "issue_id": "iss_FB7A9FD7",
+    "title": "hazy-egret-2",
+    "state": "closed",
+    "comments": 125,
+    "assignee": "core-team"
+  },
+  {
+    "issue_id": "iss_DPDRKSPQ",
+    "title": "hazy-lemur",
+    "state": "closed",
+    "comments": 162
+  }
+]

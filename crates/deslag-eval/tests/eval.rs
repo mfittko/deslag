@@ -5,6 +5,7 @@ use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
     process::{Command, Output},
+    sync::OnceLock,
 };
 
 use serde_json::Value;
@@ -23,15 +24,59 @@ fn eval(args: &[&str]) -> Output {
         .unwrap()
 }
 
+/// The pilot tasks alone: the manifest without its include, inputs made absolute.
+fn pilot_manifest() -> &'static Path {
+    static PATH: OnceLock<PathBuf> = OnceLock::new();
+    PATH.get_or_init(|| {
+        let dir = manifest().parent().unwrap().to_path_buf();
+        let mut doc: Value =
+            serde_json::from_str(&std::fs::read_to_string(manifest()).unwrap()).unwrap();
+        doc.as_object_mut().unwrap().remove("include");
+        for t in doc["tasks"].as_array_mut().unwrap() {
+            let input = dir.join(t["input"].as_str().unwrap());
+            t["input"] = input.to_str().unwrap().into();
+        }
+        let path = Path::new(env!("CARGO_TARGET_TMPDIR")).join("pilot-manifest.json");
+        std::fs::write(&path, doc.to_string()).unwrap();
+        path
+    })
+}
+
+/// Every task of the corpus (pilot, then included files) with its manifest directory.
+fn corpus() -> Vec<(Value, PathBuf)> {
+    let root: Value = serde_json::from_str(&std::fs::read_to_string(manifest()).unwrap()).unwrap();
+    let dir = manifest().parent().unwrap().to_path_buf();
+    let mut files = vec![(root.clone(), dir.clone())];
+    for rel in root["include"].as_array().into_iter().flatten() {
+        let path = dir.join(rel.as_str().unwrap());
+        let doc = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        files.push((doc, path.parent().unwrap().to_path_buf()));
+    }
+    files
+        .into_iter()
+        .flat_map(|(doc, d)| {
+            let tasks = doc["tasks"].as_array().unwrap().clone();
+            tasks.into_iter().map(move |t| (t, d.clone()))
+        })
+        .collect()
+}
+
 fn mock_run(seed: &str, name: &str) -> (String, Vec<Value>) {
+    mock_run_on(&manifest(), seed, name)
+}
+
+fn pilot_run(seed: &str, name: &str) -> (String, Vec<Value>) {
+    mock_run_on(pilot_manifest(), seed, name)
+}
+
+fn mock_run_on(manifest: &Path, seed: &str, name: &str) -> (String, Vec<Value>) {
     let out = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
     // `run` refuses an existing --out path.
     let _ = std::fs::remove_file(&out);
-    let m = manifest();
     let o = eval(&[
         "run",
         "--manifest",
-        m.to_str().unwrap(),
+        manifest.to_str().unwrap(),
         "--backend",
         "mock",
         "--seed",
@@ -48,14 +93,21 @@ fn mock_run(seed: &str, name: &str) -> (String, Vec<Value>) {
     (text, lines)
 }
 
+/// Runs of the full corpus: the baseline plus every listed arm of each task.
+fn run_count() -> usize {
+    corpus()
+        .iter()
+        .map(|(t, _)| 1 + t["arms"].as_array().unwrap().len())
+        .sum()
+}
+
 #[test]
 fn manifest_covers_every_category_and_control() {
-    let doc: Value = serde_json::from_str(&std::fs::read_to_string(manifest()).unwrap()).unwrap();
-    let tasks = doc["tasks"].as_array().unwrap();
-    let dir = manifest().parent().unwrap().to_path_buf();
-    let mut categories = BTreeSet::new();
-    for t in tasks {
+    let tasks = corpus();
+    let mut ids = BTreeSet::new();
+    for (t, dir) in &tasks {
         assert!(dir.join(t["input"].as_str().unwrap()).is_file(), "{t}");
+        assert!(ids.insert(t["id"].as_str().unwrap()), "duplicate {t}");
         let answers = t["answers"].as_array().unwrap();
         assert!(
             !answers.is_empty()
@@ -64,8 +116,13 @@ fn manifest_covers_every_category_and_control() {
                     .all(|a| !a.as_str().unwrap().trim().is_empty())
         );
         assert!(!t["arms"].as_array().unwrap().is_empty());
-        categories.insert(t["category"].as_str().unwrap());
     }
+    let generated = |c: &str| {
+        let is = |(t, _): &&(Value, PathBuf)| {
+            t["category"] == c && t["id"].as_str().unwrap().starts_with("gen-")
+        };
+        tasks.iter().filter(is).count()
+    };
     for c in [
         "api_query",
         "code_search",
@@ -78,35 +135,37 @@ fn manifest_covers_every_category_and_control() {
         "incompressible",
         "evidence_drop",
     ] {
-        let n = tasks.iter().filter(|t| t["category"] == c).count();
+        let n = tasks.iter().filter(|(t, _)| t["category"] == c).count();
         assert!(n >= 2, "category {c} has {n} tasks");
+        assert!(
+            generated(c) >= 4,
+            "category {c} has {} generated tasks",
+            generated(c)
+        );
     }
-    // At least one buried-evidence input has 100 or more rows.
-    let largest = tasks
-        .iter()
-        .filter(|t| t["category"] == "buried_evidence")
-        .map(|t| std::fs::read_to_string(dir.join(t["input"].as_str().unwrap())).unwrap())
-        .filter_map(|s| {
-            serde_json::from_str::<Value>(&s)
-                .ok()?
-                .as_array()
-                .map(Vec::len)
-        })
-        .max();
-    assert!(largest >= Some(100), "{largest:?}");
+    // Every buried task has 100 or more rows or lines, and its answer sits in the last 40%.
+    for (t, dir) in tasks.iter().filter(|(t, _)| {
+        t["category"] == "buried_evidence" && t["id"].as_str().unwrap().starts_with("gen-")
+    }) {
+        let text = std::fs::read_to_string(dir.join(t["input"].as_str().unwrap())).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        let answer = t["answers"][0].as_str().unwrap().split(',').next().unwrap();
+        let at = lines.iter().position(|l| l.contains(answer)).unwrap();
+        let rows = serde_json::from_str::<Value>(&text)
+            .map_or(lines.len(), |v| v.as_array().unwrap().len());
+        assert!(rows >= 100, "{t}: {rows} rows");
+        assert!(
+            at * 10 >= lines.len() * 6,
+            "{t}: answer on line {at} of {}",
+            lines.len()
+        );
+    }
 }
 
 #[test]
 fn mock_run_detects_evidence_loss_and_keeps_controls_unchanged() {
     let (_, lines) = mock_run("16", "mock-16.jsonl");
-    let tasks =
-        serde_json::from_str::<Value>(&std::fs::read_to_string(manifest()).unwrap()).unwrap();
-    let expected: usize = tasks["tasks"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|t| 1 + t["arms"].as_array().unwrap().len())
-        .sum();
+    let expected = run_count();
     assert_eq!(lines.len(), expected);
     let orders: BTreeSet<u64> = lines.iter().map(|l| l["order"].as_u64().unwrap()).collect();
     assert_eq!(orders.len(), expected);
@@ -180,7 +239,7 @@ fn run_order_is_seeded() {
 
 #[test]
 fn report_renders_format_comparison_and_controls() {
-    mock_run("16", "mock-report.jsonl");
+    pilot_run("16", "mock-report.jsonl");
     let path = Path::new(env!("CARGO_TARGET_TMPDIR")).join("mock-report.jsonl");
     let o = eval(&["report", path.to_str().unwrap()]);
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
@@ -214,7 +273,7 @@ fn report_renders_format_comparison_and_controls() {
     assert!(md.contains("| incompressible | lines-v2 | 2 | 2/2 (100.0%) | 2/2 (100.0%) | 2 | 0 | all variants unchanged |"), "{md}");
     assert!(!md.contains("a transform changed a control input"), "{md}");
     // Edit one arm's control results and check one control row.
-    let (_, lines) = mock_run("16", "mock-report-fail.jsonl");
+    let (_, lines) = pilot_run("16", "mock-report-fail.jsonl");
     let (v2, drop, inc) = (
         "| evidence_drop | lines-v2 | 1 |",
         "| evidence_drop | drop-evidence | 2 |",
@@ -414,7 +473,7 @@ fn estimate_refuses_token_overflow() {
 #[test]
 fn report_gives_an_arm_without_non_control_pairs_no_data() {
     // lines-v2 then runs only on control tasks.
-    let (_, lines) = mock_run("16", "control-only.jsonl");
+    let (_, lines) = pilot_run("16", "control-only.jsonl");
     let text: String = lines
         .iter()
         .filter(|l| l["arm"] != "lines-v2" || !l["control"].is_null())
@@ -448,7 +507,7 @@ fn estimate_prints_a_cost() {
     let md = String::from_utf8(o.stdout).unwrap();
     assert!(
         md.contains("| Estimated cost | USD ")
-            && md.contains("| Cap if every call stays within --per-run-usd (90 runs"),
+            && md.contains("| Cap if every call stays within --per-run-usd (935 runs"),
         "{md}"
     );
 }
@@ -829,7 +888,7 @@ fn live_backend_counts_only_a_valid_reported_cost() {
             None => {
                 assert!(o.status.success(), "{mode}: {err}");
                 assert!(err.contains("spent 0.0000 USD"), "{mode}: {err}");
-                assert_eq!(lines.len(), 90, "{mode}");
+                assert_eq!(lines.len(), run_count(), "{mode}");
             }
         }
     }
@@ -875,4 +934,33 @@ fn live_backend_failed_live_dir_leaks_no_out_file() {
     assert!(lines.is_empty());
     // The out path stays free, so a retry is not refused.
     assert!(!out.exists(), "{err}");
+}
+
+#[test]
+fn every_transform_arm_has_100_non_control_pairs() {
+    let (_, lines) = mock_run("16", "mock-pairs.jsonl");
+    for arm in [
+        "json-minify",
+        "table-csv",
+        "table-mdkv",
+        "table-v2",
+        "lines-v1",
+        "lines-v2",
+    ] {
+        let n = lines
+            .iter()
+            .filter(|l| l["arm"] == arm && l["control"].is_null())
+            .count();
+        assert!(n >= 100, "{arm} has {n} non-control pairs");
+    }
+    // The generated controls are scaled up: each kind has at least 4 new tasks.
+    for control in ["incompressible", "evidence_drop"] {
+        let n = corpus()
+            .iter()
+            .filter(|(t, _)| {
+                t["control"] == control && t["id"].as_str().unwrap().starts_with("gen-")
+            })
+            .count();
+        assert!(n >= 4, "{control}: {n}");
+    }
 }

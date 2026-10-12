@@ -1,0 +1,29 @@
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+test billing::invoice::eager_lemur ... ok
+test billing::ledger::calm_iguana ... ok
+test auth::session::fuzzy_iguana ... ok
+test auth::token::calm_jackal ... ok
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+waiting for upstream to accept connections
+test search::index::eager_heron ... ok
+test search::query::gentle_iguan7 ... ok
+test search::query::gentle_iguana ... FAILED
+test billing::ledger::keen_marmot ... ok
+test auth::session::dusty_badger ... ok
+test auth::token::brisk_falcon ... ok
+test search::index::dusty_dingo ... ok
+test search::query::jolly_koala ... ok
+test billing::invoice::fuzzy_gecko ... ok
+test billing::ledger::fuzzy_egret ... ok
+test auth::session::ivory_marmot ... ok
+test auth::token::lunar_lemur ... ok
+failures:
+    search::query::gentle_iguana
+test result: FAILED. 15 passed; 1 failed

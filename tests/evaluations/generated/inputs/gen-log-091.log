@@ -1,0 +1,26 @@
+test billing::invoice::amber_lemur ... ok
+test billing::ledger::brisk_koala ... ok
+test auth::session::calm_iguana ... ok
+test auth::token::calm_egret ... ok
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+test auth::token::fuzzy_koal7 ... ok
+test search::query::jolly_egret ... ok
+test billing::invoice::amber_jackal ... ok
+test billing::ledger::jolly_marmot ... ok
+test auth::session::jolly_falcon ... ok
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+test auth::token::dusty_dingo ... ok
+test auth::token::fuzzy_koala ... FAILED
+test search::query::calm_marmot ... ok
+failures:
+    auth::token::fuzzy_koala
+test result: FAILED. 11 passed; 1 failed

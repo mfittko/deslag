@@ -1,0 +1,37 @@
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+retrying after a transient error
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+flushing buffered writes
+test billing::invoice::ivory_egret ... ok
+test billing::ledger::calm_heron ... ok
+test auth::token::eager_koala ... FAILED
+test auth::token::brisk_falcon ... ok
+test search::index::fuzzy_jackal ... ok
+test search::query::gentle_marmot ... ok
+test billing::invoice::ivory_koala ... ok
+test billing::ledger::brisk_badger ... ok
+test auth::session::gentle_heron ... ok
+test auth::token::lunar_heron ... ok
+test search::index::fuzzy_badger ... ok
+test search::query::gentle_falcon ... ok
+test billing::invoice::brisk_iguana ... ok
+test billing::ledger::dusty_gecko ... ok
+test auth::session::jolly_dingo ... ok
+test auth::token::eager_koal7 ... ok
+test search::index::gentle_badger ... ok
+test search::query::amber_falcon ... ok
+test billing::invoice::jolly_koala ... ok
+failures:
+    auth::token::eager_koala
+test result: FAILED. 18 passed; 1 failed
