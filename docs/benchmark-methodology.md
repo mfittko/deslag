@@ -1,0 +1,135 @@
+# Benchmark methodology: paired task evaluation
+
+This document predeclares the scoring rules and the non-inferiority criterion for the paired task evaluation in PLAN §14.4. It was committed before any evaluation run. A change to the scoring rules or to the criterion after results have been inspected needs a decision record in `docs/decisions/`.
+
+The harness is the `deslag-eval` binary in `crates/deslag-eval`. The corpus is `tests/evaluations/manifest.json`. Results are in `docs/benchmarks/evaluation.md`.
+
+## Unit of analysis
+
+One task is one paired observation. Each task runs once per arm. The analysis pairs the baseline run of a task with each compressed run of the same task. Repeated turns and repeated runs are never treated as independent samples.
+
+## Arms
+
+| Arm | Prompt payload |
+| --- | --- |
+| `baseline` | The original tool result. |
+| `json-minify` | `deslag_core::minify_json` output. |
+| `table-csv` | table-v1 output of `deslag_core::compress` with only `json_table` on, the estimate token counter and no size limits. |
+| `table-mdkv` | `deslag_core::table::render_markdown_kv` output with `TableOptions::default()` and the estimate token counter. Evaluation only. |
+| `lines-v1` | lines-v1 output of `deslag_core::compress` with only `exact_line_runs` on and no size limits. |
+| `drop-evidence` | The original with every line that contains the task's `evidence` substring removed. Negative control only. |
+
+Every task runs the `baseline` arm. A task lists the other arms that apply to it. When a transform declines the input, the arm's payload equals the baseline payload. The run still happens and its result line has `variant_unchanged: true`. Such pairs stay in the analysis, because the deployed transform would decline the same input.
+
+## Prompt and model settings
+
+Every run sends this system prompt:
+
+```text
+You answer questions about a tool result. Use only the tool result. Reply with the answer only, on one line, with no explanation. If the tool result does not contain the answer, reply NOT_FOUND.
+```
+
+Every run sends this user prompt, with `{payload}` replaced by the arm's payload and `{question}` by the task's question:
+
+```text
+<tool_result>
+{payload}
+</tool_result>
+
+Question: {question}
+```
+
+The prompt does not explain table-v1, Markdown-KV or lines-v1. A deployed hook does not explain them either.
+
+One evaluation run uses one model. `claude -p` does not expose temperature, so the result lines record the model id and the client version instead. Tools are disabled (`--tools ""`). Each run is a single turn.
+
+## Scoring
+
+The harness normalizes the model answer and every accepted answer the same way:
+
+1. Trim surrounding whitespace.
+2. Collapse each internal whitespace run to one space.
+3. Strip one pair of surrounding double quotes, single quotes or backticks.
+4. Strip one trailing period.
+
+Each task names one rule:
+
+| Rule | Success when |
+| --- | --- |
+| `exact` | The normalized answer equals a normalized accepted answer, case-sensitive. |
+| `exact_ci` | As `exact`, case-insensitive. |
+| `set` | The answer, split on commas with each item normalized and empty items dropped, equals an accepted answer split the same way, as a set. Case-sensitive. Order does not matter. |
+| `number` | The normalized answer parses as a 64-bit float and differs from an accepted answer by at most the task's `tolerance` (default 0). |
+
+Success is binary. Each failure has one error kind:
+
+| Error kind | Meaning |
+| --- | --- |
+| `wrong` | A non-empty answer that scores as a failure. This is an exact-value or evidence error. |
+| `abstain` | The normalized answer is empty or equals `NOT_FOUND`, case-insensitive. |
+| `backend` | The backend call failed or reported an error. |
+
+All three kinds count as failures. The report lists them separately.
+
+## Non-inferiority criterion
+
+The criterion is the PLAN §14.4 starting policy: the lower one-sided 95% confidence bound on compressed-minus-baseline success must exceed -2 percentage points.
+
+The method is the Agresti-Min adjusted Wald interval for matched proportions. For one arm, the paired table over `n` tasks has:
+
+- `b`: baseline succeeded, arm failed.
+- `c`: baseline failed, arm succeeded.
+
+Add 0.5 to each of the four cells. Then:
+
+```text
+n' = n + 2
+d' = (c - b) / n'
+se = sqrt(((b + 0.5) + (c + 0.5) - (c - b)^2 / n') / n'^2)
+lower = d' - 1.6449 * se
+```
+
+The arm passes when `lower > -0.02`. Otherwise the verdict is `not shown`. The verdict is `inferior` only when the unadjusted point estimate `(c - b) / n` is also below -0.02. A `not shown` verdict is no evidence of equivalence and no evidence of harm.
+
+With zero discordant pairs, `lower = -1.6449 / (n + 2)`. That exceeds -0.02 only for `n >= 81`. A corpus with fewer than 81 paired tasks for an arm is inconclusive by construction. The initial corpus is such a pilot.
+
+The criterion is evaluated per arm over all non-control tasks that list the arm. The report also gives the paired counts and the bound per task category. Control tasks and the `drop-evidence` arm are excluded from this analysis.
+
+## Secondary measures
+
+Each result line records, when the backend reports them: input, output, cache-read and cache-creation tokens, cost in USD, backend duration in ms and the number of turns. It also records the payload bytes and the estimated payload tokens (`deslag-estimate-v1`). Reported usage and estimated tokens are different measurements and are never mixed.
+
+The harness never retries a call. A failed call is recorded with error kind `backend`, so the retry count is always zero. Tool-call count does not apply, because the corpus is single-turn read-back with tools disabled. Multi-turn agentic tasks with real tools are a follow-up.
+
+## Corpus and controls
+
+Each task in `tests/evaluations/manifest.json` has `id`, `category`, `input` (a path relative to the manifest), `question`, `answers`, `rule`, an optional `tolerance`, `arms`, an optional `control` and, for the evidence-drop control, `evidence`. All content is synthetic. No real user content is exported.
+
+The categories are the PLAN §14.4 task kinds: `api_query`, `code_search`, `failure_diagnosis`, `issue_triage`, `logs`, `aggregation`, `exact_id` and `buried_evidence`. A `buried_evidence` task puts the answer in the middle or at the end of a large result. At least one input has 100 or more rows.
+
+Two control kinds validate the harness:
+
+- `incompressible`: inputs that every listed transform declines. Every arm equals baseline. Any paired difference measures run-to-run noise of the model.
+- `evidence_drop`: the `drop-evidence` arm removes the answer-carrying line. It must score below baseline. This shows that the harness detects evidence loss.
+
+## Backends
+
+The `mock` backend is offline and deterministic. It answers with the first accepted answer when that answer occurs verbatim in the payload, else `NOT_FOUND`. For a `set` task, every item must occur. The mock measures evidence presence only. It is plumbing evidence for the harness, never evidence about a model.
+
+The `claude` backend runs `claude -p` in a throwaway directory with a project `.claude/settings.json`, `--setting-sources project`, `--strict-mcp-config`, `--no-session-persistence`, `--tools ""` and the fixed system prompt. The prompt goes on stdin. It never reads or edits the user's global settings.
+
+## Randomization
+
+The run order is a seeded shuffle (splitmix64, Fisher-Yates) over all (task, arm) pairs. Each result line records the seed and its position in the run order.
+
+## Cost controls
+
+- The `claude` backend refuses to start unless `DESLAG_EVAL_LIVE=1` is set and `--model` is given.
+- Every call passes `--max-budget-usd` with the per-run cap (`--per-run-usd`, default 0.30).
+- Before each call, the runner stops when the spent amount plus the per-run cap would exceed `--budget-usd`. A call that reports no cost counts as the full per-run cap.
+- `deslag-eval estimate` prints an upper-bound cost of a full live run before any money is spent.
+- CI runs only `cargo test`, which uses the mock backend. CI never sets `DESLAG_EVAL_LIVE`.
+
+## Table format read-back
+
+The `table-csv` and `table-mdkv` arms run on the same tasks. The report gives per-format accuracy for both. The CSV form cannot become a default until a live comparison exists. The default decision belongs to the DF-025 release gate (#22), not to this harness.
