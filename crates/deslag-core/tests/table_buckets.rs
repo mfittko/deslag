@@ -133,20 +133,50 @@ fn key_unique_in_every_row_is_not_a_discriminator() {
 
 #[test]
 fn discriminator_tie_goes_to_the_first_key() {
-    // `kind` and `tag` split the rows the same way at the same length.
+    // `tag` and `knd` have names of equal length and split the rows the same
+    // way, so both bucket blocks have the same length. The first key wins.
     let items: Vec<String> = (0..8)
         .map(|i| {
             if i % 2 == 0 {
-                format!(r#"{{"tag":"p","kind":"a","v":{i}}}"#)
+                format!(r#"{{"tag":"p","knd":"a","v":{i}}}"#)
             } else {
-                format!(r#"{{"tag":"q","kind":"b","v":"s{i}"}}"#)
+                format!(r#"{{"tag":"q","knd":"b","v":"s{i}"}}"#)
             }
         })
         .collect();
-    let encoded = round_trip(&format!("[{}]", items.join(",")));
+    let input = format!("[{}]", items.join(","));
+    let encoded = round_trip(&input);
     assert!(
         encoded.starts_with("table-v2 @0\n@0 [8] by tag\n"),
         "{encoded}"
+    );
+    let other = encoded.replacen(" by tag\n", " by knd\n", 1);
+    assert_eq!(other.len(), encoded.len());
+    assert_eq!(v2::decode(&other), Some(input));
+}
+
+#[test]
+fn only_the_first_8_candidates_are_tried() {
+    // Rows whose leading string keys never split, followed by `type`, which
+    // does. With `type` as the 8th candidate it splits; as the 9th it is
+    // never tried, so the array has no bucket block.
+    let rows = |constant: usize| {
+        let items: Vec<String> = (0..6)
+            .map(|i| {
+                let lead: String = (0..constant).map(|k| format!(r#""k{k}":"c","#)).collect();
+                if i % 2 == 0 {
+                    format!(r#"{{{lead}"type":"a","v":{i}}}"#)
+                } else {
+                    format!(r#"{{{lead}"type":"b","v":"s{i}"}}"#)
+                }
+            })
+            .collect();
+        format!("[{}]", items.join(","))
+    };
+    assert!(round_trip(&rows(7)).starts_with("table-v2 @0\n@0 [6] by type\n"));
+    assert_eq!(
+        v2::encode(&rows(8), &lenient()),
+        Err(Reason::UnsupportedFormat)
     );
 }
 

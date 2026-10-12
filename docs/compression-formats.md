@@ -480,7 +480,7 @@ The decoder returns no value for any of these:
 
 `table::v2::decode` also reads table-v1 text: text that does not start with `table-v2` goes to the table-v1 decoder unchanged. `table::decode` reads table-v1 only.
 
-Encoder output is canonical. The decoder also accepts some non-canonical texts that the encoder does not emit. A hole may stand anywhere a JSON value can stand, for example a whole skeleton such as `table-v2 @0`, or a hole inside an array or a nested object. A block may have zero rows. Such texts decode, but encoding the result does not reproduce them.
+Encoder output is canonical. The decoder also accepts some non-canonical texts that the encoder does not emit. A hole may stand anywhere a JSON value can stand, for example a whole skeleton such as `table-v2 @0`, or a hole inside an array or a nested object. A table block in a hole may have zero rows; a bucket table may not. Such texts decode, but encoding the result does not reproduce them.
 
 Decoding is linear in the text length.
 
