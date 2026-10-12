@@ -227,6 +227,63 @@ fn homogeneous_arrays_keep_their_output() {
 }
 
 #[test]
+fn table_block_wins_a_tie_with_the_bucket_block() {
+    // Row 1 is kind `b` with eight fields; the rest are kind `a` with two.
+    // The sparse table pays empty cells, the bucket block pays its order line
+    // and a second header. These sizes make both blocks equally long.
+    let rows = |n: usize| {
+        let items: Vec<String> = (0..n)
+            .map(|i| {
+                if i == 1 {
+                    let f: Vec<String> = (0..8).map(|j| format!(r#""y{j}":1"#)).collect();
+                    format!(r#"{{"t":"b",{}}}"#, f.join(","))
+                } else {
+                    format!(r#"{{"t":"a","x0":{i},"x1":{i}}}"#)
+                }
+            })
+            .collect();
+        format!("[{}]", items.join(","))
+    };
+    // The bucket block the encoder builds for `rows(n)`, split by `t`.
+    let buckets = |n: usize| {
+        let order: Vec<&str> = (0..n).map(|i| if i == 1 { "1" } else { "0" }).collect();
+        let a: Vec<String> = (0..n)
+            .filter(|&i| i != 1)
+            .map(|i| format!("a,{i},{i}"))
+            .collect();
+        let y: Vec<String> = (0..8).map(|j| format!("y{j}:int")).collect();
+        format!(
+            "[{n}] by t\n{}\n@0.0 [{}]{{t:str,x0:int,x1:int}}\n{}\n@0.1 [1]{{t:str,{}}}\nb{}",
+            order.join(","),
+            n - 1,
+            a.join("\n"),
+            y.join(","),
+            ",1".repeat(8)
+        )
+    };
+
+    // Wrapped form: the table block and the bucket block have equal length.
+    let wrapped = format!(r#"{{"r":{}}}"#, rows(6));
+    let bucket_text = format!("table-v2 {{\"r\":@0}}\n@0 {}", buckets(6));
+    assert_eq!(v2::decode(&bucket_text), Some(minified(&wrapped)));
+    let encoded = round_trip(&wrapped);
+    assert!(
+        encoded.starts_with("table-v2 {\"r\":@0}\n@0 [6]{"),
+        "{encoded}"
+    );
+    assert_eq!(encoded.len(), bucket_text.len(), "{encoded}");
+
+    // Bare form: table-v1 text and `table-v2 @0` with the bucket block have
+    // equal length.
+    let bare = rows(7);
+    let bucket_text = format!("table-v2 @0\n@0 {}", buckets(7));
+    assert_eq!(v2::decode(&bucket_text), Some(minified(&bare)));
+    let v1 = table::encode(&bare, &lenient()).unwrap();
+    assert_eq!(v1.len(), bucket_text.len(), "{v1}");
+    assert_eq!(v2::encode(&bare, &lenient()), Ok(v1));
+}
+
+#[test]
 fn bucket_limits_and_gain() {
     let few = TableOptions {
         max_rows: 8,
