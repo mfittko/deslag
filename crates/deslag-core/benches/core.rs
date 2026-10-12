@@ -249,7 +249,7 @@ const STAGES: [Stage; 6] = [
         run: |s| output_len(s, &ctx(true, false, false, false)),
     },
     Stage {
-        name: "table-v1 encode",
+        name: "table-v2 encode, bare array",
         input: table_input,
         run: |s| output_len(s, &ctx(false, true, false, false)),
     },
