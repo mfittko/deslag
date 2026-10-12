@@ -11,7 +11,7 @@ deslag reduces the representation overhead of tool results before a model sees t
 - A Rust core (`deslag-core`) with deterministic transforms for model-visible tool results:
   - JSON minification that preserves every value and lexeme (default on).
   - `table-v1` repeated-record encoding for homogeneous JSON arrays (opt-in).
-  - `table-v2` encoding for such arrays inside a wrapper object (opt-in).
+  - `table-v2` encoding for such arrays inside a wrapper object, and for heterogeneous arrays, bare (`table-v2 @0`) or wrapped, split into one table per discriminator value (opt-in).
   - Exact consecutive-line run encoding for plain text (opt-in).
 - A Claude Code plugin that runs the native binary as a `PostToolUse` hook.
 - A minimal transparent Anthropic Messages proxy with streaming support.

@@ -14,3 +14,7 @@ serde_json = "=1.0.152"
 [[bench]]
 name = "minify"
 harness = false
+
+[[bench]]
+name = "core"
+harness = false

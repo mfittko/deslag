@@ -1,0 +1,51 @@
+[package]
+name = "deslag-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Outside the root workspace so the shipped crates never link the fuzz runtime.
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+# Exact pin: the cargo-fuzz runtime binding, fuzz-only, never linked into shipped crates.
+libfuzzer-sys = "=0.4.13"
+deslag-core = { path = "../crates/deslag-core" }
+
+[[bin]]
+name = "json_minify"
+path = "fuzz_targets/json_minify.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "json_table"
+path = "fuzz_targets/json_table.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exact_line_runs"
+path = "fuzz_targets/exact_line_runs.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "compress"
+path = "fuzz_targets/compress.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "line_templates"
+path = "fuzz_targets/line_templates.rs"
+test = false
+doc = false
+bench = false
