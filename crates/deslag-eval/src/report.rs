@@ -210,6 +210,8 @@ pub fn render(text: &str) -> Result<String, String> {
         let result = match control {
             "incompressible" if p.unchanged == p.n => "all variants unchanged",
             "incompressible" => "a transform changed a control input",
+            "evidence_drop" if *arm != "drop-evidence" && p.arm_ok >= p.base_ok => "evidence kept",
+            "evidence_drop" if *arm != "drop-evidence" => "a transform lost evidence",
             "evidence_drop" if p.arm_ok < p.base_ok => "evidence loss detected",
             "evidence_drop" => "evidence loss not detected",
             _ => "unknown control",

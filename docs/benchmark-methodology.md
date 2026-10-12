@@ -112,7 +112,7 @@ The categories are the PLAN §14.4 task kinds: `api_query`, `code_search`, `fail
 Two control kinds validate the harness:
 
 - `incompressible`: inputs that every listed transform declines. Every arm equals baseline. Any paired difference measures run-to-run noise of the model.
-- `evidence_drop`: the `drop-evidence` arm removes the answer-carrying line. It must score below baseline. This shows that the harness detects evidence loss.
+- `evidence_drop`: the `drop-evidence` arm removes the answer-carrying line. It must score below baseline. This shows that the harness detects evidence loss. A transform arm on an `evidence_drop` task must keep the evidence and score at least as high as baseline.
 
 ## Backends
 
