@@ -15,7 +15,7 @@
 use std::{
     collections::BTreeMap,
     fs::{self, OpenOptions},
-    io::{self, Write},
+    io::{self, Read, Write},
     os::unix::{
         fs::{OpenOptionsExt, PermissionsExt},
         net::UnixDatagram,
@@ -479,11 +479,13 @@ fn open_private(path: &Path) -> io::Result<fs::File> {
 fn rotate(path: &Path, now: u64, retention: u64) -> io::Result<()> {
     // A symlinked `path` is refused, so the rename cannot replace it.
     refuse_symlink(path)?;
-    let text = match fs::read(path) {
-        Ok(text) => text,
+    let mut file = match fs::File::open(path) {
+        Ok(file) => file,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
         Err(e) => return Err(e),
     };
+    let mut text = Vec::new();
+    file.read_to_end(&mut text)?;
     let cutoff = floor_hour(now.saturating_sub(retention));
     let kept: Vec<u8> = text
         .split(|&b| b == b'\n')
@@ -497,8 +499,9 @@ fn rotate(path: &Path, now: u64, retention: u64) -> io::Result<()> {
         .copied()
         .collect();
     if kept == text {
-        // The rewrite path gets 0600 from its temp file; an unchanged store needs the chmod.
-        return fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+        // The rewrite path gets 0600 from its temp file; an unchanged store needs the chmod,
+        // done on the open handle so a path swapped after the open cannot redirect it.
+        return file.set_permissions(fs::Permissions::from_mode(0o600));
     }
     // A fresh 0600 file: `create_new` never follows a planted symlink.
     let tmp = path.with_extension("jsonl.tmp");
