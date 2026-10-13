@@ -197,8 +197,7 @@ fn floor_hour(t: u64) -> u64 {
 /// Bucket dimensions. A service line has every dimension `None`: it carries
 /// service drops and marks its hour as covered. An hour can hold several
 /// service lines (a restart, a drop after a `flush`), and any service line
-/// marks the hour as covered. A reader that wants the drop count of an hour
-/// sums `dropped` over all its lines; see [`Bucket`].
+/// marks the hour as covered. For the drop count of an hour, see [`Bucket`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct Key {
     pub hour: u64,
@@ -724,5 +723,53 @@ mod tests {
         rotate(&path, T0, retention).unwrap();
         let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
+    }
+
+    /// Each allowlist equals the `as_str()` vocabulary of its enum, and `pick`
+    /// rejects any other string. The exhaustive match stops compiling when a
+    /// variant is added, so the list below cannot fall behind the enum.
+    macro_rules! assert_vocab {
+        ($list:expr, $enum:path, [$($v:ident),+ $(,)?]) => {{
+            use $enum as E;
+            for v in [$(E::$v),+] {
+                match v {
+                    $(E::$v)|+ => {}
+                }
+                assert_eq!(pick(&json!({ "f": v.as_str() }), "f", $list), Some(v.as_str()));
+            }
+            let mut want = vec![$(E::$v.as_str()),+];
+            let mut got = $list.to_vec();
+            want.sort();
+            got.sort();
+            assert_eq!(got, want);
+            assert_eq!(pick(&json!({ "f": "not_a_variant" }), "f", $list), None);
+        }};
+    }
+
+    #[test]
+    fn allowlists_match_enum_vocabularies() {
+        assert_vocab!(ADAPTERS, deslag_telemetry::Adapter, [Hook, Proxy]);
+        assert_vocab!(TOOLS, deslag_telemetry::ToolCategory, [Bash, Mcp, Other]);
+        assert_vocab!(
+            OUTCOMES,
+            deslag_core::Outcome,
+            [Changed, WouldChange, Skipped, Failed]
+        );
+        assert_vocab!(
+            REASONS,
+            deslag_core::Reason,
+            [
+                ModeOff,
+                TransformDisabled,
+                BelowMinBytes,
+                AboveMaxBytes,
+                UnsupportedFormat,
+                DepthLimit,
+                DuplicateKey,
+                EscapedKey,
+                InsufficientGain,
+                InvalidCandidate,
+            ]
+        );
     }
 }
