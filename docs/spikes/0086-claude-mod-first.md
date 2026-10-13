@@ -35,19 +35,19 @@ claude plugin validate plugins/claude-mod-experimental
 claude plugin test plugins/claude-mod-experimental
 ```
 
-To load the mod in a local session (live, not done in this spike): build `deslag`, write `mod` to `$DESLAG_STATE_DIR/owner` (default `~/.local/state/deslag/owner`), and start `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 DESLAG_MOD_MODE=observe DESLAG_MOD_BINARY=/abs/path/to/deslag claude --plugin-dir plugins/claude-mod-experimental`. Use `safe` instead of `observe` to rewrite rows.
+To load the mod in a local session (live, not done in this spike): build `deslag`, write `mod` to the `owner` file in the deslag state directory (`$DESLAG_STATE_DIR`, else `$XDG_STATE_HOME/deslag`, else `~/.local/state/deslag`; see `state_dir` in [deslag-telemetry](../../crates/deslag-telemetry/src/lib.rs)), and start `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 DESLAG_MOD_MODE=observe DESLAG_MOD_BINARY=/abs/path/to/deslag claude --plugin-dir plugins/claude-mod-experimental`. Use `safe` instead of `observe` to rewrite rows.
 
 ### Predeclared budgets
 
-Declared before the benchmark ran. They follow PLAN §13.2 where it has a case and are new otherwise.
+Declared before the benchmark ran. They follow [PLAN §13.2](../PLAN.md#132-proposed-initial-budgets) where it has a case and are new otherwise.
 
 | Case | Budget |
 | --- | --- |
-| Codec bridge, whole process, payload up to 64 KiB | p95 within 2 ms of the hook's p95 on the same payload, and p95 at most 25 ms (PLAN §13.2 warm hook) |
+| Codec bridge, whole process, payload up to 64 KiB | p95 within 2 ms of the hook's p95 on the same payload, and p95 at most 25 ms ([PLAN §13.2](../PLAN.md#132-proposed-initial-budgets) warm hook) |
 | Codec bridge, 1 MiB payload | Completes with a complete envelope; p95 at most 100 ms |
 | Payload above the 16 MiB cap | Exit nonzero, no stdout, original kept; p95 at most 250 ms |
 | Client `$.process.run` overhead over the native call | p95 at most 10 ms (pending live) |
-| Instrumentation in the hot path | No awaited I/O; counters only (PLAN §12.2) |
+| Instrumentation in the hot path | No awaited I/O; counters only ([PLAN §12.2](../PLAN.md#122-hot-path-contract)) |
 
 ## Findings
 
@@ -68,7 +68,7 @@ Status values: `documented` (public declarations or docs only), `offline verifie
 | E9 | Model-visible Bash content is `stdout` when `stderr` is empty and `stdout + stderr` when it is not. Of 3,360 stored Bash rows in local transcripts from the last 5 days: 2,887 equal `stdout`, 334 equal `stdout + stderr`, 89 are `(Bash completed with no output)`, 50 match none of these | Shape-only `jq` aggregation over `~/.claude/projects/**/*.jsonl` (counts, no content read) | observed | The 50 unmatched rows were not inspected: reading their content was denied by the session's permission classifier. Large-output previews (E10) are the likely cause |
 | E10 | The client replaces a large Bash result with a preview and a file path before the model reads it. In this spike's own session, a 31.5 KB result arrived as "Output too large (31.5KB). Full output saved to ..." plus a 2 KB preview | Observed in this session's tool output; the binary contains the string `Output too large (` | observed | Whether `session.append` sees the full text or the preview, and whether the PostToolUse hook runs before this cut, is unknown. This decides how much a mod can compress; see Q1 |
 | E11 | `deslag codec --protocol 1` returns one complete envelope, keeps number lexemes and UTF-8 byte counts exact, reports observe mode as `would_change` with emitted bytes equal to the original, and in safe mode changes text only when the owner file reads `mod` | `cargo test --locked -p deslag-cli codec` (10 tests) | offline verified | |
-| E12 | Owner `mod` makes the hook and the proxy stand down without a change to either: `read_owner` maps any value other than `hook`/`proxy` to `none`, the hook compresses only under `hook`, and the proxy decides new results only under `proxy` while it still replays pinned decisions | Code reading of `crates/deslag-proxy/src/session.rs` and `crates/deslag-cli/src/main.rs`; existing test `no_routed_field_is_replaced_unless_the_hook_owns_compression` | offline verified | No end-to-end test with a live hook and mod in one session |
+| E12 | Owner `mod` makes the hook and the proxy stand down without a change to either: `read_owner` maps any value other than `hook`/`proxy` to `none`, the hook compresses only under `hook`, and the proxy decides new results only under `proxy` while it still replays pinned decisions | Code reading of [`crates/deslag-proxy/src/session.rs`](../../crates/deslag-proxy/src/session.rs) and [`crates/deslag-cli/src/main.rs`](../../crates/deslag-cli/src/main.rs); existing test `no_routed_field_is_replaced_unless_the_hook_owns_compression` | offline verified | No end-to-end test with a live hook and mod in one session |
 | E13 | Bridge cost is at or below the hook's at every size (table below), and every predeclared native budget passes | `cargo bench --locked -p deslag-cli --bench mod_bridge` | offline verified | Excludes the client's `$.process.run` dispatch; see Q3 |
 | E14 | The model reads the rewritten row, and the transcript file never holds the pre-rewrite form of `content` | Declarations at `bf2323b` (`session.append` doc comment) | documented | Live sentinel probe pending (Q2) |
 | E15 | The transcript keeps the tool's structured record (`toolUseResult`) as made, so the original output stays on disk under a mod. The hook replaced that record too ([ADR 0006](../decisions/0006-session-identity-and-replay.md), run A) | Declarations: `SessionAppendInput` "Not on `e`, so stored as made: a tool result's structured record" | documented | Live transcript inspection pending. A mod is therefore not a way to keep large originals off disk |
@@ -79,7 +79,7 @@ Status values: `documented` (public declarations or docs only), `offline verifie
 
 ### Benchmark: hook versus codec bridge
 
-Apple M5 Max, macOS, rustc 1.96.0, release build of this branch, concurrency 1, whole process (spawn, pipes, exit). Payloads are pretty JSON records generated by `crates/deslag-cli/benches/mod_bridge.rs`; the 64 KiB Bash payload is the generator behind the 78,633-byte baseline event in `docs/benchmarks/baseline.md`. The client's `$.process.run` dispatch is not included.
+Apple M5 Max, macOS, rustc 1.96.0, release build of this branch, concurrency 1, whole process (spawn, pipes, exit). Payloads are pretty JSON records generated by [`crates/deslag-cli/benches/mod_bridge.rs`](../../crates/deslag-cli/benches/mod_bridge.rs); the 64 KiB Bash payload is the generator behind the 78,633-byte baseline event in [`docs/benchmarks/baseline.md`](../benchmarks/baseline.md). The client's `$.process.run` dispatch is not included.
 
 | Payload | Path | Samples | p50 | p95 | p99 | stdout bytes | Exit 0 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -147,7 +147,7 @@ Staged plan. Each step is one small PR with its own tests; none deletes the prox
 | Step | Change | Depends on | Acceptance | Rollback |
 | --- | --- | --- | --- | --- |
 | 1 | This spike: codec bridge, experimental mod, benchmark, ADR (proposed) | none | Tests above pass; ADR accepted or rejected by the owner | Revert the PR; nothing ships |
-| 2 | Live verification of Q1 to Q4 with operator-authorized caps; record results in `docs/compatibility.md` | 1, budget authorization | Sentinel probe and lifecycle table filled for the mod | Docs only |
+| 2 | Live verification of Q1 to Q4 with operator-authorized caps; record results in [`docs/compatibility.md`](../compatibility.md) | 1, budget authorization | Sentinel probe and lifecycle table filled for the mod | Docs only |
 | 3 | `Owner::Mod` in `deslag_proxy::session` and the owner writer in the #20 launcher/doctor work; the hook conflict scan reports an active mod | 2 | Owner file round trip; hook and proxy stand down under `mod` (tests) | Owner back to `hook` |
 | 4 | Usage observer and compression counters in `plugins/claude` as an opt-in mod module, feeding the #21 local service over a bounded bridge | 2, #21 | Works with compression off; drops are counted; no awaited I/O in the hot path | Disable the mod module; the hook is unaffected |
 | 5 | Mod compression as an opt-in alternative to the hook, binary path from the verified install, one owner selected through the owner file | 2 passing Q1 to Q3, 3 | #22 and #23 gates extended to the mod adapter | Owner `hook`, disable the mod module |
