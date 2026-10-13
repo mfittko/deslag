@@ -109,9 +109,32 @@ impl Drop for Service {
     }
 }
 
+/// Sends one `ping` without retries and reports whether the service answered `ok`.
+fn pinged(dir: &Path) -> bool {
+    let path = dir.join("ping.sock");
+    let _ = fs::remove_file(&path);
+    let Ok(client) = UnixDatagram::bind(&path) else {
+        return false;
+    };
+    client
+        .set_read_timeout(Some(Duration::from_millis(200)))
+        .unwrap();
+    let mut buf = [0; 16];
+    let ok = client.send_to(b"ping", dir.join("local.sock")).is_ok()
+        && client.recv(&mut buf).is_ok_and(|n| &buf[..n] == b"ok");
+    let _ = fs::remove_file(&path);
+    ok
+}
+
 /// Spawns `deslag local run` and waits until it answers `ping`.
 fn run(dir: &Path) -> Service {
-    let child = command(dir, &["local", "run"])
+    run_with(dir, &[])
+}
+
+/// Spawns `deslag local run <args>` and waits until it answers `ping`. A
+/// stale socket never answers, so it cannot end the wait early.
+fn run_with(dir: &Path, args: &[&str]) -> Service {
+    let child = command(dir, &[&["local", "run"][..], args].concat())
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -120,12 +143,11 @@ fn run(dir: &Path) -> Service {
     // Guard first: a failed wait below kills the child on unwind.
     let mut service = Service(child, dir.to_path_buf());
     let deadline = Instant::now() + Duration::from_secs(5);
-    while !dir.join("local.sock").exists() {
+    while !pinged(dir) {
         assert!(service.0.try_wait().unwrap().is_none(), "service exited");
-        assert!(Instant::now() < deadline, "service did not bind");
+        assert!(Instant::now() < deadline, "service did not answer ping");
         thread::sleep(Duration::from_millis(20));
     }
-    assert_eq!(request(dir, b"ping"), b"ok");
     service
 }
 
@@ -213,6 +235,51 @@ fn run_replaces_a_stale_socket() {
     drop(UnixDatagram::bind(dir.join("local.sock")).unwrap());
     // `run` waits for a `ping` answer, which the stale socket never gives.
     run(&dir).stop();
+}
+
+#[test]
+fn a_failed_flush_or_stop_replies_and_keeps_the_service_running() {
+    let dir = state_dir("flushfail");
+    let _cleanup = RemoveOnDrop(dir.clone());
+    // A directory in place of stats.jsonl makes every write fail.
+    fs::create_dir_all(dir.join("stats.jsonl")).unwrap();
+    let service = run(&dir);
+    send(
+        &UnixDatagram::unbound().unwrap(),
+        report().to_string().as_bytes(),
+        &dir,
+    );
+    for message in [&b"flush"[..], b"stop"] {
+        let reply = String::from_utf8(request(&dir, message)).unwrap();
+        assert!(reply.starts_with("flush failed: "), "{reply}");
+        assert_eq!(request(&dir, b"ping"), b"ok");
+    }
+    fs::remove_dir(dir.join("stats.jsonl")).unwrap();
+    service.stop();
+    let text = fs::read_to_string(dir.join("stats.jsonl")).unwrap();
+    assert!(text.contains(r#""adapter":"hook""#), "buckets kept: {text}");
+}
+
+#[test]
+fn run_applies_the_retention_days_argument() {
+    let dir = state_dir("retention");
+    let _cleanup = RemoveOnDrop(dir.clone());
+    fs::create_dir_all(&dir).unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let hour = now - now % 3600;
+    let old = format!(r#"{{"hour":{},"dropped":1}}"#, hour - 2 * 24 * 3600);
+    let recent = format!(r#"{{"hour":{hour},"dropped":2}}"#);
+    let stats = dir.join("stats.jsonl");
+    fs::write(&stats, format!("{old}\n{recent}\n")).unwrap();
+    fs::set_permissions(&stats, fs::Permissions::from_mode(0o600)).unwrap();
+    // The default 90-day retention keeps both lines; only the argument drops `old`.
+    run_with(&dir, &["--retention-days", "1"]).stop();
+    let text = fs::read_to_string(&stats).unwrap();
+    assert!(!text.contains(&old), "{text}");
+    assert!(text.contains(&recent), "{text}");
 }
 
 #[test]
