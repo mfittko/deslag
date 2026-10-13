@@ -771,5 +771,14 @@ mod tests {
                 InvalidCandidate,
             ]
         );
+        // Exact counts have no allowed tokenizer yet; a new variant must be reviewed here.
+        use deslag_core::TokenMethod;
+        match TokenMethod::Estimate {
+            TokenMethod::Estimate | TokenMethod::Exact => {}
+        }
+        assert_eq!(
+            TOKEN_LABELS,
+            [(TokenMethod::Estimate.as_str(), EstimateCounter::TOKENIZER)]
+        );
     }
 }
