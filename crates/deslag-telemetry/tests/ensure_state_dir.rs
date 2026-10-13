@@ -67,16 +67,18 @@ fn creates_0700_fixes_own_dirs_and_refuses_foreign_or_non_dirs() {
     }
 
     // Symlinks to directories of another uid: `/` (0755) and `/tmp` (1777).
-    // Skipped as root, which owns both.
-    if fs::metadata(&file).unwrap().uid() != 0 {
-        for foreign in ["/", "/tmp"] {
-            let before = mode(Path::new(foreign));
-            let link = root.join(format!("foreign{}", foreign.len()));
-            symlink(foreign, &link).unwrap();
-            set_state_dir(&link);
-            assert!(ensure_state_dir().is_err(), "{foreign}");
-            assert_eq!(mode(Path::new(foreign)), before);
+    // Each path owned by the test uid (root, or a sandbox tmpfs) is skipped.
+    let uid = fs::metadata(&file).unwrap().uid();
+    for foreign in ["/", "/tmp"] {
+        if fs::metadata(foreign).unwrap().uid() == uid {
+            continue;
         }
+        let before = mode(Path::new(foreign));
+        let link = root.join(format!("foreign{}", foreign.len()));
+        symlink(foreign, &link).unwrap();
+        set_state_dir(&link);
+        assert!(ensure_state_dir().is_err(), "{foreign}");
+        assert_eq!(mode(Path::new(foreign)), before);
     }
 
     fs::remove_dir_all(&root).unwrap();
