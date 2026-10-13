@@ -497,7 +497,8 @@ fn rotate(path: &Path, now: u64, retention: u64) -> io::Result<()> {
         .copied()
         .collect();
     if kept == text {
-        return Ok(());
+        // The rewrite path gets 0600 from its temp file; an unchanged store needs the chmod.
+        return fs::set_permissions(path, fs::Permissions::from_mode(0o600));
     }
     // A fresh 0600 file: `create_new` never follows a planted symlink.
     let tmp = path.with_extension("jsonl.tmp");
@@ -714,5 +715,11 @@ mod tests {
         fs::write(&path, format!("\n{valid}")).unwrap();
         rotate(&path, T0, retention).unwrap();
         assert_eq!(fs::read_to_string(&path).unwrap(), valid + "\n");
+
+        // An unchanged store is still narrowed to 0600.
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        rotate(&path, T0, retention).unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
     }
 }
