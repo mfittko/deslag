@@ -9,7 +9,10 @@ use std::{
 };
 
 use bytes::Bytes;
-use deslag_proxy::{Upstream, serve};
+use deslag_proxy::{
+    Upstream, serve,
+    session::{Mode, Owner, Store, write_owner},
+};
 use http_body_util::{BodyExt, Full};
 use hyper::{Request, Response, body::Incoming, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
@@ -68,7 +71,14 @@ async fn proxy(upstream: SocketAddr, minify: bool) -> SocketAddr {
     let addr = listener.local_addr().unwrap();
     let mut upstream = Upstream::parse(&format!("http://{upstream}")).unwrap();
     if minify {
-        upstream = upstream.with_json_minification();
+        let dir = std::env::temp_dir().join(format!("deslag-bench-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        write_owner(&dir, Owner::Proxy).unwrap();
+        let store = Store {
+            dir,
+            mode: Mode::Safe,
+        };
+        upstream = upstream.with_json_minification(store);
     }
     tokio::spawn(serve(listener, upstream));
     addr
@@ -96,6 +106,7 @@ async fn measure(tx: &mut Sender, body: &Bytes, n: usize) -> (Vec<Duration>, usi
         tx.ready().await.unwrap();
         let req = Request::post("/v1/messages")
             .header("content-type", "application/json")
+            .header("x-claude-code-session-id", "bench")
             .body(Full::new(body.clone()))
             .unwrap();
         let start = Instant::now();
@@ -125,6 +136,14 @@ async fn main() {
         ("proxy, --minify-json", minifying),
     ] {
         targets.push((label, connect(target).await));
+    }
+    // Start the session with a request without tool results, so the first
+    // measured request records its decision and later ones replay it.
+    let first = Bytes::from_static(
+        br#"{"model":"claude-bench","messages":[{"role":"user","content":"hi"}]}"#,
+    );
+    for (_, tx) in &mut targets {
+        measure(tx, &first, 1).await;
     }
     // Warm up every target before measuring any of them.
     for (_, tx) in &mut targets {

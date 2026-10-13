@@ -9,8 +9,10 @@ use std::io::{self, Read, Write};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::time::SystemTime;
 
 use deslag_core::{BoundedExecutor, CompressionReport, FIRST_SLICE_JSON_MINIFY_CONTEXT, Rejected};
+use deslag_proxy::session::{self, Mode, Owner, Store};
 use deslag_proxy::{Upstream, serve};
 use deslag_telemetry as report;
 use serde_json::{Value, json};
@@ -39,7 +41,15 @@ fn main() -> ExitCode {
         ["hook", "claude", flags @ ..] if matches!(flags, [] | ["--minify-json"]) => {
             let exec = BoundedExecutor::default();
             let env = |key: &str| std::env::var_os(key);
-            match claude_hook(io::stdin().lock(), !flags.is_empty(), env, &exec, minify) {
+            let (input, minify_json) = (io::stdin().lock(), !flags.is_empty());
+            match claude_hook(
+                input,
+                minify_json,
+                hook_owns_compression,
+                env,
+                &exec,
+                minify,
+            ) {
                 // A failed write leaves the tool output unchanged, which is the safe default.
                 Ok(Some(output)) => drop(writeln!(io::stdout().lock(), "{output}")),
                 Ok(None) => {}
@@ -83,7 +93,16 @@ fn proxy(args: &[&str]) -> Result<(), String> {
     }
     let mut upstream = Upstream::parse(upstream.ok_or(PROXY_USAGE)?)?;
     if minify_json {
-        upstream = upstream.with_json_minification();
+        let dir = session::state_dir().ok_or(
+            "--minify-json needs a state directory: set DESLAG_STATE_DIR, XDG_STATE_HOME or HOME",
+        )?;
+        session::prune(&dir, session::RETENTION, SystemTime::now())
+            .map_err(|e| format!("cannot prune session state in {}: {e}", dir.display()))?;
+        let store = Store {
+            dir,
+            mode: Mode::Safe,
+        };
+        upstream = upstream.with_json_minification(store);
     }
     let addr: SocketAddr = listen
         .parse()
@@ -106,17 +125,22 @@ fn proxy(args: &[&str]) -> Result<(), String> {
 
 /// Validates a Claude Code PostToolUse event. With `minify_json`, returns the hook
 /// output that replaces minifiable JSON in a Bash stdout or MCP text block. `None`
-/// leaves the tool output unchanged. The hook is stateless: each call reads only
-/// its own event, so parallel tools and subagents cannot affect each other.
+/// leaves the tool output unchanged. The hook keeps no per-result state: each call
+/// reads only its own event and the session owner, so parallel tools and subagents
+/// cannot affect each other.
 ///
 /// Errors are diagnostics only. The caller reports them on stderr and still exits 0,
 /// so the hook never blocks the tool. A rejected or panicked compression job is
 /// such an error (`compression <reason>; tool output unchanged`), and it leaves
 /// every routed field unchanged. Another `PostToolUse` hook that may replace
 /// the same output is such an error, because the client keeps only the last write.
+///
+/// `owns_compression` is the session ownership gate. Every routed field passes
+/// through it, and it is checked only with `minify_json`.
 fn claude_hook(
     mut input: impl Read,
     minify_json: bool,
+    owns_compression: impl FnOnce() -> bool,
     env: impl Fn(&str) -> Option<OsString>,
     exec: &BoundedExecutor,
     job: Job,
@@ -148,7 +172,8 @@ fn claude_hook(
     if event.get("tool_response").is_none_or(Value::is_null) {
         return Err("hook input has no tool_response".to_string());
     }
-    if !minify_json {
+    // With any owner other than the hook, no routed field is replaced.
+    if !minify_json || !owns_compression() {
         return Ok(None);
     }
     // Only Bash stdout and MCP text blocks are eligible. Every other tool, including
@@ -248,6 +273,14 @@ fn minify_mcp(response: &Value, run: &Run) -> Result<Option<Value>, Rejected> {
     Ok(changed.then_some(Value::Array(updated)))
 }
 
+/// The hook compresses only when the configured owner is the hook. It keeps no
+/// replay state: the client stores and resends the replacement. The owner is
+/// read per call, so after a mid-session change from `proxy` to `hook` the hook
+/// compresses new results while the proxy replays its earlier decisions.
+fn hook_owns_compression() -> bool {
+    session::state_dir().is_some_and(|dir| session::read_owner(&dir) == Owner::Hook)
+}
+
 /// Builds the PostToolUse output that replaces the tool result with `updated`.
 ///
 /// Claude Code drops an `updatedToolOutput` that does not match the tool's output
@@ -316,7 +349,7 @@ mod tests {
         minify_json: bool,
         env: impl Fn(&str) -> Option<OsString>,
     ) -> Result<Option<Value>, String> {
-        claude_hook(input, minify_json, env, &generous(), minify)
+        claude_hook(input, minify_json, || true, env, &generous(), minify)
     }
 
     /// Runs the hook with config and project dirs at `dir`, so real settings never apply.
@@ -550,6 +583,31 @@ mod tests {
     }
 
     #[test]
+    fn no_routed_field_is_replaced_unless_the_hook_owns_compression() {
+        let mut bash = fixture("posttooluse-bash.json");
+        bash["tool_response"]["stdout"] = PRETTY.into();
+        for event in [bash, fixture("posttooluse-mcp-text.json")] {
+            let bytes = serde_json::to_vec(&event).unwrap();
+            // The owner gate runs before any settings lookup or conflict scan.
+            let env =
+                |key: &str| -> Option<OsString> { panic!("env read before the owner gate: {key}") };
+            // It also runs before any executor job: a job that ran would panic,
+            // and the hook would report `job_panicked` instead of `Ok(None)`.
+            fn never(_: &str) -> Compressed {
+                panic!("executor job ran before the owner gate")
+            }
+            let gated = claude_hook(bytes.as_slice(), true, || false, env, &generous(), never);
+            assert_eq!(gated, Ok(None));
+            // Without the flag the gate is never consulted.
+            let gate = || panic!("owner read without --minify-json");
+            assert_eq!(
+                claude_hook(bytes.as_slice(), false, gate, |_| None, &generous(), never),
+                Ok(None)
+            );
+        }
+    }
+
+    #[test]
     fn conflicting_hook_blocks_the_replacement() {
         let dir = temp_dir("conflict");
         let settings = json!({"hooks": {"PostToolUse": [
@@ -651,7 +709,14 @@ mod tests {
     #[test]
     fn expired_job_leaves_output_unchanged() {
         let exec = BoundedExecutor::new(1, std::time::Duration::from_millis(1)).unwrap();
-        let result = claude_hook(pretty_bash().as_slice(), true, |_| None, &exec, slow_on_b);
+        let result = claude_hook(
+            pretty_bash().as_slice(),
+            true,
+            || true,
+            |_| None,
+            &exec,
+            slow_on_b,
+        );
         assert_eq!(
             result,
             Err("compression budget_exceeded; tool output unchanged".to_string())
@@ -667,7 +732,7 @@ mod tests {
         ]);
         let bytes = serde_json::to_vec(&event).unwrap();
         let exec = BoundedExecutor::new(1, std::time::Duration::from_millis(200)).unwrap();
-        let result = claude_hook(bytes.as_slice(), true, |_| None, &exec, slow_on_b);
+        let result = claude_hook(bytes.as_slice(), true, || true, |_| None, &exec, slow_on_b);
         assert_eq!(
             result,
             Err("compression budget_exceeded; tool output unchanged".to_string())
@@ -683,6 +748,7 @@ mod tests {
         let result = claude_hook(
             pretty_bash().as_slice(),
             true,
+            || true,
             |_| None,
             &generous(),
             panic_on_b,
@@ -704,7 +770,14 @@ mod tests {
         while exec.in_flight() == 0 {
             std::thread::yield_now();
         }
-        let result = claude_hook(pretty_bash().as_slice(), true, |_| None, &exec, minify);
+        let result = claude_hook(
+            pretty_bash().as_slice(),
+            true,
+            || true,
+            |_| None,
+            &exec,
+            minify,
+        );
         assert_eq!(
             result,
             Err("compression busy; tool output unchanged".to_string())
@@ -715,6 +788,7 @@ mod tests {
         let output = claude_hook(
             pretty_bash().as_slice(),
             true,
+            || true,
             |_| Some("/nonexistent-deslag".into()),
             &exec,
             minify,

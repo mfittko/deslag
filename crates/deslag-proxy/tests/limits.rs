@@ -3,7 +3,10 @@
 use std::{convert::Infallible, net::SocketAddr, time::Duration};
 
 use bytes::Bytes;
-use deslag_proxy::{Limits, Upstream, available_inspect_permits, serve_with};
+use deslag_proxy::{
+    Limits, Upstream, available_inspect_permits, serve_with,
+    session::{Mode, Store},
+};
 use http_body_util::Full;
 use hyper::{Request, Response, body::Incoming, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
@@ -191,7 +194,10 @@ async fn stalled_minify_uploads_release_permits_at_body_read_timeout() {
     };
     let upstream = Upstream::parse(&format!("http://{up}"))
         .unwrap()
-        .with_json_minification();
+        .with_json_minification(Store {
+            dir: std::env::temp_dir().join(format!("deslag-limits-{}", std::process::id())),
+            mode: Mode::Safe,
+        });
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     // No service lives here, so no test reports to a real state dir. SAFETY:
@@ -209,7 +215,7 @@ async fn stalled_minify_uploads_release_permits_at_body_read_timeout() {
                 let mut client = TcpStream::connect(addr).await.unwrap();
                 send(
                     &mut client,
-                    b"POST /v1/messages HTTP/1.1\r\nhost: proxy\r\ncontent-length: 1000\r\n\r\n{\"messages\"",
+                    b"POST /v1/messages HTTP/1.1\r\nhost: proxy\r\nx-claude-code-session-id: s\r\ncontent-length: 1000\r\n\r\n{\"messages\"",
                 )
                 .await
             })
@@ -224,12 +230,26 @@ async fn stalled_minify_uploads_release_permits_at_body_read_timeout() {
     .await
     .expect("stalled uploads never took every permit");
 
+    // A request without a session id needs no permit, so it streams through
+    // while every permit is held.
+    let mut unscoped = TcpStream::connect(addr).await.unwrap();
+    let head = send(
+        &mut unscoped,
+        b"POST /v1/messages HTTP/1.1\r\nhost: proxy\r\ncontent-length: 2\r\n\r\n{}",
+    )
+    .await;
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    assert!(
+        start.elapsed() < body_read_timeout,
+        "unscoped request queued for a permit"
+    );
+
     let mut healthy = TcpStream::connect(addr).await.unwrap();
     let head = timeout(
         WAIT,
         send(
             &mut healthy,
-            b"POST /v1/messages HTTP/1.1\r\nhost: proxy\r\ncontent-length: 2\r\n\r\n{}",
+            b"POST /v1/messages HTTP/1.1\r\nhost: proxy\r\nx-claude-code-session-id: s\r\ncontent-length: 2\r\n\r\n{}",
         ),
     )
     .await

@@ -2,9 +2,11 @@ use std::io::Write;
 use std::os::unix::net::UnixDatagram;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+use deslag_proxy::session::{Owner, write_owner};
 use serde_json::{Value, json};
 
 /// Returns a fresh directory unique to this call, so parallel test threads never
@@ -19,15 +21,33 @@ fn temp_dir(name: &str) -> PathBuf {
     dir
 }
 
-/// Spawns the hook with config, project, home and state dirs at `dir`, so the
-/// developer's real Claude Code settings and local service never apply.
-fn spawn_in(dir: &Path, args: &[&str]) -> Child {
-    Command::new(env!("CARGO_BIN_EXE_deslag"))
-        .args(args)
+/// A fresh state directory with `owner` written, if any.
+fn state(owner: Option<Owner>) -> PathBuf {
+    let dir = temp_dir("state");
+    if let Some(owner) = owner {
+        write_owner(&dir, owner).unwrap();
+    }
+    dir
+}
+
+/// A shared state directory whose owner is the hook.
+fn hook_state() -> &'static Path {
+    static DIR: OnceLock<PathBuf> = OnceLock::new();
+    DIR.get_or_init(|| state(Some(Owner::Hook)))
+}
+
+/// Spawns the hook with config and project dirs at `dir`, so the developer's real
+/// Claude Code settings never apply. Every state-dir variable is cleared, so the
+/// real owner file never applies either; then `env` is applied.
+fn spawn_in(dir: &Path, args: &[&str], env: &[(&str, &Path)]) -> Child {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_deslag"));
+    for var in ["DESLAG_STATE_DIR", "XDG_STATE_HOME", "HOME"] {
+        cmd.env_remove(var);
+    }
+    cmd.args(args)
         .env("CLAUDE_CONFIG_DIR", dir)
         .env("CLAUDE_PROJECT_DIR", dir)
-        .env("HOME", dir)
-        .env("DESLAG_STATE_DIR", dir)
+        .envs(env.iter().copied())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -35,14 +55,20 @@ fn spawn_in(dir: &Path, args: &[&str]) -> Child {
         .expect("spawn deslag")
 }
 
-fn run_in(dir: &Path, args: &[&str], stdin: &[u8]) -> Output {
-    let mut child = spawn_in(dir, args);
+fn run_in(dir: &Path, args: &[&str], stdin: &[u8], env: &[(&str, &Path)]) -> Output {
+    let mut child = spawn_in(dir, args, env);
     child.stdin.take().unwrap().write_all(stdin).unwrap();
     child.wait_with_output().unwrap()
 }
 
+/// Runs with no Claude settings and the given state-dir variables.
+fn run_env(args: &[&str], stdin: &[u8], env: &[(&str, &Path)]) -> Output {
+    run_in(&temp_dir("empty"), args, stdin, env)
+}
+
+/// Runs with no Claude settings and a state directory whose owner is the hook.
 fn run(args: &[&str], stdin: &[u8]) -> Output {
-    run_in(&temp_dir("empty"), args, stdin)
+    run_env(args, stdin, &[("DESLAG_STATE_DIR", hook_state())])
 }
 
 fn fixture(name: &str) -> Vec<u8> {
@@ -186,9 +212,61 @@ fn without_flag_pretty_json_is_untouched() {
 }
 
 #[test]
+fn minify_flag_replaces_only_when_the_hook_owns_compression() {
+    let input = fixture("posttooluse-bash-json.json");
+    let mcp = fixture("posttooluse-mcp-text.json");
+    let args = ["hook", "claude", "--minify-json"];
+    // The gate covers every routed field: Bash stdout and MCP text blocks alike.
+    for owner in [Some(Owner::Proxy), Some(Owner::None), None] {
+        let dir = state(owner);
+        for event in [&input, &mcp] {
+            let output = run_env(&args, event, &[("DESLAG_STATE_DIR", &dir)]);
+            assert_eq!(output.status.code(), Some(0), "{owner:?}");
+            assert!(output.stdout.is_empty(), "{owner:?}");
+            assert!(output.stderr.is_empty(), "{owner:?}");
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+    assert!(!run(&args, &mcp).stdout.is_empty(), "mcp with hook owner");
+    let unknown = state(None);
+    std::fs::write(unknown.join("owner"), "hooks\n").unwrap();
+    let output = run_env(&args, &input, &[("DESLAG_STATE_DIR", &unknown)]);
+    assert!(output.stdout.is_empty(), "unknown owner");
+    assert!(
+        run_env(&args, &input, &[]).stdout.is_empty(),
+        "no state dir"
+    );
+
+    // XDG_STATE_HOME/deslag, then HOME/.local/state/deslag.
+    let xdg = state(None);
+    write_owner(&xdg.join("deslag"), Owner::Hook).unwrap();
+    assert!(
+        !run_env(&args, &input, &[("XDG_STATE_HOME", &xdg)])
+            .stdout
+            .is_empty()
+    );
+    let home = state(None);
+    write_owner(&home.join(".local/state/deslag"), Owner::Hook).unwrap();
+    assert!(!run_env(&args, &input, &[("HOME", &home)]).stdout.is_empty());
+
+    // Relative values are skipped, so the cwd never selects the owner file.
+    let relative = Path::new("relative-state");
+    let env = [
+        ("DESLAG_STATE_DIR", relative),
+        ("XDG_STATE_HOME", relative),
+        ("HOME", &home),
+    ];
+    assert!(!run_env(&args, &input, &env).stdout.is_empty());
+    for dir in [unknown, xdg, home] {
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+#[test]
 fn live_service_gets_a_hook_report_and_output_is_unchanged() {
     let args = ["hook", "claude", "--minify-json"];
-    let dir = temp_dir("live");
+    // The hook reports only results it compresses, so it must own the session.
+    let dir = state(Some(Owner::Hook));
     let service = UnixDatagram::bind(dir.join("local.sock")).unwrap();
     service
         .set_read_timeout(Some(Duration::from_secs(5)))
@@ -201,7 +279,7 @@ fn live_service_gets_a_hook_report_and_output_is_unchanged() {
         let input = fixture(name);
         let baseline = run(&args, &input);
         assert!(!baseline.stdout.is_empty(), "{name}");
-        let output = run_in(&dir, &args, &input);
+        let output = run_env(&args, &input, &[("DESLAG_STATE_DIR", &dir)]);
         assert_eq!(output.status.code(), Some(0), "{name}");
         assert!(output.stderr.is_empty(), "{name}");
         assert_eq!(output.stdout, baseline.stdout, "{name}");
@@ -219,12 +297,12 @@ fn stale_socket_does_not_change_output_or_block() {
     let input = fixture("posttooluse-bash-json.json");
     let args = ["hook", "claude", "--minify-json"];
     let baseline = run(&args, &input);
-    let dir = temp_dir("stale");
+    let dir = state(Some(Owner::Hook));
     // Bind and drop: the socket file stays with no listener behind it.
     drop(UnixDatagram::bind(dir.join("local.sock")).unwrap());
 
     let start = Instant::now();
-    let output = run_in(&dir, &args, &input);
+    let output = run_env(&args, &input, &[("DESLAG_STATE_DIR", &dir)]);
     assert!(start.elapsed() < Duration::from_secs(5));
     assert_eq!(output.status.code(), Some(0));
     assert!(output.stderr.is_empty());
@@ -324,7 +402,13 @@ fn parallel_invocations_do_not_contaminate_each_other() {
         .collect();
     let mut children: Vec<Child> = cases
         .iter()
-        .map(|_| spawn_in(&dir, &["hook", "claude", "--minify-json"]))
+        .map(|_| {
+            spawn_in(
+                &dir,
+                &["hook", "claude", "--minify-json"],
+                &[("DESLAG_STATE_DIR", hook_state())],
+            )
+        })
         .collect();
     for (child, (input, _)) in children.iter_mut().zip(&cases) {
         child.stdin.take().unwrap().write_all(input).unwrap();
@@ -353,6 +437,7 @@ fn conflicting_hook_is_reported_and_output_left_unchanged() {
         &dir,
         &["hook", "claude", "--minify-json"],
         &fixture("posttooluse-bash-json.json"),
+        &[("DESLAG_STATE_DIR", hook_state())],
     );
     assert_eq!(single_output(&output), None);
     let stderr = String::from_utf8_lossy(&output.stderr);
