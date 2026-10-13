@@ -7,10 +7,19 @@ use std::process::{Child, Command, Output, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use deslag_proxy::session::{Owner, write_owner};
+
 /// A fresh short state dir under /tmp: macOS caps socket paths at 104 bytes.
 fn state_dir(name: &str) -> PathBuf {
     let dir = PathBuf::from(format!("/tmp/dsl-it-{}-{name}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
+    dir
+}
+
+/// A fresh state dir whose owner file says the hook owns compression.
+fn hook_state_dir(name: &str) -> PathBuf {
+    let dir = state_dir(name);
+    write_owner(&dir, Owner::Hook).unwrap();
     dir
 }
 
@@ -153,10 +162,12 @@ fn run_with(dir: &Path, args: &[&str]) -> Service {
 
 #[test]
 fn service_persists_buckets_across_restarts() {
-    let dir = state_dir("life");
+    let dir = hook_state_dir("life");
     let _cleanup = RemoveOnDrop(dir.clone());
     let hook = ["hook", "claude", "--minify-json"];
-    let expected = deslag(&state_dir("none"), &hook, &hook_input()).stdout;
+    let plain = hook_state_dir("none");
+    let _plain_cleanup = RemoveOnDrop(plain.clone());
+    let expected = deslag(&plain, &hook, &hook_input()).stdout;
     assert!(!expected.is_empty());
 
     for round in 1..=2 {
@@ -215,16 +226,19 @@ fn flush_writes_the_open_hour_and_keeps_the_service_running() {
 
 #[test]
 fn hook_output_is_unchanged_with_a_stale_socket() {
-    let dir = state_dir("stale");
+    let dir = hook_state_dir("stale");
     fs::create_dir_all(&dir).unwrap();
     drop(UnixDatagram::bind(dir.join("local.sock")).unwrap());
     let hook = ["hook", "claude", "--minify-json"];
     let with_stale = deslag(&dir, &hook, &hook_input());
-    let without = deslag(&state_dir("absent"), &hook, &hook_input());
+    let absent = hook_state_dir("absent");
+    let without = deslag(&absent, &hook, &hook_input());
+    assert!(!without.stdout.is_empty());
     assert_eq!(with_stale.status.code(), Some(0));
     assert!(with_stale.stderr.is_empty());
     assert_eq!(with_stale.stdout, without.stdout);
     let _ = fs::remove_dir_all(&dir);
+    let _ = fs::remove_dir_all(&absent);
 }
 
 #[test]
@@ -300,7 +314,7 @@ fn bad_local_arguments_print_usage_and_exit_64() {
 
 #[test]
 fn run_survives_a_corrupt_stats_file_and_a_loose_state_dir() {
-    let dir = state_dir("corrupt");
+    let dir = hook_state_dir("corrupt");
     let _cleanup = RemoveOnDrop(dir.clone());
     fs::create_dir_all(&dir).unwrap();
     fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
