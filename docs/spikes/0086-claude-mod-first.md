@@ -11,7 +11,7 @@ Frozen inputs:
 | Input | Value |
 | --- | --- |
 | Repository | `main` at `f1ab0d6` (the issue named `368a619`; PR #72 merged in between) |
-| Installed client | Claude Code 2.1.296, macOS arm64 (`/Users/mfittko/.local/share/claude/versions/2.1.296`) |
+| Installed client | Claude Code 2.1.296, macOS arm64 (`~/.local/share/claude/versions/2.1.296`) |
 | Public declarations | `anthropics/claude-code` `bf2323b`, `mods/types/claude-code.d.ts`, blob `e3636ad`, header "Written by Claude Code 2.1.277" |
 | Installed declarations | Not available. 2.1.296 has no `/plugin-types` command, and the binary carries no readable declaration text. The installed engine was exercised directly through `claude plugin validate` and `claude plugin test` instead |
 | Function hooks | `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` in user settings; the managed policy (`policy-limits.json`) restricts nothing related to plugins or mods |
@@ -51,22 +51,22 @@ Declared before the benchmark ran. They follow PLAN §13.2 where it has a case a
 
 ## Findings
 
-Status values: `documented` (public declarations or docs only), `offline verified` (this repository's tests or the installed engine under `claude plugin test`, no model), `live verified` (a real session with a model), `pending`.
+Status values: `documented` (public declarations or docs only), `offline verified` (this repository's tests or the installed engine under `claude plugin test`, no model), `observed` (read from the local client's own artifacts or this session's tool output, without a controlled probe), `live verified` (a controlled session with a model), `pending`.
 
 ### Evidence ledger
 
 | # | Claim | Source and command | Status | Limitations |
 | --- | --- | --- | --- | --- |
-| E1 | A `session.append` hook with matcher `{ door: "tool-result" }` loads on 2.1.296 and its rewrite before `next` is the row the engine stores | `claude plugin test plugins/claude-mod-experimental`, test "safe mode stores the codec replacement"; 18 of 18 tests pass | offline verified | The test drives the engine's chain directly. It does not prove the model reads the row; see E14 |
+| E1 | A `session.append` hook with matcher `{ door: "tool-result" }` loads on 2.1.296 and its rewrite before `next` is the row the engine stores | `claude plugin test plugins/claude-mod-experimental`, test "safe mode stores the codec replacement"; the whole suite passes | offline verified | The test drives the engine's chain directly. It does not prove the model reads the row; see E14 |
 | E2 | The rewrite keeps `tool_use_id`, the other blocks and their order; media blocks stay in place | Same suite, "media blocks keep their place" | offline verified | Declarations say the engine also restores pinned fields itself; not exercised |
-| E3 | `$.process.run` can be answered and refused beneath a mod. A refusal, nonzero exit, cut stdout, wrong UTF-8 byte count, missing or extra slot, or `complete` not `true` stores the original, and `next` runs exactly once | Same suite, seven "the original is stored once" cases | offline verified | The real output limit and timeout behavior are not reproduced offline |
+| E3 | `$.process.run` can be answered and refused beneath a mod. A refusal, nonzero exit, cut stdout, wrong UTF-8 byte count, missing or extra slot, or `complete` not `true`, a mismatched policy label, or an unexpected row shape stores the original, and `next` runs exactly once | Same suite, eight "the original is stored once" cases and "unexpected row shapes" | offline verified | Mocked responses only. The real output limit and timeout behavior are not reproduced offline (Q3) |
 | E4 | One failed slot leaves the whole row unchanged | Same suite | offline verified | |
-| E5 | Another rewriting mod beneath deslag changes the stored row after deslag's proposal: stored `OTHER(MIN(x))`, codec input `x`. Only a comparison with the stored row can tell a delivered replacement from an overridden one | Same suite, "composition"; the mod counts `overridden` when the stored text differs | offline verified | Order among user-tier mods follows load order here; not a documented guarantee |
+| E5 | Another rewriting mod beneath deslag changes the stored row after deslag's proposal: stored `OTHER(MIN(x))`, codec input `x`. Only a comparison with the stored row can tell a delivered replacement from an overridden one | Same suite, "composition"; the mod counts `overridden` when the stored text differs | offline verified | The order `OTHER(MIN(x))` was observed once on 2.1.296 and is not asserted; the test accepts either order. Order among user-tier mods is not a documented guarantee |
 | E6 | The `turn.step` observer forwards every chunk and the final result unchanged | Same suite, "turn.step observer" | offline verified | On 2.1.296, `stream.result` settled `undefined` after a `for await`; the generator's own return value was correct |
 | E7 | The engine's loader statically checks a hooks module: a hook must be a function literal or the name of one, `$` must be spelled `$.noun.event(...)` at the call site, and an inline test plugin cannot call an imported function | `claude plugin validate`, `claude plugin test` errors on the first draft | offline verified | Shapes the code: hooks are top-level named functions; configuration lives in module state |
-| E8 | `claude plugin validate` lists each module's hooks, the environment names it reads, and `calls: $.process.run`, and warns "gating hook without .catch" for the `session.append` hook | `claude plugin validate plugins/claude-mod-experimental` | offline verified | The warning is advisory; the hook catches bridge errors and lets a `next` failure propagate on purpose |
-| E9 | Model-visible Bash content is `stdout` when `stderr` is empty and `stdout + stderr` when it is not. Of 3,360 stored Bash rows in local transcripts from the last 5 days: 2,887 equal `stdout`, 334 equal `stdout + stderr`, 89 are `(Bash completed with no output)`, 50 match none of these | Shape-only `jq` aggregation over `~/.claude/projects/**/*.jsonl` (counts, no content read) | offline verified | The 50 unmatched rows were not inspected: reading their content was denied by the session's permission classifier. Large-output previews (E10) are the likely cause |
-| E10 | The client replaces a large Bash result with a preview and a file path before the model reads it. In this spike's own session, a 31.5 KB result arrived as "Output too large (31.5KB). Full output saved to ..." plus a 2 KB preview | Observed in this session's tool output; the binary contains the string `Output too large (` | offline verified | Whether `session.append` sees the full text or the preview, and whether the PostToolUse hook runs before this cut, is unknown. This decides how much a mod can compress; see Q1 |
+| E8 | `claude plugin validate` lists each module's hooks, the environment names it reads, and `calls: $.process.run`, and warns "gating hook without .catch" for the `session.append` hook | `claude plugin validate plugins/claude-mod-experimental` | offline verified | The warning is advisory. The hook catches every preparation and bridge error and lets a `next` failure propagate on purpose, so a failed store is never retried |
+| E9 | Model-visible Bash content is `stdout` when `stderr` is empty and `stdout + stderr` when it is not. Of 3,360 stored Bash rows in local transcripts from the last 5 days: 2,887 equal `stdout`, 334 equal `stdout + stderr`, 89 are `(Bash completed with no output)`, 50 match none of these | Shape-only `jq` aggregation over `~/.claude/projects/**/*.jsonl` (counts, no content read) | observed | The 50 unmatched rows were not inspected: reading their content was denied by the session's permission classifier. Large-output previews (E10) are the likely cause |
+| E10 | The client replaces a large Bash result with a preview and a file path before the model reads it. In this spike's own session, a 31.5 KB result arrived as "Output too large (31.5KB). Full output saved to ..." plus a 2 KB preview | Observed in this session's tool output; the binary contains the string `Output too large (` | observed | Whether `session.append` sees the full text or the preview, and whether the PostToolUse hook runs before this cut, is unknown. This decides how much a mod can compress; see Q1 |
 | E11 | `deslag codec --protocol 1` returns one complete envelope, keeps number lexemes and UTF-8 byte counts exact, reports observe mode as `would_change` with emitted bytes equal to the original, and in safe mode changes text only when the owner file reads `mod` | `cargo test --locked -p deslag-cli codec` (10 tests) | offline verified | |
 | E12 | Owner `mod` makes the hook and the proxy stand down without a change to either: `read_owner` maps any value other than `hook`/`proxy` to `none`, the hook compresses only under `hook`, and the proxy decides new results only under `proxy` while it still replays pinned decisions | Code reading of `crates/deslag-proxy/src/session.rs` and `crates/deslag-cli/src/main.rs`; existing test `no_routed_field_is_replaced_unless_the_hook_owns_compression` | offline verified | No end-to-end test with a live hook and mod in one session |
 | E13 | Bridge cost is at or below the hook's at every size (table below), and every predeclared native budget passes | `cargo bench --locked -p deslag-cli --bench mod_bridge` | offline verified | Excludes the client's `$.process.run` dispatch; see Q3 |
@@ -79,24 +79,27 @@ Status values: `documented` (public declarations or docs only), `offline verifie
 
 ### Benchmark: hook versus codec bridge
 
-Apple M5 Max, macOS, rustc 1.96.0, release build of this branch, concurrency 1, whole process (spawn, pipes, exit). Payloads are pretty JSON records generated by `crates/deslag-cli/benches/mod_bridge.rs`. The client's `$.process.run` dispatch is not included.
+Apple M5 Max, macOS, rustc 1.96.0, release build of this branch, concurrency 1, whole process (spawn, pipes, exit). Payloads are pretty JSON records generated by `crates/deslag-cli/benches/mod_bridge.rs`; the 64 KiB Bash payload is the generator behind the 78,633-byte baseline event in `docs/benchmarks/baseline.md`. The client's `$.process.run` dispatch is not included.
 
 | Payload | Path | Samples | p50 | p95 | p99 | stdout bytes | Exit 0 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2 KiB | hook `--minify-json` | 200 | 1.52 ms | 1.85 ms | 1.97 ms | 1,716 | yes |
-| 2 KiB | codec safe | 200 | 1.34 ms | 1.45 ms | 1.52 ms | 2,072 | yes |
-| 2 KiB | codec observe | 200 | 1.32 ms | 1.42 ms | 1.50 ms | 533 | yes |
-| 64 KiB | hook `--minify-json` | 200 | 1.72 ms | 1.81 ms | 1.87 ms | 50,030 | yes |
-| 64 KiB | codec safe | 200 | 1.62 ms | 1.74 ms | 1.91 ms | 50,391 | yes |
-| 64 KiB | codec observe | 200 | 1.55 ms | 1.68 ms | 1.79 ms | 537 | yes |
-| 1 MiB | hook `--minify-json` | 50 | 7.46 ms | 7.78 ms | 7.86 ms | 807,458 | yes |
-| 1 MiB | codec safe | 50 | 6.00 ms | 6.28 ms | 6.36 ms | 807,826 | yes |
-| 1 MiB | codec observe | 50 | 4.82 ms | 4.92 ms | 5.09 ms | 544 | yes |
-| 17 MiB | hook `--minify-json` | 5 | 5.03 ms | 5.14 ms | 5.14 ms | 0 | yes (passes through) |
-| 17 MiB | codec safe | 5 | 4.97 ms | 5.09 ms | 5.09 ms | 0 | no (exit 65, original kept) |
-| 17 MiB | codec observe | 5 | 4.96 ms | 5.06 ms | 5.06 ms | 0 | no (exit 65, original kept) |
+| 2 KiB | hook `--minify-json` | 200 | 1.35 ms | 1.74 ms | 1.88 ms | 1,716 | 200/200 |
+| 2 KiB | codec safe | 200 | 1.33 ms | 1.41 ms | 1.48 ms | 2,097 | 200/200 |
+| 2 KiB | codec observe | 200 | 1.38 ms | 1.56 ms | 1.85 ms | 558 | 200/200 |
+| 64 KiB | hook `--minify-json` | 200 | 1.71 ms | 1.80 ms | 1.89 ms | 50,030 | 200/200 |
+| 64 KiB | codec safe | 200 | 1.61 ms | 1.74 ms | 1.79 ms | 50,416 | 200/200 |
+| 64 KiB | codec observe | 200 | 1.53 ms | 1.67 ms | 1.80 ms | 562 | 200/200 |
+| 8 MCP blocks of 8 KiB | hook `--minify-json` | 200 | 1.95 ms | 2.03 ms | 2.16 ms | 49,981 | 200/200 |
+| 8 MCP blocks of 8 KiB | codec safe | 200 | 1.93 ms | 2.01 ms | 2.10 ms | 53,544 | 200/200 |
+| 8 MCP blocks of 8 KiB | codec observe | 200 | 1.84 ms | 2.00 ms | 2.12 ms | 3,968 | 200/200 |
+| 1 MiB | hook `--minify-json` | 50 | 7.93 ms | 8.16 ms | 8.34 ms | 807,458 | 50/50 |
+| 1 MiB | codec safe | 50 | 6.02 ms | 6.21 ms | 6.49 ms | 807,851 | 50/50 |
+| 1 MiB | codec observe | 50 | 4.83 ms | 4.97 ms | 5.10 ms | 569 | 50/50 |
+| 17 MiB | hook `--minify-json` | 5 | 4.95 ms | 5.04 ms | 5.04 ms | 0 | 5/5 (passes through) |
+| 17 MiB | codec safe | 5 | 5.05 ms | 5.16 ms | 5.16 ms | 0 | 0/5 (exit 65, original kept) |
+| 17 MiB | codec observe | 5 | 4.93 ms | 4.96 ms | 4.96 ms | 0 | 0/5 (exit 65, original kept) |
 
-Budget check: 64 KiB codec p95 1.74 ms against hook 1.81 ms and the 25 ms ceiling, pass. 1 MiB codec p95 6.28 ms against 100 ms, pass. Above the cap: exit 65, no stdout, p95 5.09 ms against 250 ms, pass. Client dispatch overhead: pending. Memory and allocations were not measured.
+Budget check: 64 KiB codec p95 1.74 ms against hook 1.80 ms and the 25 ms ceiling, pass. 1 MiB codec p95 6.21 ms against 100 ms, pass. Above the cap: exit 65, no stdout, p95 5.16 ms against 250 ms, pass. The multi-block row has no predeclared budget; it is reported only. Client dispatch overhead: pending. Memory, allocations and parallel tool calls were not measured.
 
 The 2 KiB safe envelope is larger than its input because the report travels with the replacement. A bridge for large payloads should drop the report from the transport or keep it as the only content of observe responses.
 
@@ -105,7 +108,7 @@ The 2 KiB safe envelope is larger than its input because the report travels with
 | Area | PostToolUse hook (shipped) | Mod `session.append` (experimental) | Proxy |
 | --- | --- | --- | --- |
 | Rewrite target | Structured `tool_response` (Bash `stdout` only, MCP text blocks) | Model-visible `content`; Bash `stdout` and `stderr` arrive joined | Request bytes on the wire |
-| Bash with stderr | Compresses `stdout`, keeps `stderr` | Whole content must parse as one JSON document, so these rows pass through (about 10 % of Bash rows in E9) | Same as mod |
+| Bash with stderr | Compresses `stdout`, keeps `stderr` | Whole content must parse as one JSON document, so these rows pass through (about 10 % of Bash rows in E9). Gap: when `stdout` is empty and `stderr` alone is one JSON document, the mod cannot tell it from `stdout` and minifies it, which the hook's stdout-only rule never does. Closing the gap needs the structured record, which a `session.append` hook does not get | Same as mod |
 | History | Client stores the replacement (live, ADR 0006) | Client stores the row (documented, pending live) | Replay manifests (offline) |
 | Original on disk | Removed from the transcript (live) | Kept in `toolUseResult` (documented) | Kept (client stores originals) |
 | Composition | Last writer wins; deslag scans settings for conflicts | Middleware chain; stored-row comparison detects overrides (offline) | Separate process |
@@ -121,7 +124,7 @@ Option A (one installable mod, internal modules) is prototyped: the usage observ
 ### Open questions for live verification
 
 - Q1. Does `session.append` see the full Bash text or the large-output preview (E10)? Does the PostToolUse hook run before the cut? If the mod sees only previews, the mod cannot compress the results that matter most.
-- Q2. Sentinel probe: does the model read the rewritten row, and does a fresh client process read it after `--resume`, `--continue` and `--fork-session` with the mod disabled (E14, E16)?
+- Q2. Sentinel probe: does the model read the rewritten row, and does a fresh client process read it after `--resume`, `--continue` and `--fork-session` with the mod disabled (E14, E16)? Does `turn.step` report usage as declared (E18)?
 - Q3. What is the real `$.process.run` output limit and dispatch overhead, and what happens to a child that outlives `timeoutMs` (E17)?
 - Q4. Where does a mod sit relative to the classic PostToolUse hook, and can a mod observe hook outcomes through the `classic.PostToolUse` event?
 - Q5. Linux x86_64, headless (`-p`) and SDK surfaces.
@@ -137,7 +140,7 @@ Reasons:
 - The engine-level mechanics work on the installed client (E1 to E8), and the native bridge is no slower than the hook (E13).
 - Two facts limit the mod's compression value until live evidence exists: Bash rows with stderr pass through (E9), and large results may already be previews at the boundary (E10, Q1).
 - The mod does not remove originals from disk (E15), and `$.process.run` is CLI only (E17).
-- The usage observer gives deslag provider-reported usage for the first time without a proxy (E6, E18). This is independent of compression ownership.
+- The usage observer can give deslag provider-reported usage without a proxy (E6, E18). Its stream forwarding is offline verified; the usage data itself is documented only and needs a live capture (Q2). This is independent of compression ownership.
 
 Staged plan. Each step is one small PR with its own tests; none deletes the proxy or changes a release promise.
 
@@ -160,6 +163,6 @@ Issue impact (proposals, not edits to those issues):
 - #4, #77, #84: no impact on `v0.1.0-alpha.3` or the frozen evaluation.
 - Future OTLP: the exporter stays outside the mod and outside the core; default exports stay metadata-only.
 
-Session boundaries for owner changes: hook to mod and mod to hook are safe at any time, because the client stores both forms. Proxy to mod keeps working while the proxy stays in the path, since it replays pinned decisions under any owner. Removing the proxy from a session with encoded history needs a new session (ADR 0006).
+Session boundaries for owner changes. The owner file is per state directory, so a change applies to every session that shares it. Hook to mod and mod to hook are expected to be safe at any time, because the client stores both forms; for the mod this is pending E16 and Q2. Proxy to mod keeps working while the proxy stays in the path, since it replays pinned decisions under any owner. Removing the proxy from a session with encoded history needs a new session (ADR 0006).
 
 Spike exit: graduate after the owner accepts ADR 0007; the operator runs `exit-spike.mjs --disposition graduate` with a plan file for step 2.
