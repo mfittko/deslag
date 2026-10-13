@@ -74,13 +74,19 @@ pub fn run(
         }
         slots.push((slot, text));
     }
-    // A safe request without mod ownership changes nothing: one owner per session.
+    // A safe request without mod ownership changes nothing. The owner file is
+    // per state directory, so it applies to every session that shares it.
     let owner_gate = mode == Mode::Safe && !owner_is_mod();
     let out: Vec<Value> = slots
         .into_iter()
         .map(|(slot, text)| item(slot, text, mode, owner_gate, exec, job))
         .collect();
-    Ok(json!({"schema_version": 1, "complete": true, "items": out}).to_string())
+    // The caller's policy label is echoed so it can reject a mismatched reply.
+    let policy = request["policy_version"].clone();
+    Ok(
+        json!({"schema_version": 1, "policy_version": policy, "complete": true, "items": out})
+            .to_string(),
+    )
 }
 
 fn item(
@@ -176,6 +182,7 @@ mod tests {
     fn safe_with_mod_owner_changes_every_minifiable_slot() {
         let out = call(&request("safe", &[PRETTY, "plain text", PRETTY]), true).unwrap();
         assert_eq!(out["complete"], true);
+        assert_eq!(out["policy_version"], "spike-1");
         let items = out["items"].as_array().unwrap();
         assert_eq!(items.len(), 3);
         for i in [0, 2] {

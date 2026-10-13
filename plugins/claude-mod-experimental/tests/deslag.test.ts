@@ -7,7 +7,7 @@ import { newStats, parseResponse, record, recordUsage, slots } from '../hooks/de
 const PRETTY_MCP = '[\n  {\n    "id": 1,\n    "name": "äöü"\n  }\n]';
 // Captured from `deslag codec --protocol 1` (release build of this branch).
 const REAL_RESPONSE =
-  '{"complete":true,"items":[{"outcome":"changed","reason":null,"replacement":"[{\\"id\\":1,\\"name\\":\\"äöü\\"}]","replacement_utf8_bytes":26,"report":{"candidate_bytes":26,"candidate_tokens":null,"compression_duration":14083,"emitted_bytes":26,"emitted_tokens":null,"format_version":null,"mode":"safe","original_bytes":45,"original_tokens":null,"outcome":"changed","policy_version":1,"schema_version":1,"skip_or_failure_reason":null,"transform_id":"json-minify","transform_version":1,"validation_outcome":"passed"},"slot":0},{"outcome":"skipped","reason":"unsupported_format","replacement":null,"replacement_utf8_bytes":null,"report":null,"slot":1}],"schema_version":1}\n';
+  '{"complete":true,"items":[{"outcome":"changed","reason":null,"replacement":"[{\\"id\\":1,\\"name\\":\\"äöü\\"}]","replacement_utf8_bytes":26,"report":{"candidate_bytes":26,"candidate_tokens":null,"compression_duration":14083,"emitted_bytes":26,"emitted_tokens":null,"format_version":null,"mode":"safe","original_bytes":45,"original_tokens":null,"outcome":"changed","policy_version":1,"schema_version":1,"skip_or_failure_reason":null,"transform_id":"json-minify","transform_version":1,"validation_outcome":"passed"},"slot":0},{"outcome":"skipped","reason":"unsupported_format","replacement":null,"replacement_utf8_bytes":null,"report":null,"slot":1}],"policy_version":"spike-1","schema_version":1}\n';
 
 const changed = (slot: number, replacement: string) => ({
   slot,
@@ -15,7 +15,7 @@ const changed = (slot: number, replacement: string) => ({
   replacement,
   replacement_utf8_bytes: new TextEncoder().encode(replacement).length,
 });
-const envelope = (items: unknown[]) => JSON.stringify({ schema_version: 1, complete: true, items });
+const envelope = (items: unknown[]) => JSON.stringify({ schema_version: 1, policy_version: 'spike-1', complete: true, items });
 
 function bash(content: string, extra = {}) {
   return {
@@ -103,6 +103,7 @@ describe('session.append compression', () => {
     ['extra slot', () => ({ value: { exitCode: 0, stdout: envelope([changed(0, 'X'), changed(1, 'Y')]), stderr: '' } })],
     ['incomplete', () => ({ value: { exitCode: 0, stdout: JSON.stringify({ schema_version: 1, items: [changed(0, 'X')] }), stderr: '' } })],
     ['denied or timed out', () => ({ deny: 'timeout' })],
+    ['policy mismatch', () => ({ value: { exitCode: 0, stdout: envelope([changed(0, 'X')]).replace('spike-1', 'other'), stderr: '' } })],
   ];
   for (const [name, answer] of broken) {
     test(`${name}: the original is stored once`, async ($, on) => {
@@ -118,6 +119,23 @@ describe('session.append compression', () => {
       expect(appends).toBe(1);
     });
   }
+
+  test('unexpected row shapes are stored once without a bridge call', async ($, on) => {
+    mock.env(on, { DESLAG_MOD_MODE: 'safe', DESLAG_MOD_BINARY: '/opt/deslag' });
+    const calls = bridge(on, () => ({ value: { exitCode: 0, stdout: envelope([changed(0, 'X')]), stderr: '' } }));
+    let appends = 0;
+    on('session.append', (_$: unknown, e: any, next: any) => {
+      appends++;
+      return next(e);
+    });
+    const rows = [mcp('{ }' as any), mcp([null, { type: 'text' }] as any), bash(['{ }'] as any)];
+    for (const row of rows) {
+      const stored = await $.session.append(row);
+      expect(stored.message.content[0].content).toEqual(row.message.content[0].content);
+    }
+    expect(appends).toBe(rows.length);
+    expect(calls).toHaveLength(0);
+  });
 
   test('one failed slot leaves every slot of the row unchanged', async ($, on) => {
     mock.env(on, { DESLAG_MOD_MODE: 'safe', DESLAG_MOD_BINARY: '/opt/deslag' });
@@ -162,18 +180,21 @@ describe('pure helpers', () => {
   test('a stored row that differs from the replacement counts as overridden', () => {
     const want = [{ slot: 0, block: 0, inner: null, text: '{ }' }];
     const stats = newStats();
-    record(stats, want, [changed(0, '{}')], { message: { content: [{ content: 'other' }] } }, true);
-    record(stats, want, [changed(0, '{}')], { message: { content: [{ content: '{}' }] } }, true);
-    record(stats, want, null, null, false);
-    expect(stats.rows).toMatchObject({ overridden: 1, changed: 1, bridge_error: 1 });
-    expect(stats.bytes).toEqual({ original: 6, candidate: 4, stored: 7 });
+    record(stats, want, [changed(0, '{}')], { message: { content: [{ content: 'other' }] } }, 'safe', true);
+    record(stats, want, [changed(0, '{}')], { message: { content: [{ content: '{}' }] } }, 'safe', true);
+    record(stats, want, [changed(0, '{}')], { message: { content: [{ content: '{ }' }] } }, 'safe', false);
+    record(stats, want, null, null, 'safe', false);
+    expect(stats.slots).toMatchObject({ overridden: 1, changed: 1, not_applied: 1, would_change: 0, bridge_error: 1 });
+    expect(stats.bytes).toEqual({ original: 12, candidate: 4, stored: 10 });
   });
 
   test('a step without usage is unknown, never zero', () => {
     const stats = newStats();
     recordUsage(stats, { usage: null });
     recordUsage(stats, { usage: { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 1, cache_creation_input_tokens: 0 } });
-    expect(stats.usage).toEqual({ steps: 2, unknown: 1, input: 5, output: 2, cache_read: 1, cache_creation: 0 });
+    recordUsage(stats, { usage: { input_tokens: 9 } });
+    recordUsage(stats, undefined);
+    expect(stats.usage).toEqual({ steps: 4, unknown: 3, input: 5, output: 2, cache_read: 1, cache_creation: 0 });
   });
 
   test('parseResponse rejects a non-object envelope', () => {
