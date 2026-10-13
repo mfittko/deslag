@@ -1,10 +1,18 @@
 //! Opt-in JSON minification of Bash tool results, against a local mock upstream.
 
-use std::{convert::Infallible, net::SocketAddr, time::Duration};
+use std::{
+    convert::Infallible,
+    net::SocketAddr,
+    sync::atomic::{AtomicU32, Ordering},
+    time::Duration,
+};
 
 use bytes::Bytes;
 use deslag_core::BoundedExecutor;
-use deslag_proxy::{Limits, Upstream, serve_with};
+use deslag_proxy::{
+    Limits, Upstream, serve_with,
+    session::{Mode, Owner, Store, write_owner},
+};
 use http_body_util::{BodyExt, Full, channel::Channel};
 use hyper::{
     HeaderMap, Request, Response, body::Incoming, server::conn::http1, service::service_fn,
@@ -119,8 +127,10 @@ async fn mock() -> (SocketAddr, mpsc::UnboundedReceiver<Seen>) {
     (addr, rx)
 }
 
-/// A budget no debug build on a slow runner can miss, so tests that expect a
-/// rewrite never see a fail-open rejection.
+/// With `minify`, the proxy owns compression in a fresh state directory and the
+/// session has started with a request that carries no tool results. The
+/// executor budget is one no debug build on a slow runner can miss, so tests
+/// that expect a rewrite never see a rejected job.
 async fn proxy(minify: bool) -> (SocketAddr, mpsc::UnboundedReceiver<Seen>) {
     proxy_with(
         minify,
@@ -138,7 +148,19 @@ async fn proxy_with(
     let addr = listener.local_addr().unwrap();
     let mut upstream = Upstream::parse(&format!("http://{upstream}")).unwrap();
     if minify {
-        upstream = upstream.with_json_minification();
+        static N: AtomicU32 = AtomicU32::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "deslag-minify-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        write_owner(&dir, Owner::Proxy).unwrap();
+        let store = Store {
+            dir,
+            mode: Mode::Safe,
+        };
+        upstream = upstream.with_json_minification(store);
     }
     let limits = Limits {
         executor,
@@ -148,7 +170,12 @@ async fn proxy_with(
     // only std reads the environment here, and std serializes that access.
     unsafe { std::env::set_var("DESLAG_STATE_DIR", "/nonexistent/deslag-test") };
     tokio::spawn(serve_with(listener, upstream, limits));
-    (addr, seen)
+    let mut p = (addr, seen);
+    if minify {
+        let first = r#"{"model": "m", "messages": [{"role": "user", "content": "hi"}]}"#;
+        relay(&mut p, messages(), first).await;
+    }
+    p
 }
 
 /// Sends one request through the proxy and returns what the upstream received.
@@ -183,7 +210,9 @@ async fn relay(
 }
 
 fn messages() -> hyper::http::request::Builder {
-    Request::post("/v1/messages?beta=true").header("content-type", "application/json")
+    Request::post("/v1/messages?beta=true")
+        .header("content-type", "application/json")
+        .header("x-claude-code-session-id", "session-a")
 }
 
 #[tokio::test]
@@ -354,21 +383,44 @@ async fn request_with_trailers_is_not_rewritten() {
 }
 
 #[tokio::test]
-async fn busy_executor_forwards_the_original_body() {
+async fn busy_executor_records_new_results_unchanged() {
+    let (input, expected) = render(TURN_1);
+    assert_ne!(input, expected);
+    let exec = BoundedExecutor::new(1, Duration::from_secs(60)).unwrap();
+    let mut p = proxy_with(true, exec.clone()).await;
+    let (release, holder) = hold(&exec);
+    assert_eq!(relay(&mut p, messages(), input.clone()).await.body, input);
+    drop(release);
+    assert!(holder.join().unwrap());
+    // The `unchanged` decision is pinned, so a free executor does not change it.
+    assert_eq!(relay(&mut p, messages(), input.clone()).await.body, input);
+}
+
+#[tokio::test]
+async fn busy_executor_never_changes_pinned_encoded_results() {
     let (input, expected) = render(TURN_1);
     let exec = BoundedExecutor::new(1, Duration::from_secs(60)).unwrap();
     let mut p = proxy_with(true, exec.clone()).await;
-    // Clones share one permit pool, so this job holds the proxy's only permit.
+    assert_eq!(
+        relay(&mut p, messages(), input.clone()).await.body,
+        expected
+    );
+    let (release, holder) = hold(&exec);
+    assert_eq!(relay(&mut p, messages(), input).await.body, expected);
+    drop(release);
+    assert!(holder.join().unwrap());
+}
+
+/// Holds the only permit of `exec` until the returned sender is dropped.
+/// Clones share one permit pool, so this also blocks the proxy's jobs.
+fn hold(exec: &BoundedExecutor) -> (std::sync::mpsc::Sender<()>, std::thread::JoinHandle<bool>) {
     let (release, wait) = std::sync::mpsc::channel::<()>();
     let holder = {
         let exec = exec.clone();
-        std::thread::spawn(move || exec.run(move || wait.recv()))
+        std::thread::spawn(move || exec.run(move || wait.recv()).is_ok())
     };
     while exec.in_flight() == 0 {
         std::thread::yield_now();
     }
-    assert_eq!(relay(&mut p, messages(), input.clone()).await.body, input);
-    drop(release);
-    assert!(holder.join().unwrap().is_ok());
-    assert_eq!(relay(&mut p, messages(), input).await.body, expected);
+    (release, holder)
 }
