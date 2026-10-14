@@ -33,39 +33,43 @@ async function socketPath($) {
 }
 
 async function send($, e, result) {
-  if ((await $.env.get('DESLAG_USAGE_STATS')) !== '1') return;
-  if (inFlight >= MAX_IN_FLIGHT) {
-    dropped++;
-    return;
-  }
-  inFlight++;
-  // Swap, not read: concurrent sends never carry the same drops twice.
-  const carried = dropped;
-  dropped = 0;
+  // Decided before the first await: the cap applies when the step settles.
+  const over = inFlight >= MAX_IN_FLIGHT;
+  if (!over) inFlight++;
   try {
-    const socket = await socketPath($);
-    const body = JSON.stringify({
-      kind: 'usage',
-      session: await $.session.id(),
-      turn: e.turnId,
-      index: result?.index ?? e.index,
-      model: result?.usage?.model ?? e.model,
-      usage: usageOf(result),
-      dropped: carried,
-    });
-    const res = socket
-      ? await $.http.fetch('http://deslag/usage', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', 'content-length': String(new TextEncoder().encode(body).length) },
-          body,
-          socketPath: socket,
-        })
-      : undefined;
-    if (!res?.ok) dropped += carried + 1;
-  } catch {
-    dropped += carried + 1;
+    if ((await $.env.get('DESLAG_USAGE_STATS')) !== '1') return;
+    if (over) {
+      dropped++;
+      return;
+    }
+    // Swap, not read: concurrent sends never carry the same drops twice.
+    const carried = dropped;
+    dropped = 0;
+    try {
+      const socket = await socketPath($);
+      const body = JSON.stringify({
+        kind: 'usage',
+        session: await $.session.id(),
+        turn: e.turnId,
+        index: result?.index ?? e.index,
+        model: result?.usage?.model ?? e.model,
+        usage: usageOf(result),
+        dropped: carried,
+      });
+      const res = socket
+        ? await $.http.fetch('http://deslag/usage', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'content-length': String(new TextEncoder().encode(body).length) },
+            body,
+            socketPath: socket,
+          })
+        : undefined;
+      if (!res?.ok) dropped += carried + 1;
+    } catch {
+      dropped += carried + 1;
+    }
   } finally {
-    inFlight--;
+    if (!over) inFlight--;
   }
 }
 

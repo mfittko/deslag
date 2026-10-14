@@ -685,6 +685,13 @@ fn usage_records_take_the_hook_reports_of_their_session() {
     );
     let big = "x".repeat(513);
     assert_eq!(http(&dir, &usage_request(&big)), "HTTP/1.1 400 Bad Request");
+    // Only a JSON object passes, so control messages cannot reach the service.
+    for control in ["stop", "flush"] {
+        assert_eq!(
+            http(&dir, &usage_request(control)),
+            "HTTP/1.1 400 Bad Request"
+        );
+    }
     let partial = r#"{"kind":"usage","session":"s","turn":"t","index":0,"model":"m","usage":{"input_tokens":1},"dropped":0}"#;
     assert_eq!(
         http(&dir, &usage_request(partial)),
@@ -760,6 +767,19 @@ fn usage_records_work_with_hook_compression_off() {
     assert_eq!(lines[0]["compression_reports"], 0);
     assert_eq!(lines[0]["estimated_removed_tokens"], 0);
     assert_eq!(lines[0]["usage"]["input_tokens"], 100);
+}
+
+#[test]
+fn the_bridge_answers_503_when_the_datagram_cannot_be_sent() {
+    let dir = state_dir("bridge503");
+    let _cleanup = RemoveOnDrop(dir.clone());
+    // Killed on drop: without `local.sock` no `stop` datagram can reach it.
+    let _service = run(&dir);
+    fs::remove_file(dir.join("local.sock")).unwrap();
+    assert_eq!(
+        post_usage(&dir, SESSION, 0),
+        "HTTP/1.1 503 Service Unavailable"
+    );
 }
 
 #[test]

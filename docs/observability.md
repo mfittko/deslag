@@ -8,7 +8,7 @@ deslag can count what it changed, skipped and saved. Counting is optional and lo
 | --- | --- |
 | `deslag local start [--retention-days <n>]` | Starts the service in the background and waits until it answers. Exit 0 also when it already runs. |
 | `deslag local run [--retention-days <n>]` | Runs the service in the foreground and logs write errors to stderr. Exits 2 when another service holds the lock. |
-| `deslag local stop` | Writes all open buckets, removes the socket and stops the service. When the write fails, the service keeps running with its buckets and `stop` exits 2. |
+| `deslag local stop` | Writes all open buckets, removes the sockets and stops the service. When the write fails, the service keeps running with its buckets and `stop` exits 2. |
 | `deslag local status` | Prints `running` or `not running` and the state directory. |
 | `deslag stats [--json [--session <id>]] [--since <n>h\|<n>d]` | Asks a running service to write its open buckets, then prints the aggregates of the window as a table, or as JSON with `--json`. `--session <id>` prints the per-request view of one session; it needs `--json`. The default window is `24h`. Exits 2 when `stats.jsonl` or `requests.jsonl` exists but cannot be read, or when stdout cannot be written. |
 
@@ -138,7 +138,7 @@ Drop behavior:
 - A missing service, a refused connection or a non-2xx answer counts as a drop.
 - The next delivered record carries the count in `dropped`.
 
-The service accepts one HTTP connection at a time. It reads at most 2048 bytes within 500 ms, requires `POST /usage` with a `Content-Length` of at most 512 bytes, and forwards the body as one datagram to `local.sock`. It answers `204` when the datagram was sent, `503` when it was not, and `400` for any other request, and always closes the connection. An invalid record counts as a service drop, like an invalid report.
+The service accepts one HTTP connection at a time. It reads at most 2048 bytes and must receive the whole request within 500 ms of the accept. It requires `POST /usage` with a `Content-Length` of at most 512 bytes and a body that starts with `{`, and forwards the body as one datagram to `local.sock`. It answers `204` when the datagram was sent, `503` when it was not, and `400` for any other request, and always closes the connection. An invalid record counts as a service drop, like an invalid report.
 
 ## Per-request lines
 
@@ -167,9 +167,11 @@ Limits of the attribution:
 - Subagents of one session share the session ID, so they share the pending sums.
 - Proxy reports carry no session and are not attributed. The proxy reports every resent history block on each submission, so per-request attribution would count a result again on every request.
 - At most 1024 sessions hold pending sums. A report for a new session over that cap is bucketed but not attributed.
+- A report with an invalid session ID (not 1 to 64 bytes of `[A-Za-z0-9_-]`) is bucketed but not attributed. The hook sends no such ID.
+- Records and reports travel on separate paths. When the usage record of step N is delayed, it can reach the service after hook reports for step N+1. Then those reports count toward step N, and the attribution is off by one.
 - At each hour close, the service forgets the sums of sessions without a report for one hour.
 
-Rotation removes lines older than the retention window and malformed lines, at service start and after each hour close.
+Rotation runs at service start and after each hour close. Lines are in time order, so rotation rewrites `requests.jsonl` only when its first line is malformed or older than the retention window. A rewrite removes the lines older than the window and all malformed lines. Readers skip malformed lines.
 
 ## Usage totals
 
@@ -210,7 +212,7 @@ Prints the requests of one session in the window, in file order. An invalid ID, 
 }
 ```
 
-`schema_version`, `window` and `partial` have the same meaning as in `deslag stats --json`. Each request has the fields of its line, without `v` and `session`. `totals` holds the usage totals of this session only.
+This view is its own document shape with its own `schema_version`, currently `1`; it changes independently of `deslag stats --json`. `window` and `partial` have the same meaning as in `deslag stats --json`. Each request has the fields of its line, without `v` and `session`. `totals` holds the usage totals of this session only.
 
 ## Limitations
 

@@ -10,24 +10,21 @@ const OPTS = { timeoutMs: 3000 };
 
 // Answers env, session id, fetch and the engine's turn.step beneath the
 // plugin. `fetched()` resolves with the next fetch input; `reply` decides its
-// response. `switchReads(n)` resolves once DESLAG_USAGE_STATS was read n times.
+// response. A set `error` makes the engine's step throw after its first chunk.
 function world(on: any, env: Record<string, string | undefined>) {
   const waiting: ((e: any) => void)[] = [];
   const queued: any[] = [];
   const reads: string[] = [];
-  const readWaiters: [number, () => void][] = [];
-  const switches = () => reads.filter((n) => n === 'DESLAG_USAGE_STATS').length;
   const w = {
     env,
     reads,
     result: undefined as any,
+    error: undefined as Error | undefined,
     reply: (_e: any): Promise<any> | any => OK,
     fetched: () => new Promise<any>((r) => (queued.length ? r(queued.shift()) : waiting.push(r))),
-    switchReads: (n: number) => new Promise<void>((r) => (switches() >= n ? r() : readWaiters.push([n, r]))),
   };
   on('env.get', async (_$: unknown, e: any) => {
     reads.push(e.name);
-    for (const [n, r] of readWaiters) if (switches() >= n) r();
     return { value: w.env[e.name] };
   });
   on('session.id', async () => ({ value: 'sess-1' }));
@@ -40,6 +37,7 @@ function world(on: any, env: Record<string, string | undefined>) {
   // The engine's stream: two chunks, then the world's current result.
   on('turn.step', async function* () {
     yield { kind: 'text', index: 0, text: 'h' };
+    if (w.error) throw w.error;
     yield { kind: 'text', index: 0, text: 'i' };
     return w.result;
   });
@@ -70,7 +68,8 @@ describe('turn.step usage observer', () => {
     w.env.DESLAG_STATE_DIR = '/state';
     const sent = w.fetched();
     await step($, w, result(1));
-    expect(JSON.parse((await sent).init.body).index).toBe(1);
+    const first = JSON.parse((await sent).init.body);
+    expect([first.index, first.dropped]).toEqual([1, 0]);
     expect(w.reads.filter((n) => n === 'DESLAG_STATE_DIR')).toEqual(['DESLAG_STATE_DIR']);
   });
 
@@ -135,9 +134,8 @@ describe('turn.step usage observer', () => {
       await step($, w, result(index));
       await sent;
     }
+    // The cap is checked when the step settles, so releasing right after it cannot race.
     await step($, w, result(4));
-    // Hold the four sends until the fifth step's send read its switch and gave up.
-    await w.switchReads(5);
     w.reply = () => OK;
     for (const r of release) r();
     let carried = 0;
@@ -147,5 +145,19 @@ describe('turn.step usage observer', () => {
       carried += JSON.parse((await sent).init.body).dropped;
     }
     expect(carried).toBe(1);
+  });
+
+  test('a failing step rejects unchanged and still sends a record', OPTS, async ($, on) => {
+    const w = world(on, { DESLAG_USAGE_STATS: '1', DESLAG_STATE_DIR: '/state' });
+    w.error = new Error('provider failed');
+    const sent = w.fetched();
+    const stream = $.turn.step({ turnId: 't-1', index: 3, model: 'fallback-model', messageCount: 1 });
+    expect((await stream.next()).value.text).toBe('h');
+    // The engine turns a throwing hook into a skip and fails the step with its own
+    // HooksError (2.1.299); that error reaches the caller through the observer unchanged.
+    const failure = await stream.next().then(() => undefined, (e: any) => e);
+    expect([failure?.name, failure?.message]).toEqual(['HooksError', 'no implementation for turn.step']);
+    const body = JSON.parse((await sent).init.body);
+    expect([body.index, body.model, body.usage]).toEqual([3, 'fallback-model', null]);
   });
 });

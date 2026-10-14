@@ -34,6 +34,14 @@ pub const REQUESTS_FILE: &str = "requests.jsonl";
 /// send datagrams, such as the Claude Code usage module.
 pub const HTTP_SOCKET_FILE: &str = "local-http.sock";
 
+/// Session and turn IDs: 1 to 64 bytes of `[A-Za-z0-9_-]`. The service
+/// accepts no other ID, so senders check with the same rule.
+pub fn valid_id(s: &str) -> bool {
+    (1..=64).contains(&s.len())
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
 /// `$DESLAG_STATE_DIR`, else `$XDG_STATE_HOME/deslag`, else
 /// `$HOME/.local/state/deslag`. Empty or relative values are ignored, as the
 /// XDG spec requires. `None` when no source is usable.

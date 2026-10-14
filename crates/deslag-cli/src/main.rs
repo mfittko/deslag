@@ -205,7 +205,7 @@ fn claude_hook(
     }
     .map_err(|rejected| format!("compression {}; tool output unchanged", rejected.as_str()))?;
     if let Some(socket) = &socket {
-        let session = event["session_id"].as_str();
+        let session = event["session_id"].as_str().filter(|s| report::valid_id(s));
         // ponytail: a hook process exits after one result, so a failed send is lost uncounted.
         for compressed in reports.into_inner() {
             report::send_report(socket, &compressed, report::Adapter::Hook, tool, session);

@@ -40,7 +40,7 @@ use deslag_core::{
 };
 use deslag_telemetry::{
     HTTP_SOCKET_FILE, MAX_MESSAGE_BYTES, REQUESTS_FILE, SOCKET_FILE, STATS_FILE, ensure_state_dir,
-    state_dir,
+    state_dir, valid_id,
 };
 use serde_json::{Map, Value, json};
 
@@ -266,7 +266,11 @@ fn run(retention_days: u64) -> Result<(), String> {
             fs::set_permissions(&http_path, fs::Permissions::from_mode(0o600))?;
             Ok(l)
         })
-        .map_err(|e| format!("cannot bind {}: {e}", http_path.display()))?;
+        .map_err(|e| {
+            let _ = fs::remove_file(&socket_path);
+            let _ = fs::remove_file(&http_path);
+            format!("cannot bind {}: {e}", http_path.display())
+        })?;
     let target = socket_path.clone();
     thread::spawn(move || bridge(&listener, &target));
     let result = serve(&socket, &socket_path, &lock, &dir, retention_days);
@@ -284,10 +288,16 @@ const MAX_HTTP_BYTES: usize = 2048;
 /// `target`, one connection at a time. Answers 204 when the datagram was
 /// sent, 503 when it was not (service busy) and 400 for anything else, and
 /// always closes the connection.
-// ponytail: one connection at a time with a 500 ms read budget; a slow client
-// delays the rest, and the usage module drops what does not fit its cap.
+// ponytail: one connection at a time with a 500 ms deadline per request; a
+// slow client delays the rest, and the usage module drops what does not fit
+// its cap.
 fn bridge(listener: &UnixListener, target: &Path) {
-    for mut stream in listener.incoming().flatten() {
+    for stream in listener.incoming() {
+        let Ok(mut stream) = stream else {
+            // A persistent accept error (such as EMFILE) would otherwise spin.
+            thread::sleep(Duration::from_millis(100));
+            continue;
+        };
         let status = match read_usage(&mut stream) {
             Some(body) if deslag_telemetry::send(target, &body) => "204 No Content",
             Some(_) => "503 Service Unavailable",
@@ -299,12 +309,11 @@ fn bridge(listener: &UnixListener, target: &Path) {
 }
 
 /// The body of one `POST /usage` request with a `Content-Length` of at most
-/// [`MAX_MESSAGE_BYTES`]. `None` for any other request, a read error, a read
-/// past [`MAX_HTTP_BYTES`] or 500 ms without data.
+/// [`MAX_MESSAGE_BYTES`] and a body that starts with `{`, so control messages
+/// such as `stop` never pass. `None` for any other request, a read error, a
+/// read past [`MAX_HTTP_BYTES`] or a request not complete within 500 ms.
 fn read_usage(stream: &mut UnixStream) -> Option<Vec<u8>> {
-    stream
-        .set_read_timeout(Some(Duration::from_millis(500)))
-        .ok()?;
+    let deadline = Instant::now() + Duration::from_millis(500);
     let mut buf = [0; MAX_HTTP_BYTES];
     let mut n = 0;
     loop {
@@ -323,12 +332,18 @@ fn read_usage(stream: &mut UnixStream) -> Option<Vec<u8>> {
                 return None;
             }
             if n >= body + len {
-                return Some(buf[body..body + len].to_vec());
+                let body = &buf[body..body + len];
+                return body.starts_with(b"{").then(|| body.to_vec());
             }
         }
         if n == buf.len() {
             return None;
         }
+        let left = deadline.checked_duration_since(Instant::now())?;
+        if left.is_zero() {
+            return None;
+        }
+        stream.set_read_timeout(Some(left)).ok()?;
         match stream.read(&mut buf[n..]).ok()? {
             0 => return None,
             read => n += read,
@@ -513,13 +528,6 @@ fn label(v: &Value, field: &str, valid: fn(&str) -> bool) -> Option<Option<Strin
         Some(Value::String(s)) if valid(s) => Some(Some(s.clone())),
         _ => None,
     }
-}
-
-/// Session and turn IDs: 1 to 64 bytes of `[A-Za-z0-9_-]`.
-pub(crate) fn valid_id(s: &str) -> bool {
-    (1..=64).contains(&s.len())
-        && s.bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
 /// Model names: 1 to 64 bytes of printable ASCII without `"` and `\`.
@@ -866,9 +874,10 @@ impl Service {
     }
 
     /// Buckets one compression report and, with a valid `session`, adds it to
-    /// that session's pending sums.
+    /// that session's pending sums. An invalid `session` leaves the report
+    /// unattributed.
     fn report(&mut self, v: &Value, now: u64) -> Option<()> {
-        let session = label(v, "session", valid_id)?;
+        let session = label(v, "session", valid_id).flatten();
         let (key, bucket) = parse_report(v, floor_hour(now))?;
         self.buckets.entry(key).or_default().merge(&bucket);
         let Some(session) = session else {
@@ -1036,10 +1045,23 @@ fn rotate(path: &Path, now: u64, retention: u64) -> io::Result<()> {
 }
 
 /// Removes `requests.jsonl` lines older than the hour that contains
-/// `now - retention`, and lines `parse_request` rejects.
+/// `now - retention`, and lines `parse_request` rejects. Lines are in time
+/// order, so a valid first line inside retention leaves the file unchanged,
+/// later malformed lines included; readers skip those.
+// ponytail: reads the whole file each rotation; at about 300 bytes per model
+// request, 90 days of 10k requests a day is about 270 MB. Read only the first
+// line, or rotate into dated files, if stores grow that large.
 fn rotate_requests(path: &Path, now: u64, retention: u64) -> io::Result<()> {
     let cutoff = floor_hour(now.saturating_sub(retention));
     rewrite(path, |text| {
+        let first = text.split(|&b| b == b'\n').next().unwrap_or_default();
+        if parse_requests(first)
+            .next()
+            .is_some_and(|r| r.time >= cutoff)
+            && let Ok(text) = std::str::from_utf8(text)
+        {
+            return text.to_owned();
+        }
         parse_requests(text)
             .filter(|r| r.time >= cutoff)
             .map(|r| r.json().to_string() + "\n")
@@ -1182,6 +1204,40 @@ mod tests {
         s.record(&with_session("s0"), T0 + HOUR + 10);
         s.tick(T0 + 2 * HOUR).unwrap();
         assert_eq!(s.sessions.keys().collect::<Vec<_>>(), ["s0"]);
+    }
+
+    #[test]
+    fn request_rotation_skips_a_file_whose_first_line_is_kept() {
+        let (_dir, path) = temp_file("reqskip");
+        let line = |time: u64| {
+            format!(
+                r#"{{"compression_reports":0,"dropped":0,"estimated_removed_tokens":null,"index":0,"model":"m","session":"s","time":{time},"turn":"t","usage":null,"v":1}}"#
+            ) + "\n"
+        };
+        let fresh = line(T0) + "garbage\n";
+        fs::write(&path, &fresh).unwrap();
+        rotate_requests(&path, T0, DAY).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), fresh);
+        fs::write(&path, line(T0 - 2 * DAY) + &fresh).unwrap();
+        rotate_requests(&path, T0, DAY).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), line(T0));
+    }
+
+    #[test]
+    fn an_invalid_session_leaves_the_report_unattributed() {
+        let (_dir, path) = temp_file("bad-session");
+        let mut s = Service::new(path, 90 * DAY, T0);
+        for session in [json!("a b"), json!("x".repeat(65)), json!(7)] {
+            let mut v: Value = serde_json::from_slice(&report("changed", Some(40), true)).unwrap();
+            v["session"] = session;
+            s.record(&v.to_string().into_bytes(), T0 + 1);
+        }
+        assert!(s.sessions.is_empty());
+        assert_eq!(s.buckets.values().map(|b| b.count).sum::<u64>(), 3);
+        assert!(
+            !s.buckets.contains_key(&Key::service(T0)),
+            "no service drop"
+        );
     }
 
     #[test]

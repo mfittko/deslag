@@ -78,7 +78,7 @@ fn parse_args<'a>(args: &[&'a str]) -> Option<(bool, &'a str, Option<&'a str>)> 
             _ => return None,
         }
     }
-    if session.is_some_and(|s| !as_json || !local::valid_id(s)) {
+    if session.is_some_and(|s| !as_json || !deslag_telemetry::valid_id(s)) {
         return None;
     }
     Some((as_json, since, session))
