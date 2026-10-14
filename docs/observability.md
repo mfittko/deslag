@@ -136,6 +136,7 @@ Drop behavior:
 
 - At most 4 sends are in flight. A request over that cap is dropped and counted.
 - A missing service, a refused connection or a non-2xx answer counts as a drop.
+- A record is dropped and counted locally, without a send, when its session id or turn id is not 1 to 64 bytes of `[A-Za-z0-9_-]`, its model is not 1 to 64 bytes of printable ASCII without `"` and `\`, or its index is not a non-negative safe integer. The same holds when no absolute state directory resolves.
 - The next delivered record carries the count in `dropped`.
 
 The service accepts one HTTP connection at a time. It reads at most 2048 bytes and must receive the whole request within 500 ms of the accept. It requires `POST /usage` with a `Content-Length` of at most 512 bytes and a body that starts with `{`, and forwards the body as one datagram to `local.sock`. It answers `204` when the datagram was sent, `503` when it was not, and `400` for any other request, and always closes the connection. An invalid record counts as a service drop, like an invalid report.
