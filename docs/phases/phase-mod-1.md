@@ -17,7 +17,7 @@ Staged plan. Each step is one small PR with its own tests; none deletes the prox
 | Step | Change | Depends on | Acceptance | Rollback |
 | --- | --- | --- | --- | --- |
 | 2 | Remaining live verification (see Pending checks) under an operator-authorized cap; record the mod row in [`docs/compatibility.md`](../compatibility.md) | 1, budget authorization | Usage capture, classic-hook ordering and in-session lifecycle recorded with versions, commands and costs | Docs only |
-| 3 | `Owner::Mod` in `deslag_proxy::session` and the owner writer in the #20 launcher/doctor work; the hook conflict scan reports an active mod | 1 | Owner file round trip; hook and proxy stand down under `mod` (tests) | Owner back to `hook` |
+| 3 | `Owner::Mod` in `deslag_proxy::session` and the owner writer in the #20 launcher/doctor work; the hook conflict scan reports an active mod; replace `codec::owner_is_mod` with `read_owner(dir) == Owner::Mod` | 1 | Owner file round trip; hook and proxy stand down under `mod` (tests) | Owner back to `hook` |
 | 4 | Usage observer and compression counters in `plugins/claude` as an opt-in mod module, feeding the #21 local service over a bounded bridge | 2 (usage capture), #21 | Works with compression off; drops are counted; no awaited I/O in the hot path | Disable the mod module; the hook is unaffected |
 | 5 | Mod compression as an opt-in alternative to the hook, binary path from the verified install, one owner selected through the owner file | 3 | #22 and #23 gates extended to the mod adapter, including the stderr-only JSON gate below | Owner `hook`, disable the mod module |
 | 6 | Decide the Claude default (hook or mod) and whether the proxy requirement leaves the Claude MVP | 5, a paired evaluation run | Owner decision recorded in a new ADR | Keep the hook default |
@@ -37,6 +37,8 @@ Issue impact (proposals, not edits to those issues):
 - #22 / #23: add mod adapter compatibility, fault, security, performance and clean-install gates at step 5; codec and model-quality gates stay.
 - #4, #77, #84: no impact on `v0.1.0-alpha.3` or the frozen evaluation.
 - Future OTLP: the exporter stays outside the mod and outside the core; default exports stay metadata-only.
+- Rust boundaries: `deslag-core` is unchanged; only the narrow codec CLI bridge is added. Host integration, exporters and protocol state stay outside the core (ADR 0007 decision 5).
+- Future harnesses: compression and report contracts stay portable; mod, hook and proxy are delivery alternatives over the same codecs.
 
 Session boundaries for owner changes. The owner file is per state directory, so a change applies to every session that shares it. Hook to mod and mod to hook are safe at any time, because the client stores both forms (E16 for the mod, ADR 0006 for the hook). Proxy to mod keeps working while the proxy stays in the path, since it replays pinned decisions under any owner. Removing the proxy from a session with encoded history needs a new session (ADR 0006).
 

@@ -151,6 +151,8 @@ fn item(
 }
 
 /// True when the state directory's `owner` file names the mod.
+// ponytail: second owner-file reader next to `deslag_proxy::session::read_owner`,
+// which owns the format. Phase-mod-1 step 3 adds `Owner::Mod` and retires this parser.
 pub fn owner_is_mod(dir: Option<&Path>) -> bool {
     dir.and_then(|dir| std::fs::read_to_string(dir.join("owner")).ok())
         .is_some_and(|owner| owner.trim_end() == MOD_OWNER)

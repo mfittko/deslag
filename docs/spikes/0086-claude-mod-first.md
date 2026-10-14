@@ -163,16 +163,6 @@ Reasons:
 
 Staged plan. Step 1 is this spike: codec bridge, experimental mod, benchmark, live checks Q1 to Q3 and ADR 0007. Steps 2 to 6 graduated into the phase plan, [docs/phases/phase-mod-1.md](../phases/phase-mod-1.md). That file is the only copy of the staged plan and its step gates.
 
-Issue impact (proposals, not edits to those issues):
-
-- #18 / PR #72: merged. Manifests stay for the proxy; the mod needs no replay state because the client stores the row (E16).
-- #19: no change until step 5. Mod compression is not a reason to declare proxy acceptance criteria met.
-- #20: split generic config and diagnostics from proxy launch; add the owner writer for `mod`.
-- #21: reuse the report schema and bounded delivery for mod counters.
-- #22 / #23: add mod adapter compatibility, fault, security, performance and clean-install gates at step 5; codec and model-quality gates stay.
-- #4, #77, #84: no impact on `v0.1.0-alpha.3` or the frozen evaluation.
-- Future OTLP: the exporter stays outside the mod and outside the core; default exports stay metadata-only.
-
-Session boundaries for owner changes. The owner file is per state directory, so a change applies to every session that shares it. Hook to mod and mod to hook are safe at any time, because the client stores both forms (E16 for the mod, ADR 0006 for the hook). Proxy to mod keeps working while the proxy stays in the path, since it replays pinned decisions under any owner. Removing the proxy from a session with encoded history needs a new session (ADR 0006).
+The issue impact and the session boundaries for owner changes are plan content, so they live only in the phase plan, [docs/phases/phase-mod-1.md](../phases/phase-mod-1.md).
 
 Spike exit: graduated (operator decision, 2026-10-14) into [docs/phases/phase-mod-1.md](../phases/phase-mod-1.md), the plan for step 2 and the staged rollout.
