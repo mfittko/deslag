@@ -8,12 +8,17 @@ const FULL = { input_tokens: 3, output_tokens: 1, cache_read_input_tokens: 7, ca
 const OK = { status: 204, ok: true, headers: {}, text: '' };
 const OPTS = { timeoutMs: 3000 };
 
-// Answers env, session id, fetch and the engine's turn.step beneath the
-// plugin. `fetched()` resolves with the next fetch input; `reply` decides its
-// response. A set `error` makes the engine's step throw after its first chunk.
+// Answers env, session id, fetch, status, sleep and the engine's turn.step
+// beneath the plugin. `fetched()` resolves with the next fetch input; `reply`
+// decides its response. `status()` resolves with the next `$.ui.status` text;
+// `shown` lists them all. Sleeps end only on `expire()`. A set `error` makes
+// the engine's step throw after its first chunk.
 function world(on: any, env: Record<string, string | undefined>) {
   const waiting: ((e: any) => void)[] = [];
   const queued: any[] = [];
+  const statusWaiting: ((t: string | undefined) => void)[] = [];
+  const statusQueued: (string | undefined)[] = [];
+  const sleeping: (() => void)[] = [];
   const reads: string[] = [];
   const w = {
     env,
@@ -23,6 +28,9 @@ function world(on: any, env: Record<string, string | undefined>) {
     session: 'sess-1' as string | undefined,
     reply: (_e: any): Promise<any> | any => OK,
     fetched: () => new Promise<any>((r) => (queued.length ? r(queued.shift()) : waiting.push(r))),
+    shown: [] as (string | undefined)[],
+    status: () => new Promise<string | undefined>((r) => (statusQueued.length ? r(statusQueued.shift()) : statusWaiting.push(r))),
+    expire: () => sleeping.splice(0).forEach((r) => r()),
     // Called with each env name read, before its value is returned.
     onRead: (_name: string) => {},
     // Called on each session id read, in the same segment that reads `session`.
@@ -48,6 +56,17 @@ function world(on: any, env: Record<string, string | undefined>) {
     w.settled++;
     w.onSettle();
     return { value };
+  });
+  on('ui.status', async (_$: unknown, e: any) => {
+    w.shown.push(e.text);
+    const wake = statusWaiting.shift();
+    if (wake) wake(e.text);
+    else statusQueued.push(e.text);
+    return { value: undefined };
+  });
+  on('clock.sleep', async () => {
+    await new Promise<void>((r) => sleeping.push(r));
+    return { value: undefined };
   });
   // The engine's stream: two chunks, then the world's current result.
   on('turn.step', async function* () {
@@ -263,4 +282,124 @@ describe('turn.step usage observer', () => {
     const body = JSON.parse((await sent).init.body);
     expect([body.index, body.model, body.usage]).toEqual([3, 'fallback-model', null]);
   });
+});
+
+// A `deslag stats --json --session` document whose last request removed ~120
+// of 5,432 input tokens, in a session that removed ~1,200.
+const DOC = {
+  schema_version: 1,
+  session: 'sess-1',
+  window: { since: 0, until: 1 },
+  partial: { value: false, reasons: [] },
+  totals: { requests: 2, unknown_usage: 0, estimated_removed_tokens: 1200 },
+  requests: [
+    { turn: 't-1', index: 0, estimated_removed_tokens: 1080, usage: FULL },
+    {
+      turn: 't-1',
+      index: 1,
+      estimated_removed_tokens: 120,
+      usage: { input_tokens: 32, output_tokens: 9, cache_read_input_tokens: 5000, cache_creation_input_tokens: 400 },
+    },
+  ],
+};
+const WIDGET = { DESLAG_USAGE_STATS: '1', DESLAG_SAVINGS_WIDGET: '1', DESLAG_STATE_DIR: '/state' };
+const json = (doc: any) => ({ status: 200, ok: true, headers: { 'content-type': 'application/json' }, text: JSON.stringify(doc) });
+// Answers the usage POST with 204 and each session read with `read(e)`.
+const serve = (read: (e: any) => any) => (e: any) => (e.url === 'http://deslag/usage' ? OK : read(e));
+
+describe('savings widget', () => {
+  test('renders estimated removed and input tokens of the last request, labeled as an estimate', OPTS, async ($, on) => {
+    const w = world(on, { ...WIDGET });
+    w.reply = serve(() => json(DOC));
+    const status = w.status();
+    const posted = w.fetched();
+    await step($, w, result(1));
+    await posted;
+    const read = await w.fetched();
+    expect(read.url).toBe('http://deslag/session/sess-1');
+    expect(read.init.socketPath).toBe('/state/local-http.sock');
+    expect(await status).toBe(
+      'deslag: ~120 tokens removed (estimate) of 5,432 input tokens · session ~1,200 removed (estimate)',
+    );
+  });
+
+  test('unknown estimates and usage show as unknown, never 0', OPTS, async ($, on) => {
+    const w = world(on, { ...WIDGET });
+    const doc = {
+      ...DOC,
+      totals: { ...DOC.totals, estimated_removed_tokens: null },
+      requests: [{ turn: 't-1', index: 0, estimated_removed_tokens: null, usage: null }],
+    };
+    w.reply = serve(() => json(doc));
+    const status = w.status();
+    await step($, w, result(0));
+    expect(await status).toBe(
+      'deslag: unknown tokens removed (estimate) of unknown input tokens · session unknown removed (estimate)',
+    );
+  });
+
+  test('the step completes while the read is pending; nothing is shown until it settles', OPTS, async ($, on) => {
+    const w = world(on, { ...WIDGET });
+    let answer = () => {};
+    w.reply = serve(() => new Promise((r) => (answer = () => r(json(DOC)))));
+    const posted = w.fetched();
+    await step($, w, result(1));
+    await posted;
+    await w.fetched();
+    expect(w.shown).toEqual([]);
+    const status = w.status();
+    answer();
+    expect(await status).toContain('~120 tokens removed (estimate)');
+  });
+
+  test('a read that outlasts the timeout clears the line', OPTS, async ($, on) => {
+    const w = world(on, { ...WIDGET });
+    w.reply = serve(() => new Promise(() => {}));
+    const status = w.status();
+    await step($, w, result(1));
+    await w.fetched();
+    await w.fetched();
+    w.expire();
+    expect(await status).toBeUndefined();
+  });
+
+  // Service down: the send fails, or the read fails. The line is cleared, the step unchanged.
+  const down: [string, (e: any) => any][] = [
+    ['send rejected', () => Promise.reject(new Error('ENOENT'))],
+    ['read rejected', serve(() => Promise.reject(new Error('ECONNREFUSED')))],
+    ['read answered 400', serve(() => ({ status: 400, ok: false, headers: {}, text: '' }))],
+    ['read answered bad JSON', serve(() => ({ status: 200, ok: true, headers: {}, text: '{' }))],
+    ['read answered no requests', serve(() => json({ ...DOC, requests: [] }))],
+  ];
+  for (const [form, reply] of down) {
+    test(`service down (${form}): no line`, OPTS, async ($, on) => {
+      const w = world(on, { ...WIDGET });
+      w.reply = reply;
+      const status = w.status();
+      await step($, w, result(1));
+      expect(await status).toBeUndefined();
+      expect(w.shown).toEqual([undefined]);
+    });
+  }
+
+  for (const [form, env] of [
+    ['widget off', { DESLAG_USAGE_STATS: '1', DESLAG_STATE_DIR: '/state' }],
+    ['module off', { DESLAG_SAVINGS_WIDGET: '1', DESLAG_STATE_DIR: '/state' }],
+  ] as const) {
+    test(`${form}: no read, no status, the step is unchanged`, OPTS, async ($, on) => {
+      const w = world(on, { ...env });
+      const urls: string[] = [];
+      w.reply = (e) => (urls.push(e.url), json(DOC));
+      // The widget and module flags are read after the step settles.
+      const flagsRead = new Promise<void>(
+        (r) => (w.onRead = (n) => n === (form === 'widget off' ? 'DESLAG_SAVINGS_WIDGET' : 'DESLAG_USAGE_STATS') && r()),
+      );
+      await step($, w, result(1));
+      await flagsRead;
+      // One macrotask drains the background chain after the last flag read.
+      await new Promise((r) => setTimeout(r, 0));
+      expect(urls).toEqual(form === 'widget off' ? ['http://deslag/usage'] : []);
+      expect(w.shown).toEqual([]);
+    });
+  }
 });
