@@ -204,28 +204,51 @@ fn claude_hook(
         report::ToolCategory::Other => Ok(None),
     }
     .map_err(|rejected| format!("compression {}; tool output unchanged", rejected.as_str()))?;
+    let output = updated.and_then(|updated| replacement(&event, updated));
+    // The conflict check runs before reporting, so a blocked result is never counted as changed.
+    let conflict = output.as_ref().and_then(|_| {
+        // An empty variable counts as unset, so the lookup falls through to the next source.
+        let env = |key: &str| env(key).filter(|value| !value.is_empty());
+        let config_dir = env("CLAUDE_CONFIG_DIR")
+            .map(PathBuf::from)
+            .or_else(|| env("HOME").map(|home| PathBuf::from(home).join(".claude")));
+        let project_dir = env("CLAUDE_PROJECT_DIR")
+            .map(PathBuf::from)
+            .or_else(|| event["cwd"].as_str().map(PathBuf::from));
+        hook_conflicts::find(
+            tool_name,
+            config_dir.as_deref(),
+            project_dir.as_deref(),
+            session::state_dir().as_deref(),
+        )
+    });
     if let Some(socket) = &socket {
         let session = event["session_id"].as_str().filter(|s| report::valid_id(s));
         // ponytail: a hook process exits after one result, so a failed send is lost uncounted.
-        for compressed in reports.into_inner() {
+        for mut compressed in reports.into_inner() {
+            if conflict.is_some() {
+                block(&mut compressed);
+            }
             report::send_report(socket, &compressed, report::Adapter::Hook, tool, session);
         }
     }
-    let Some(output) = updated.and_then(|updated| replacement(&event, updated)) else {
-        return Ok(None);
-    };
-    // An empty variable counts as unset, so the lookup falls through to the next source.
-    let env = |key: &str| env(key).filter(|value| !value.is_empty());
-    let config_dir = env("CLAUDE_CONFIG_DIR")
-        .map(PathBuf::from)
-        .or_else(|| env("HOME").map(|home| PathBuf::from(home).join(".claude")));
-    let project_dir = env("CLAUDE_PROJECT_DIR")
-        .map(PathBuf::from)
-        .or_else(|| event["cwd"].as_str().map(PathBuf::from));
-    match hook_conflicts::find(tool_name, config_dir.as_deref(), project_dir.as_deref()) {
+    match conflict {
         Some(conflict) => Err(conflict),
-        None => Ok(Some(output)),
+        None => Ok(output),
     }
+}
+
+/// Records a `changed` result that a hook conflict kept from the model as
+/// `skipped`, with the original size emitted.
+fn block(compressed: &mut CompressionReport) {
+    if compressed.outcome != deslag_core::Outcome::Changed {
+        return;
+    }
+    compressed.outcome = deslag_core::Outcome::Skipped;
+    compressed.reason = Some(deslag_core::Reason::HookConflict);
+    compressed.emitted_bytes = compressed.original_bytes;
+    compressed.emitted_tokens = compressed.original_tokens;
+    compressed.candidate_tokens = None;
 }
 
 /// One finished job: the changed text, if any, and the compression report.
