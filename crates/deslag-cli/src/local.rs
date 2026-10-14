@@ -10,9 +10,11 @@
 //! and its buckets stay in memory for the next attempt. The log is visible only
 //! under `deslag local run`: `deslag local start` discards the service's stderr.
 //!
-//! The service answers `ping`, `flush` and `stop` with `ok`. When the write
-//! fails, `flush` and `stop` answer `flush failed: <error>` instead, and the
-//! service keeps running.
+//! The service answers `ping`, `flush`, `requests` and `stop` with `ok`.
+//! `requests` writes only the queued `requests.jsonl` lines, plus the buckets
+//! when one holds drops; the HTTP bridge sends it before a session read. When
+//! the write fails, `flush`, `requests` and `stop` answer
+//! `flush failed: <error>` instead, and the service keeps running.
 //!
 //! Usage records (`"kind":"usage"`, one per model request) arrive over the
 //! HTTP socket `local-http.sock`, which forwards each body as one datagram.
@@ -302,8 +304,8 @@ enum HttpRequest {
 /// cannot be read. Anything else is 400.
 // ponytail: one connection at a time with a 500 ms deadline per request; a
 // slow client delays the rest, and the usage module drops what does not fit
-// its cap. A session read flushes the service and parses requests.jsonl on
-// every call; cache the parsed window if reads outgrow that.
+// its cap. A session read writes the queued requests and parses
+// requests.jsonl on every call; cache the parsed window if reads outgrow that.
 fn bridge(listener: &UnixListener, target: &Path) {
     for stream in listener.incoming() {
         let Ok(mut stream) = stream else {
@@ -316,8 +318,12 @@ fn bridge(listener: &UnixListener, target: &Path) {
                 ("204 No Content", None)
             }
             Some(HttpRequest::Usage(_)) => ("503 Service Unavailable", None),
+            // ponytail: answers the full 24h session document on every read.
+            // A long session can outlast the 500 ms write timeout below and
+            // the widget's 1 s read timeout, which then clears its line. Serve
+            // a totals-plus-last-request view if sessions grow that long.
             Some(HttpRequest::Session(id)) => {
-                match crate::stats::session_document(&id, 24 * HOUR) {
+                match crate::stats::session_document(&id, 24 * HOUR, "requests") {
                     Ok(doc) => ("200 OK", Some(doc)),
                     Err(e) => {
                         log(io::Error::other(e));
@@ -437,22 +443,24 @@ fn serve(
             }
         };
         let reply = |text: &[u8]| drop(socket.send_to_addr(text, &addr));
-        let mut flushed = || {
-            service.flush(now).map_err(|e| {
-                let text = format!("flush failed: {e}");
-                log(e);
-                text
-            })
+        let failed = |e: io::Error| {
+            let text = format!("flush failed: {e}");
+            log(e);
+            text
         };
         match &buf[..n] {
             b"ping" => reply(b"ok"),
-            b"flush" => match flushed() {
+            b"flush" => match service.flush(now).map_err(failed) {
+                Ok(()) => reply(b"ok"),
+                Err(e) => reply(e.as_bytes()),
+            },
+            b"requests" => match service.write_for_session(now).map_err(failed) {
                 Ok(()) => reply(b"ok"),
                 Err(e) => reply(e.as_bytes()),
             },
             // On a failed flush the service logs the error, answers
             // `flush failed: <error>` and keeps running with its buckets.
-            b"stop" => match flushed() {
+            b"stop" => match service.flush(now).map_err(failed) {
                 Ok(()) => {
                     let _ = fs::remove_file(socket_path);
                     let _ = fs::remove_file(socket_path.with_file_name(HTTP_SOCKET_FILE));
@@ -1013,6 +1021,16 @@ impl Service {
         requests
     }
 
+    /// Writes what a session read needs: the queued `requests.jsonl` lines,
+    /// and every bucket only when one holds drops, so `partial` still counts
+    /// them. A read per model request thus appends no bucket lines.
+    fn write_for_session(&mut self, now: u64) -> io::Result<()> {
+        if self.buckets.values().any(|b| b.dropped > 0) {
+            return self.flush(now);
+        }
+        self.write_requests()
+    }
+
     /// Appends the queued `requests.jsonl` lines. On a write error they stay
     /// queued, and the file is truncated back as in [`Service::close`].
     fn write_requests(&mut self) -> io::Result<()> {
@@ -1332,6 +1350,24 @@ mod tests {
         let skipped = &after[5];
         assert_eq!(skipped["candidate_bytes"], Value::Null);
         assert_eq!(skipped["tokens"], json!({}));
+    }
+
+    #[test]
+    fn a_session_write_appends_bucket_lines_only_for_drops() {
+        let (_dir, path) = temp_file("session-write");
+        let mut s = Service::new(path.clone(), 90 * DAY, T0);
+        let usage = br#"{"kind":"usage","session":"s","turn":"t","index":0,"model":"m","usage":null,"dropped":0}"#;
+        let clean = String::from_utf8(report("changed", Some(40), true)).unwrap();
+        let clean = clean.replace(r#""dropped":1"#, r#""dropped":0"#);
+        s.record(clean.as_bytes(), T0 + 1);
+        s.record(usage, T0 + 2);
+        s.write_for_session(T0 + 3).unwrap();
+        assert_eq!(lines(&path.with_file_name(REQUESTS_FILE)).len(), 1);
+        assert!(!path.exists(), "no bucket lines without drops");
+
+        s.record(b"not json", T0 + 4);
+        s.write_for_session(T0 + 5).unwrap();
+        assert_eq!(lines(&path).len(), 2, "one report and one service line");
     }
 
     #[test]

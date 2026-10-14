@@ -30,8 +30,8 @@ pub fn command(args: &[&str]) -> ExitCode {
         return ExitCode::from(crate::EX_USAGE);
     };
     let out = match session {
-        Some(session) => session_document(session, since_secs),
-        None => Stats::load(since_secs, None).map(|stats| match as_json {
+        Some(session) => session_document(session, since_secs, "flush"),
+        None => Stats::load(since_secs, None, "flush").map(|stats| match as_json {
             true => format!("{:#}\n", stats.json()),
             false => stats.table(since_arg),
         }),
@@ -54,9 +54,14 @@ pub fn command(args: &[&str]) -> ExitCode {
 
 /// The `deslag stats --json --session <id>` output, newline included. The
 /// service's HTTP bridge answers `GET /session/<id>` with it for the default
-/// 24h window.
-pub(crate) fn session_document(session: &str, since_secs: u64) -> Result<String, String> {
-    let stats = Stats::load(since_secs, Some(session))?;
+/// 24h window. `control` is the message sent to a running service first:
+/// `flush` or `requests`.
+pub(crate) fn session_document(
+    session: &str,
+    since_secs: u64,
+    control: &str,
+) -> Result<String, String> {
+    let stats = Stats::load(since_secs, Some(session), control)?;
     Ok(format!("{:#}\n", stats.session_json(session)))
 }
 
@@ -172,11 +177,12 @@ struct Stats {
 }
 
 impl Stats {
-    /// Flushes a running service, then reads the state dir's files for the
-    /// last `since_secs`. Errs when a file exists but cannot be read.
-    fn load(since_secs: u64, session: Option<&str>) -> Result<Self, String> {
-        // A running service writes its open hour first, so the current hour is complete.
-        let running = local::control("flush", local::CONTROL_TIMEOUT).is_ok();
+    /// Sends `control` to a running service, then reads the state dir's files
+    /// for the last `since_secs`. Errs when a file exists but cannot be read.
+    fn load(since_secs: u64, session: Option<&str>, control: &str) -> Result<Self, String> {
+        // A running service writes its open hour (`flush`) or its queued
+        // requests (`requests`) first, so the current hour is complete.
+        let running = local::control(control, local::CONTROL_TIMEOUT).is_ok();
         // Undocumented fixed clock for tests.
         let now = std::env::var("DESLAG_NOW")
             .ok()
@@ -241,7 +247,8 @@ impl Stats {
             ("service_not_running", !running),
             ("drops", dropped > 0),
             ("gaps", closed.clone().any(|h| !covered.contains(&h))),
-            ("no_data", !any),
+            // A running service holds the open hour; `flush` always writes it.
+            ("no_data", !any && !running),
         ];
         Stats {
             since,

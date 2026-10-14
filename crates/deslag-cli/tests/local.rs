@@ -755,6 +755,7 @@ fn the_bridge_answers_a_session_read_with_the_stats_document() {
     let _cleanup = RemoveOnDrop(dir.clone());
     let service = run(&dir);
     assert_eq!(post_usage(&dir, SESSION, 0), "HTTP/1.1 204 No Content");
+    let stats_before = fs::read(dir.join("stats.jsonl")).unwrap_or_default();
     let mut stream = UnixStream::connect(dir.join("local-http.sock")).unwrap();
     stream
         .set_read_timeout(Some(Duration::from_secs(5)))
@@ -780,6 +781,17 @@ fn the_bridge_answers_a_session_read_with_the_stats_document() {
     assert_eq!(listed.len(), 1, "{doc}");
     assert_eq!(listed[0]["usage"]["input_tokens"], 100);
     assert_eq!(listed[0]["estimated_removed_tokens"], 0);
+    // The read writes the queued request but appends no bucket lines.
+    assert_eq!(
+        fs::read(dir.join("stats.jsonl")).unwrap_or_default(),
+        stats_before
+    );
+    // Running, so no `no_data`; the hours before this run have no service line.
+    assert_eq!(
+        doc["partial"]["reasons"],
+        serde_json::json!(["gaps"]),
+        "{doc}"
+    );
     // Same document as the CLI, except the clock.
     let cli = stdout(&deslag(
         &dir,
@@ -832,6 +844,21 @@ fn the_bridge_answers_503_when_the_datagram_cannot_be_sent() {
         post_usage(&dir, SESSION, 0),
         "HTTP/1.1 503 Service Unavailable"
     );
+}
+
+#[test]
+fn an_unreadable_requests_file_answers_500_and_the_bridge_keeps_serving() {
+    let dir = state_dir("bridge500");
+    let _cleanup = RemoveOnDrop(dir.clone());
+    fs::create_dir_all(dir.join("requests.jsonl")).unwrap();
+    // Killed on drop: `stop` cannot write the queued record into a directory.
+    let _service = run(&dir);
+    let read = format!("GET /session/{SESSION} HTTP/1.1\r\n\r\n");
+    assert_eq!(
+        http(&dir, read.as_bytes()),
+        "HTTP/1.1 500 Internal Server Error"
+    );
+    assert_eq!(post_usage(&dir, SESSION, 0), "HTTP/1.1 204 No Content");
 }
 
 #[test]

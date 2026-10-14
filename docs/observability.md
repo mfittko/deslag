@@ -107,7 +107,7 @@ Partial reasons:
 - `service_not_running`: the service did not answer, or it failed to write its open hour. The current hour is missing. A running service writes its open hour before `stats` reads the file.
 - `drops`: a line in the window, in either store, has `dropped` above 0.
 - `gaps`: a closed hour in the window has no service line, so the service never ran in that hour. A killed service that restarts within the same hour loses its unwritten reports of that hour without a gap.
-- `no_data`: the window has no `stats.jsonl` lines.
+- `no_data`: the window has no `stats.jsonl` lines and the service is not running. A running service holds the open hour.
 
 The table shows one row per dimension set, summed across the window. `saved` is `original - emitted`, or `original - candidate` for `would_change` rows. `tokens_saved` uses the first token label. `-` means unknown. A `usage:` line under the totals shows the usage totals.
 
@@ -157,11 +157,13 @@ deslag: ~120 tokens removed (estimate) of 5,432 input tokens · session ~1,200 r
 
 The removed counts come from the `deslag-estimate-v1` estimator and carry the `(estimate)` label. The input count is provider-reported usage. A `null` count shows as `unknown`, never as 0. The line shows no money figures.
 
-The module clears the line when the send fails, the read fails, the answer is not `2xx`, the body is not a session document with at least one request, or the read takes longer than 1 s. At most 2 reads are unsettled at a time. The host fetch has no abort, so a hung read holds its slot until it settles, and the line does not refresh while both slots are held. Without `DESLAG_SAVINGS_WIDGET=1`, or with the usage module off, the module reads nothing and sets no status line.
+The module clears the line when the delivery of the usage record fails, the read fails, the answer is not `2xx`, the body is not a session document with at least one request, or the read takes longer than 1 s. A record dropped without a send (the send cap, an invalid ID, model or index, or no state directory) leaves the line unchanged. At most 2 reads are unsettled at a time. The host fetch has no abort, so a hung read holds its slot until it settles, and the line does not refresh while both slots are held. Only the latest refresh sets the line: an older read's late answer or timeout is ignored. Without `DESLAG_SAVINGS_WIDGET=1`, or with the usage module off, the module reads nothing and sets no status line.
 
 ### Session read
 
-`GET /session/<id>` on `local-http.sock` asks the service to write its open hour, then answers `200` with `Content-Type: application/json` and the [`deslag stats --json --session <id>`](#deslag-stats---json---session-id) document of the default `24h` window. An invalid ID gets `400`. A state file that exists but cannot be read gets `500`. Each read parses `requests.jsonl`, and the bridge serves one connection at a time, so a slow read delays the usage sends behind it.
+`GET /session/<id>` on `local-http.sock` asks the service to write its queued `requests.jsonl` lines (the `requests` control message), then answers `200` with `Content-Type: application/json` and the [`deslag stats --json --session <id>`](#deslag-stats---json---session-id) document of the default `24h` window. The service writes its buckets as well only when one holds drops, so `partial.reasons` stays complete and a read per model request appends no other `stats.jsonl` lines. An invalid ID gets `400`. A state file that exists but cannot be read gets `500`. Each read parses `requests.jsonl`, and the bridge serves one connection at a time, so a slow read delays the usage sends behind it.
+
+Each read answers the full session document of the last 24 hours. A long session can make the answer outlast the bridge's 500 ms write timeout or the widget's 1 s read timeout, and the widget then clears its line. A view with only the totals and the last request would remove this ceiling.
 
 ## Per-request lines
 
