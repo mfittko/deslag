@@ -116,4 +116,20 @@ rm -rf "$DESLAG_STATE_DIR" /tmp/deslag-demo-project
 
 ## Recorded run
 
-Pending: the end-to-end run of this guide with its output.
+This run used Claude Code 2.1.299 on macOS arm64 on 2026-10-14. It followed steps 1 to 4 and then ran one headless request with `claude -p --model haiku --max-budget-usd 0.30` and the step 5 variables, with `--allowedTools "Bash(cat items.json)"`. The request cost USD 0.0094. Headless mode draws no status line. A throwaway probe plugin hooked `ui.status` and logged each line the widget set. These are the two lines, one per model request:
+
+```text
+deslag: ~0 tokens removed (estimate) of 38,349 input tokens · session ~0 removed (estimate)
+deslag: ~3,603 tokens removed (estimate) of 55,388 input tokens · session ~3,603 removed (estimate)
+```
+
+The first request runs the Bash tool. The second request reads the compressed tool result, so it takes the hook's report. `items.json` is 23,787 bytes. The model answered that the file has 200 items.
+
+`deslag stats --json --session <session id>` showed the same figures (fields shortened):
+
+```json
+{"index":0,"compression_reports":0,"estimated_removed_tokens":0,"usage":{"input_tokens":2,"cache_read_input_tokens":11447,"cache_creation_input_tokens":26900,"output_tokens":79}}
+{"index":1,"compression_reports":1,"estimated_removed_tokens":3603,"usage":{"input_tokens":2,"cache_read_input_tokens":38347,"cache_creation_input_tokens":17039,"output_tokens":136}}
+```
+
+The session totals were 2 requests and an `estimated_removed_tokens` of 3603.
