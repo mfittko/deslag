@@ -481,10 +481,19 @@ fn parse_report(message: &[u8], hour: u64) -> Option<(Key, Bucket)> {
         .into_iter()
         .chain(bucket.candidate_bytes)
         .any(|n| n > u32::MAX.into())
+        || !proposal_known(&key, &bucket)
     {
         return None;
     }
     Some((key, bucket))
+}
+
+/// `false` for a `would_change` bucket with a null byte or token candidate.
+/// deslag-core always sets the candidate for `would_change`; a null one would
+/// merge into a known sum and overstate the proposal.
+fn proposal_known(key: &Key, b: &Bucket) -> bool {
+    key.outcome != Some("would_change")
+        || b.candidate_bytes.is_some() && b.tokens.values().all(|t| t.candidate.is_some())
 }
 
 /// One `stats.jsonl` line, schema `"v":1`.
@@ -496,7 +505,8 @@ fn line(key: &Key, b: &Bucket) -> String {
 
 /// Parses one `stats.jsonl` line. `None` for a malformed line, another
 /// schema version, a value outside the allowlists, an hour that is not a
-/// multiple of `HOUR`, or a partly null dimension key.
+/// multiple of `HOUR`, a partly null dimension key, or a `would_change`
+/// line with a null candidate.
 pub(crate) fn parse_line(text: &str) -> Option<(Key, Bucket)> {
     let v: Value = serde_json::from_str(text).ok()?;
     if u64_of(&v, "v")? != 1 {
@@ -544,7 +554,7 @@ pub(crate) fn parse_line(text: &str) -> Option<(Key, Bucket)> {
         tokens,
         dropped: u64_of(&v, "dropped")?,
     };
-    Some((key, bucket))
+    proposal_known(&key, &bucket).then_some((key, bucket))
 }
 
 /// The dimensions and sums of one bucket as a JSON object.
@@ -1085,5 +1095,23 @@ mod tests {
                 "{kind:?}"
             );
         }
+    }
+
+    #[test]
+    fn would_change_with_a_null_candidate_is_rejected() {
+        let known = report("would_change", Some(40), true);
+        let (key, bucket) = parse_report(&known, T0).unwrap();
+        assert!(parse_line(&line(&key, &bucket)).is_some());
+        assert!(parse_report(&report("would_change", None, false), T0).is_none());
+        assert!(parse_report(&report("skipped", None, false), T0).is_some());
+        let mut v: Value = serde_json::from_slice(&known).unwrap();
+        v["tokens"]["candidate"] = Value::Null;
+        assert!(parse_report(v.to_string().as_bytes(), T0).is_none());
+        let mut l: Value = serde_json::from_str(&line(&key, &bucket)).unwrap();
+        l["tokens"]["estimate:deslag-estimate-v1"]["candidate"] = Value::Null;
+        assert!(parse_line(&l.to_string()).is_none());
+        l = serde_json::from_str(&line(&key, &bucket)).unwrap();
+        l["candidate_bytes"] = Value::Null;
+        assert!(parse_line(&l.to_string()).is_none());
     }
 }

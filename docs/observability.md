@@ -56,7 +56,7 @@ The service appends one line per bucket when an hour closes, and when `stop` or 
 
 A service line has every dimension `null` and `count` 0. The service writes one for every hour it covered. Its `dropped` counts reports the service rejected in that hour. `stats` treats a closed hour without a service line as a gap.
 
-Lines older than the retention window are removed at service start and after each hour close. This rotation also merges lines with equal keys, so lines from frequent `stats` runs collapse into one line per key. Rotation also removes malformed lines, invalid UTF-8 included, and token labels outside the allowlist; `stats` skips them too. A line is malformed when its `hour` is not a multiple of 3600, or when its dimensions are neither all set (`reason` may be `null`) nor all `null`. The service counts a report with a byte size above 2^32 - 1 as a service drop, since no real tool result is that large.
+Lines older than the retention window are removed at service start and after each hour close. This rotation also merges lines with equal keys, so lines from frequent `stats` runs collapse into one line per key. Rotation also removes malformed lines, invalid UTF-8 included, and token labels outside the allowlist; `stats` skips them too. A line is malformed when its `hour` is not a multiple of 3600, or when its dimensions are neither all set (`reason` may be `null`) nor all `null`, or when a `would_change` line has a `null` byte or token candidate. The service counts a report with a byte size above 2^32 - 1 as a service drop, since no real tool result is that large. It also drops a `would_change` report with a `null` byte or token candidate, since deslag-core always sets one in observe mode.
 
 ## `deslag stats --json`
 
@@ -84,7 +84,7 @@ Lines older than the retention window are removed at service start and after eac
 | `partial.reasons` | Any of `service_not_running`, `drops`, `gaps`, `no_data`, in this order. |
 | `totals.reports` | Sum of `count` over all buckets. |
 | `totals.emitted_reduction_bytes` | Sum of `original_bytes - emitted_bytes` over `changed` buckets of both adapters. A hook reduction counts once per tool result. A proxy reduction counts once per submission, so history resends count again. `buckets` has the values per adapter. |
-| `totals.would_change_reduction_bytes` | Sum of `original_bytes - candidate_bytes` over `would_change` buckets. `null` when a bucket has no candidate size. |
+| `totals.would_change_reduction_bytes` | Sum of `original_bytes - candidate_bytes` over `would_change` buckets. Every `would_change` bucket has a candidate size, since lines without one are malformed. |
 | `totals.dropped` | Sum of `dropped` over all lines, service lines included. |
 | `buckets` | Report buckets in the window, merged per key and sorted by hour, then dimensions. Fields as in the JSONL line, without `v`. |
 

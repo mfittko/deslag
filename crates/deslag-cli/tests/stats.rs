@@ -93,17 +93,19 @@ fn observe_proposals_stay_separate_from_emitted_reductions() {
 
 #[test]
 fn unknown_values_are_null_never_zero() {
-    let line = r#"{"v":1,"hour":1799996400,"adapter":"proxy","transform":"json-minify","outcome":"would_change","reason":null,"tool":"bash","count":1,"original_bytes":500,"candidate_bytes":null,"emitted_bytes":500,"tokens":{},"dropped":0}"#;
-    let dir = state_dir("null", Some(&format!("{line}\n")));
+    let line = r#"{"v":1,"hour":1799996400,"adapter":"proxy","transform":"json-minify","outcome":"would_change","reason":null,"tool":"bash","count":1,"original_bytes":500,"candidate_bytes":300,"emitted_bytes":500,"tokens":{},"dropped":0}"#;
+    // A null would_change candidate is malformed; merged, it would overstate the proposal.
+    let unknown = line.replace("300", "null");
+    let dir = state_dir("null", Some(&format!("{line}\n{unknown}\n")));
     let stats = stats_json(&dir, &["--since", "1h"]);
-    assert_eq!(stats["totals"]["would_change_reduction_bytes"], Value::Null);
+    assert_eq!(stats["totals"]["reports"], 1);
+    assert_eq!(stats["totals"]["would_change_reduction_bytes"], 200);
     assert_eq!(stats["totals"]["emitted_reduction_bytes"], 0);
-    assert_eq!(stats["buckets"][0]["candidate_bytes"], Value::Null);
     assert_eq!(stats["buckets"][0]["tokens"], serde_json::json!({}));
     let table = stdout(&deslag(&dir, Some(NOW), &["stats", "--since", "1h"]));
     let row = table.lines().find(|l| l.contains("would_change")).unwrap();
     let saved: Vec<&str> = row.split_whitespace().skip(8).collect();
-    assert_eq!(saved, ["-", "-"], "{row}");
+    assert_eq!(saved, ["200", "-"], "{row}");
     let _ = fs::remove_dir_all(&dir);
 }
 
