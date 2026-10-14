@@ -4,4 +4,4 @@
 
 ### Fixed
 
-- `deslag stats` counts a hook result blocked by a hook conflict as `skipped` with reason `hook_conflict` instead of `changed`; restart a running `deslag local` service after the upgrade, because an older service drops reports with the new reason (#97)
+- `deslag stats` counts a hook result blocked by a hook conflict as `skipped` with reason `hook_conflict` instead of `changed`, with the original size emitted and the candidate fields kept; restart a running `deslag local` service after the upgrade, because an older service drops reports with the new reason (#97)

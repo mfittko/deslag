@@ -239,7 +239,7 @@ fn claude_hook(
 }
 
 /// Records a `changed` result that a hook conflict kept from the model as
-/// `skipped`, with the original size emitted.
+/// `skipped`, with the original size emitted. The candidate fields stay as built.
 fn block(compressed: &mut CompressionReport) {
     if compressed.outcome != deslag_core::Outcome::Changed {
         return;
@@ -248,7 +248,6 @@ fn block(compressed: &mut CompressionReport) {
     compressed.reason = Some(deslag_core::Reason::HookConflict);
     compressed.emitted_bytes = compressed.original_bytes;
     compressed.emitted_tokens = compressed.original_tokens;
-    compressed.candidate_tokens = None;
 }
 
 /// One finished job: the changed text, if any, and the compression report.
@@ -402,6 +401,44 @@ mod tests {
 
     const PRETTY: &str = "{\n  \"a\": [\n    1,\n    2\n  ]\n}";
     const COMPACT: &str = r#"{"a":[1,2]}"#;
+
+    #[test]
+    fn block_relabels_only_changed_reports() {
+        let big = format!("{{\n  \"a\": \"{}\"\n}}", "x".repeat(4096));
+        let (_, mut changed) = minify(&big);
+        assert_eq!(changed.outcome, deslag_core::Outcome::Changed);
+        let candidate = (changed.candidate_bytes, changed.candidate_tokens);
+        block(&mut changed);
+        assert_eq!(changed.outcome, deslag_core::Outcome::Skipped);
+        assert_eq!(changed.reason, Some(deslag_core::Reason::HookConflict));
+        assert_eq!(changed.emitted_bytes, changed.original_bytes);
+        assert_eq!(changed.emitted_tokens, changed.original_tokens);
+        assert_eq!(
+            (changed.candidate_bytes, changed.candidate_tokens),
+            candidate
+        );
+
+        let ctx = deslag_core::CompressionContext {
+            limits: deslag_core::Limits {
+                min_candidate_bytes: usize::MAX,
+                ..FIRST_SLICE_JSON_MINIFY_CONTEXT.limits
+            },
+            ..FIRST_SLICE_JSON_MINIFY_CONTEXT
+        };
+        let mut small = deslag_core::compress(PRETTY, &ctx).report;
+        assert_eq!(small.outcome, deslag_core::Outcome::Skipped);
+        assert_eq!(small.reason, Some(deslag_core::Reason::BelowMinBytes));
+        let before = small.clone();
+        block(&mut small);
+        assert_eq!(small, before);
+
+        let mut failed = before;
+        failed.outcome = deslag_core::Outcome::Failed;
+        failed.reason = Some(deslag_core::Reason::InvalidCandidate);
+        let before = failed.clone();
+        block(&mut failed);
+        assert_eq!(failed, before);
+    }
 
     #[test]
     fn valid_bash_replacement_is_accepted() {
