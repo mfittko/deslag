@@ -105,4 +105,4 @@ The table shows one row per dimension set, summed across the window. `saved` is 
 - The proxy reports once per submission. A conversation resends its history, so the same tool result counts again on every request.
 - A killed service loses the open hour since the last write. `deslag local stop` and `deslag stats` write the open hour; there is no signal handling.
 - macOS limits socket paths to 104 bytes. A long state directory path makes `local start` fail to bind.
-- `deslag local status` and `deslag local stop` exit 0 whether or not the service runs. Their output states whether the service runs. `stop` exits 2 only when the service fails to write its buckets.
+- `deslag local status` and `deslag local stop` exit 0 whether or not the service runs. Their output states whether the service runs. Both exit 2 when the service does not answer within the control timeout (`service not responding`) or the control request fails (`control failed: ...`). `stop` also exits 2 when the service fails to write its buckets.
