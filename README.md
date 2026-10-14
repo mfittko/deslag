@@ -81,7 +81,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 ```
 
-The Claude Code plugin lives in [`plugins/claude`](plugins/claude). It currently registers a no-op `PostToolUse` hook. Install it from this repository's marketplace in Claude Code:
+The Claude Code plugin lives in [`plugins/claude`](plugins/claude). It registers a `PostToolUse` hook that leaves tool results unchanged, because the plugin does not pass `--minify-json`, and an opt-in usage module that is off by default (see below). Install it from this repository's marketplace in Claude Code:
 
 ```text
 /plugin marketplace add mfittko/deslag
