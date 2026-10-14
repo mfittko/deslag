@@ -13,6 +13,12 @@
 //! The service answers `ping`, `flush` and `stop` with `ok`. When the write
 //! fails, `flush` and `stop` answer `flush failed: <error>` instead, and the
 //! service keeps running.
+//!
+//! Usage records (`"kind":"usage"`, one per model request) arrive over the
+//! HTTP socket `local-http.sock`, which forwards each body as one datagram.
+//! Each becomes one line of the private `requests.jsonl`, written with the
+//! buckets. Compression reports with a `session` count toward the next usage
+//! record of that session.
 
 use std::{
     collections::BTreeMap,
@@ -20,10 +26,10 @@ use std::{
     io::{self, Read, Write},
     os::unix::{
         fs::{OpenOptionsExt, PermissionsExt},
-        net::UnixDatagram,
+        net::{UnixDatagram, UnixListener, UnixStream},
         process::CommandExt,
     },
-    path::Path,
+    path::{Path, PathBuf},
     process::{Command, ExitCode, Stdio},
     thread,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -32,7 +38,10 @@ use std::{
 use deslag_core::{
     EXACT_LINE_RUNS_ID, EstimateCounter, JSON_MINIFY_ID, JSON_TABLE_ID, LINE_TEMPLATES_ID,
 };
-use deslag_telemetry::{MAX_MESSAGE_BYTES, SOCKET_FILE, STATS_FILE, ensure_state_dir, state_dir};
+use deslag_telemetry::{
+    HTTP_SOCKET_FILE, MAX_MESSAGE_BYTES, REQUESTS_FILE, SOCKET_FILE, STATS_FILE, ensure_state_dir,
+    state_dir, valid_id,
+};
 use serde_json::{Map, Value, json};
 
 pub const USAGE: &str = "usage: deslag local start|run [--retention-days <n>]\n       \
@@ -66,7 +75,7 @@ const REASONS: &[&str] = &[
     "invalid_candidate",
 ];
 /// Allowed (method, tokenizer) pairs: the estimate tokenizer never labels exact counts.
-/// The only stored label is `estimate:deslag-estimate-v1`; `exact` is reserved
+/// The only stored label is `estimate:<EstimateCounter::TOKENIZER>`; `exact` is reserved
 /// for a future tokenizer.
 const TOKEN_LABELS: &[(&str, &str)] = &[("estimate", EstimateCounter::TOKENIZER)];
 /// Held by the running service: a second `run` fails instead of stealing the socket.
@@ -250,11 +259,96 @@ fn run(retention_days: u64) -> Result<(), String> {
     let _ = fs::remove_file(&socket_path);
     let socket = UnixDatagram::bind(&socket_path)
         .map_err(|e| format!("cannot bind {}: {e}", socket_path.display()))?;
+    let http_path = dir.join(HTTP_SOCKET_FILE);
+    let _ = fs::remove_file(&http_path);
+    let listener = UnixListener::bind(&http_path)
+        .and_then(|l| {
+            fs::set_permissions(&http_path, fs::Permissions::from_mode(0o600))?;
+            Ok(l)
+        })
+        .map_err(|e| {
+            let _ = fs::remove_file(&socket_path);
+            let _ = fs::remove_file(&http_path);
+            format!("cannot bind {}: {e}", http_path.display())
+        })?;
+    let target = socket_path.clone();
+    thread::spawn(move || bridge(&listener, &target));
     let result = serve(&socket, &socket_path, &lock, &dir, retention_days);
     if result.is_err() {
         let _ = fs::remove_file(&socket_path);
+        let _ = fs::remove_file(&http_path);
     }
     result
+}
+
+/// Read budget of one HTTP bridge request, headers included.
+const MAX_HTTP_BYTES: usize = 2048;
+
+/// Forwards each `POST /usage` body from the HTTP socket as one datagram to
+/// `target`, one connection at a time. Answers 204 when the datagram was
+/// sent, 503 when it was not (service busy) and 400 for anything else, and
+/// always closes the connection.
+// ponytail: one connection at a time with a 500 ms deadline per request; a
+// slow client delays the rest, and the usage module drops what does not fit
+// its cap.
+fn bridge(listener: &UnixListener, target: &Path) {
+    for stream in listener.incoming() {
+        let Ok(mut stream) = stream else {
+            // A persistent accept error (such as EMFILE) would otherwise spin.
+            thread::sleep(Duration::from_millis(100));
+            continue;
+        };
+        let status = match read_usage(&mut stream) {
+            Some(body) if deslag_telemetry::send(target, &body) => "204 No Content",
+            Some(_) => "503 Service Unavailable",
+            None => "400 Bad Request",
+        };
+        let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
+        let _ = write!(stream, "HTTP/1.1 {status}\r\nConnection: close\r\n\r\n");
+    }
+}
+
+/// The body of one `POST /usage` request with a `Content-Length` of at most
+/// [`MAX_MESSAGE_BYTES`] and a body that starts with `{`, so control messages
+/// such as `stop` never pass. `None` for any other request, a read error, a
+/// read past [`MAX_HTTP_BYTES`] or a request not complete within 500 ms.
+fn read_usage(stream: &mut UnixStream) -> Option<Vec<u8>> {
+    let deadline = Instant::now() + Duration::from_millis(500);
+    let mut buf = [0; MAX_HTTP_BYTES];
+    let mut n = 0;
+    loop {
+        if let Some(end) = buf[..n].windows(4).position(|w| w == b"\r\n\r\n") {
+            let mut lines = std::str::from_utf8(&buf[..end]).ok()?.split("\r\n");
+            if !lines.next()?.starts_with("POST /usage ") {
+                return None;
+            }
+            let len: usize = lines.find_map(|l| {
+                let (name, value) = l.split_once(':')?;
+                name.eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse().ok())?
+            })?;
+            let body = end + 4;
+            if len > MAX_MESSAGE_BYTES {
+                return None;
+            }
+            if n >= body + len {
+                let body = &buf[body..body + len];
+                return body.starts_with(b"{").then(|| body.to_vec());
+            }
+        }
+        if n == buf.len() {
+            return None;
+        }
+        let left = deadline.checked_duration_since(Instant::now())?;
+        if left.is_zero() {
+            return None;
+        }
+        stream.set_read_timeout(Some(left)).ok()?;
+        match stream.read(&mut buf[n..]).ok()? {
+            0 => return None,
+            read => n += read,
+        }
+    }
 }
 
 fn log(e: io::Error) {
@@ -278,7 +372,8 @@ fn serve(
         .map_err(err)?;
     let mut service = Service::new(dir.join(STATS_FILE), retention_days * DAY, now());
     refuse_symlink(&service.path).map_err(err)?;
-    rotate(&service.path, now(), service.retention).unwrap_or_else(log);
+    refuse_symlink(&service.requests_path).map_err(err)?;
+    service.rotate(now()).unwrap_or_else(log);
     let mut buf = [0; MAX_MESSAGE_BYTES + 1];
     loop {
         let received = socket.recv_from(&mut buf);
@@ -320,6 +415,7 @@ fn serve(
             b"stop" => match flushed() {
                 Ok(()) => {
                     let _ = fs::remove_file(socket_path);
+                    let _ = fs::remove_file(socket_path.with_file_name(HTTP_SOCKET_FILE));
                     // Unlocked before the reply, so an immediate restart wins the lock.
                     let _ = lock.unlock();
                     reply(b"ok");
@@ -424,6 +520,110 @@ impl Bucket {
     }
 }
 
+/// `Some(None)` for a missing or null `field`, `Some(Some(_))` for a string
+/// that passes `valid`, `None` otherwise.
+fn label(v: &Value, field: &str, valid: fn(&str) -> bool) -> Option<Option<String>> {
+    match v.get(field) {
+        None | Some(Value::Null) => Some(None),
+        Some(Value::String(s)) if valid(s) => Some(Some(s.clone())),
+        _ => None,
+    }
+}
+
+/// Model names: 1 to 64 bytes of printable ASCII without `"` and `\`.
+fn valid_model(s: &str) -> bool {
+    (1..=64).contains(&s.len())
+        && s.bytes()
+            .all(|b| (b' '..=b'~').contains(&b) && b != b'"' && b != b'\\')
+}
+
+/// Provider usage fields of a request, in stored order.
+pub(crate) const USAGE_FIELDS: [&str; 4] = [
+    "input_tokens",
+    "output_tokens",
+    "cache_read_input_tokens",
+    "cache_creation_input_tokens",
+];
+
+/// One `requests.jsonl` line, schema `"v":1`: the provider usage of one model
+/// request and the compression reports of its session since the previous
+/// request. `usage` is `None` when the provider reported none or only part.
+/// `estimated_removed_tokens` is `None` when one of those reports had no
+/// token counts.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Request {
+    pub time: u64,
+    pub session: String,
+    pub turn: String,
+    pub index: u64,
+    pub model: String,
+    pub usage: Option<[u64; 4]>,
+    pub compression_reports: u64,
+    pub estimated_removed_tokens: Option<u64>,
+    pub dropped: u64,
+}
+
+impl Request {
+    pub(crate) fn json(&self) -> Value {
+        let usage = self.usage.map(|u| {
+            USAGE_FIELDS
+                .iter()
+                .zip(u)
+                .map(|(f, n)| (f.to_string(), n.into()))
+                .collect::<Map<_, _>>()
+        });
+        json!({
+            "v": 1,
+            "time": self.time,
+            "session": self.session,
+            "turn": self.turn,
+            "index": self.index,
+            "model": self.model,
+            "usage": usage,
+            "compression_reports": self.compression_reports,
+            "estimated_removed_tokens": self.estimated_removed_tokens,
+            "dropped": self.dropped,
+        })
+    }
+}
+
+/// Parses one `requests.jsonl` line. `None` for a malformed line, another
+/// schema version or a value that fails validation.
+pub(crate) fn parse_request(v: &Value) -> Option<Request> {
+    if u64_of(v, "v")? != 1 {
+        return None;
+    }
+    let usage = match v.get("usage")? {
+        Value::Null => None,
+        u => {
+            let mut sums = [0; 4];
+            for (sum, field) in sums.iter_mut().zip(USAGE_FIELDS) {
+                *sum = u64_of(u, field)?;
+            }
+            Some(sums)
+        }
+    };
+    Some(Request {
+        time: u64_of(v, "time")?,
+        session: label(v, "session", valid_id)??,
+        turn: label(v, "turn", valid_id)??,
+        index: u64_of(v, "index")?,
+        model: label(v, "model", valid_model)??,
+        usage,
+        compression_reports: u64_of(v, "compression_reports")?,
+        estimated_removed_tokens: opt_u64(v, "estimated_removed_tokens")?,
+        dropped: u64_of(v, "dropped")?,
+    })
+}
+
+/// Parses every line of `requests.jsonl` bytes; invalid lines are skipped.
+pub(crate) fn parse_requests(bytes: &[u8]) -> impl Iterator<Item = Request> + '_ {
+    bytes
+        .split(|b| *b == b'\n')
+        .filter_map(|l| serde_json::from_slice(l).ok())
+        .filter_map(|v| parse_request(&v))
+}
+
 /// The value of `field` when it is one of `allowed`.
 fn pick(v: &Value, field: &str, allowed: &[&'static str]) -> Option<&'static str> {
     let s = v.get(field)?.as_str()?;
@@ -450,18 +650,17 @@ fn opt_u64(v: &Value, field: &str) -> Option<Option<u64>> {
     }
 }
 
-/// Parses and validates one report datagram into its key and a one-report bucket.
+/// Validates one parsed report datagram into its key and a one-report bucket.
 /// `None` also for a byte size above `u32::MAX` and for a `would_change` report
 /// with a null byte candidate; the caller counts either as a drop.
-fn parse_report(message: &[u8], hour: u64) -> Option<(Key, Bucket)> {
-    let v: Value = serde_json::from_slice(message).ok()?;
+fn parse_report(v: &Value, hour: u64) -> Option<(Key, Bucket)> {
     let key = Key {
         hour,
-        adapter: Some(pick(&v, "adapter", ADAPTERS)?),
-        transform: Some(pick(&v, "transform", TRANSFORMS)?),
-        outcome: Some(pick(&v, "outcome", OUTCOMES)?),
-        reason: dim(&v, "reason", REASONS)?,
-        tool: Some(pick(&v, "tool", TOOLS)?),
+        adapter: Some(pick(v, "adapter", ADAPTERS)?),
+        transform: Some(pick(v, "transform", TRANSFORMS)?),
+        outcome: Some(pick(v, "outcome", OUTCOMES)?),
+        reason: dim(v, "reason", REASONS)?,
+        tool: Some(pick(v, "tool", TOOLS)?),
     };
     let mut tokens = BTreeMap::new();
     let t = v.get("tokens")?;
@@ -477,11 +676,11 @@ fn parse_report(message: &[u8], hour: u64) -> Option<(Key, Bucket)> {
     }
     let bucket = Bucket {
         count: 1,
-        original_bytes: u64_of(&v, "original_bytes")?,
-        candidate_bytes: opt_u64(&v, "candidate_bytes")?,
-        emitted_bytes: u64_of(&v, "emitted_bytes")?,
+        original_bytes: u64_of(v, "original_bytes")?,
+        candidate_bytes: opt_u64(v, "candidate_bytes")?,
+        emitted_bytes: u64_of(v, "emitted_bytes")?,
         tokens,
-        dropped: u64_of(&v, "dropped")?,
+        dropped: u64_of(v, "dropped")?,
     };
     // A size above u32::MAX is not a real tool result; it counts as a drop.
     let sizes = [bucket.original_bytes, bucket.emitted_bytes];
@@ -602,11 +801,33 @@ pub(crate) fn bucket_json(key: &Key, b: &Bucket) -> Value {
     })
 }
 
+/// Compression reports of one session not yet taken by a usage record.
+#[derive(Debug, Default)]
+struct Pending {
+    reports: u64,
+    removed: u64,
+    /// One report without estimated token counts makes `removed` unknown.
+    unknown: bool,
+    /// Time of the last report.
+    seen: u64,
+}
+
+/// At most this many sessions hold pending reports.
+// ponytail: a report for a new session over the cap is bucketed but not
+// attributed; a map with eviction would keep the newest sessions instead.
+const MAX_SESSIONS: usize = 1024;
+
 /// In-memory aggregation. All methods take `now` so tests inject the clock.
 struct Service {
-    path: std::path::PathBuf,
+    path: PathBuf,
+    requests_path: PathBuf,
     retention: u64,
     buckets: BTreeMap<Key, Bucket>,
+    sessions: BTreeMap<String, Pending>,
+    /// `requests.jsonl` lines not written yet.
+    // ponytail: grows by one line per model request while writes fail; it
+    // empties at the next successful close or flush.
+    requests: Vec<String>,
     /// Start of the hour the last tick saw.
     hour: u64,
     /// Every hour before this one already has its service line on disk.
@@ -614,41 +835,111 @@ struct Service {
 }
 
 impl Service {
-    fn new(path: std::path::PathBuf, retention: u64, now: u64) -> Self {
+    /// `path` is the `stats.jsonl` path; `requests.jsonl` sits next to it.
+    fn new(path: PathBuf, retention: u64, now: u64) -> Self {
         Service {
+            requests_path: path.with_file_name(REQUESTS_FILE),
             path,
             retention,
             buckets: BTreeMap::new(),
+            sessions: BTreeMap::new(),
+            requests: Vec::new(),
             hour: floor_hour(now),
             covered: floor_hour(now),
         }
     }
 
-    /// Aggregates one report. An invalid report counts as a service drop, and
-    /// so does one over [`MAX_MESSAGE_BYTES`]: `serve` receives into one extra
-    /// byte, so a longer datagram arrives truncated to that length.
+    /// Aggregates one report or usage record. An invalid message counts as a
+    /// service drop, and so does one over [`MAX_MESSAGE_BYTES`]: `serve`
+    /// receives into one extra byte, so a longer datagram arrives truncated to
+    /// that length.
     fn record(&mut self, message: &[u8], now: u64) {
         let hour = floor_hour(now);
-        let report = (message.len() <= MAX_MESSAGE_BYTES)
-            .then(|| parse_report(message, hour))
+        let v = (message.len() <= MAX_MESSAGE_BYTES)
+            .then(|| serde_json::from_slice::<Value>(message).ok())
             .flatten();
-        match report {
-            Some((key, bucket)) => self.buckets.entry(key).or_default().merge(&bucket),
-            None => self.buckets.entry(Key::service(hour)).or_default().dropped += 1,
+        let recorded = match v {
+            Some(v) if v.get("kind").and_then(Value::as_str) == Some("usage") => {
+                self.usage(&v, now)
+            }
+            Some(v) => self.report(&v, now),
+            None => None,
+        };
+        if recorded.is_none() {
+            self.buckets.entry(Key::service(hour)).or_default().dropped += 1;
         }
+    }
+
+    /// Buckets one compression report and, with a valid `session`, adds it to
+    /// that session's pending sums. An invalid `session` leaves the report
+    /// unattributed.
+    fn report(&mut self, v: &Value, now: u64) -> Option<()> {
+        let session = label(v, "session", valid_id).flatten();
+        let (key, bucket) = parse_report(v, floor_hour(now))?;
+        self.buckets.entry(key).or_default().merge(&bucket);
+        let Some(session) = session else {
+            return Some(());
+        };
+        if self.sessions.len() >= MAX_SESSIONS && !self.sessions.contains_key(&session) {
+            return Some(());
+        }
+        let p = self.sessions.entry(session).or_default();
+        p.reports = p.reports.saturating_add(1);
+        p.seen = now;
+        // The estimate label's `original - emitted` is the estimated removal.
+        match bucket
+            .tokens
+            .get(&format!("estimate:{}", EstimateCounter::TOKENIZER))
+        {
+            Some(t) => {
+                p.removed = p
+                    .removed
+                    .saturating_add(t.original.saturating_sub(t.emitted))
+            }
+            None => p.unknown = true,
+        }
+        Some(())
+    }
+
+    /// Queues one `requests.jsonl` line for a usage record and takes the
+    /// pending sums of its session.
+    fn usage(&mut self, v: &Value, now: u64) -> Option<()> {
+        // The record is a stored line without the service's fields; one
+        // parser validates both.
+        let mut line = v.clone();
+        line["v"] = json!(1);
+        line["time"] = json!(now);
+        line["compression_reports"] = json!(0);
+        line["estimated_removed_tokens"] = Value::Null;
+        let mut request = parse_request(&line)?;
+        let pending = self.sessions.remove(&request.session).unwrap_or_default();
+        request.compression_reports = pending.reports;
+        request.estimated_removed_tokens = (!pending.unknown).then_some(pending.removed);
+        self.requests.push(request.json().to_string() + "\n");
+        Some(())
     }
 
     /// Closes past hours when the hour changed, then applies retention.
     fn tick(&mut self, now: u64) -> io::Result<()> {
         let hour = floor_hour(now);
         if hour > self.hour {
+            // ponytail: idle sessions leave after one hour; a session idle
+            // longer between a tool result and its next request loses the sums.
+            self.sessions
+                .retain(|_, p| p.seen.saturating_add(HOUR) > now);
             self.close(hour)?;
             // Advanced before rotating: a failed rotation does not repeat the close.
             self.hour = hour;
-            return rotate(&self.path, now, self.retention);
+            return self.rotate(now);
         }
         self.hour = hour;
         Ok(())
+    }
+
+    /// Applies retention to both stores.
+    fn rotate(&self, now: u64) -> io::Result<()> {
+        let stats = rotate(&self.path, now, self.retention);
+        rotate_requests(&self.requests_path, now, self.retention).and(stats)
     }
 
     /// Writes every bucket, the open hour included. Lines are additive, so the
@@ -662,6 +953,7 @@ impl Service {
     /// buckets stay in memory for the next call, and the file is truncated back
     /// to its old length, so the retry starts on a clean line boundary.
     fn close(&mut self, before: u64) -> io::Result<()> {
+        let requests = self.write_requests();
         let first = self
             .covered
             .max(floor_hour(before.saturating_sub(self.retention)));
@@ -678,6 +970,19 @@ impl Service {
             return Err(e);
         }
         self.covered = self.covered.max(before);
+        requests
+    }
+
+    /// Appends the queued `requests.jsonl` lines. On a write error they stay
+    /// queued, and the file is truncated back as in [`Service::close`].
+    fn write_requests(&mut self) -> io::Result<()> {
+        if self.requests.is_empty() {
+            return Ok(());
+        }
+        let text = self.requests.concat();
+        open_private(&self.requests_path)
+            .and_then(|f| append_or_truncate(&f, |mut f| f.write_all(text.as_bytes())))?;
+        self.requests.clear();
         Ok(())
     }
 }
@@ -728,6 +1033,46 @@ fn open_private(path: &Path) -> io::Result<fs::File> {
 /// Lines `parse_line` rejects, invalid UTF-8 included, are removed too.
 // ponytail: reads the whole file; 90 days of hourly buckets stays in the low MBs.
 fn rotate(path: &Path, now: u64, retention: u64) -> io::Result<()> {
+    let cutoff = floor_hour(now.saturating_sub(retention));
+    rewrite(path, |text| {
+        let mut merged = BTreeMap::<Key, Bucket>::new();
+        for (key, bucket) in parse_lines(text) {
+            if key.hour >= cutoff {
+                merged.entry(key).or_default().merge(&bucket);
+            }
+        }
+        merged.iter().map(|(k, b)| line(k, b) + "\n").collect()
+    })
+}
+
+/// Removes `requests.jsonl` lines older than the hour that contains
+/// `now - retention`, and lines `parse_request` rejects. Lines are in time
+/// order, so a valid first line inside retention leaves the file unchanged,
+/// later malformed lines included; readers skip those.
+// ponytail: reads the whole file each rotation; at about 300 bytes per model
+// request, 90 days of 10k requests a day is about 270 MB. Read only the first
+// line, or rotate into dated files, if stores grow that large.
+fn rotate_requests(path: &Path, now: u64, retention: u64) -> io::Result<()> {
+    let cutoff = floor_hour(now.saturating_sub(retention));
+    rewrite(path, |text| {
+        let first = text.split(|&b| b == b'\n').next().unwrap_or_default();
+        if parse_requests(first)
+            .next()
+            .is_some_and(|r| r.time >= cutoff)
+            && let Ok(text) = std::str::from_utf8(text)
+        {
+            return text.to_owned();
+        }
+        parse_requests(text)
+            .filter(|r| r.time >= cutoff)
+            .map(|r| r.json().to_string() + "\n")
+            .collect()
+    })
+}
+
+/// Replaces the content of `path` with `keep(content)` via a 0600 temp file
+/// renamed over it. A missing `path` stays missing.
+fn rewrite(path: &Path, keep: impl FnOnce(&[u8]) -> String) -> io::Result<()> {
     // A symlinked `path` is refused, so the rename cannot replace it.
     refuse_symlink(path)?;
     let mut file = match fs::File::open(path) {
@@ -737,14 +1082,7 @@ fn rotate(path: &Path, now: u64, retention: u64) -> io::Result<()> {
     };
     let mut text = Vec::new();
     file.read_to_end(&mut text)?;
-    let cutoff = floor_hour(now.saturating_sub(retention));
-    let mut merged = BTreeMap::<Key, Bucket>::new();
-    for (key, bucket) in parse_lines(&text) {
-        if key.hour >= cutoff {
-            merged.entry(key).or_default().merge(&bucket);
-        }
-    }
-    let kept: String = merged.iter().map(|(k, b)| line(k, b) + "\n").collect();
+    let kept = keep(&text);
     if kept.as_bytes() == text {
         // The rewrite path gets 0600 from its temp file; an unchanged store needs the chmod,
         // done on the open handle so a path swapped after the open cannot redirect it.
@@ -789,6 +1127,25 @@ mod tests {
         (TempDir(dir), path)
     }
 
+    #[test]
+    fn read_usage_returns_a_complete_request_body() {
+        let (mut client, mut server) = UnixStream::pair().unwrap();
+        client
+            .write_all(b"POST /usage HTTP/1.1\r\nContent-Length: 2\r\n\r\n{}")
+            .unwrap();
+        assert_eq!(read_usage(&mut server), Some(b"{}".to_vec()));
+    }
+
+    #[test]
+    fn read_usage_gives_up_on_a_stalled_request_at_the_deadline() {
+        let (mut client, mut server) = UnixStream::pair().unwrap();
+        client.write_all(b"POST /usage HTTP/1.1\r\n").unwrap();
+        let start = Instant::now();
+        assert_eq!(read_usage(&mut server), None);
+        assert!(start.elapsed() < Duration::from_secs(1));
+        drop(client);
+    }
+
     fn report(outcome: &str, candidate: Option<u64>, tokens: bool) -> Vec<u8> {
         let tokens = if tokens {
             json!({"method":"estimate","tokenizer":"deslag-estimate-v1","original":10,"candidate":4,"emitted":4})
@@ -800,6 +1157,10 @@ mod tests {
             "tokens":tokens,"dropped":1})
         .to_string()
         .into_bytes()
+    }
+
+    fn parse(message: &[u8]) -> Option<(Key, Bucket)> {
+        parse_report(&serde_json::from_slice(message).ok()?, T0)
     }
 
     fn lines(path: &Path) -> Vec<Value> {
@@ -839,6 +1200,64 @@ mod tests {
         };
         assert_eq!(s.buckets[&skipped].candidate_bytes, None);
         assert!(s.buckets[&skipped].tokens.is_empty());
+    }
+
+    #[test]
+    fn pending_sessions_are_capped_and_pruned_after_an_idle_hour() {
+        let (_dir, path) = temp_file("sessions");
+        let mut s = Service::new(path, 90 * DAY, T0);
+        let with_session = |id: &str| {
+            let mut v: Value = serde_json::from_slice(&report("changed", Some(40), true)).unwrap();
+            v["session"] = json!(id);
+            v.to_string().into_bytes()
+        };
+        for i in 0..=MAX_SESSIONS {
+            s.record(&with_session(&format!("s{i}")), T0 + 1);
+        }
+        assert_eq!(s.sessions.len(), MAX_SESSIONS);
+        assert!(!s.sessions.contains_key(&format!("s{MAX_SESSIONS}")));
+        assert_eq!(
+            s.buckets.values().map(|b| b.count).sum::<u64>(),
+            1025,
+            "all bucketed"
+        );
+        s.record(&with_session("s0"), T0 + HOUR + 10);
+        s.tick(T0 + 2 * HOUR).unwrap();
+        assert_eq!(s.sessions.keys().collect::<Vec<_>>(), ["s0"]);
+    }
+
+    #[test]
+    fn request_rotation_skips_a_file_whose_first_line_is_kept() {
+        let (_dir, path) = temp_file("reqskip");
+        let line = |time: u64| {
+            format!(
+                r#"{{"compression_reports":0,"dropped":0,"estimated_removed_tokens":null,"index":0,"model":"m","session":"s","time":{time},"turn":"t","usage":null,"v":1}}"#
+            ) + "\n"
+        };
+        let fresh = line(T0) + "garbage\n";
+        fs::write(&path, &fresh).unwrap();
+        rotate_requests(&path, T0, DAY).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), fresh);
+        fs::write(&path, line(T0 - 2 * DAY) + &fresh).unwrap();
+        rotate_requests(&path, T0, DAY).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), line(T0));
+    }
+
+    #[test]
+    fn an_invalid_session_leaves_the_report_unattributed() {
+        let (_dir, path) = temp_file("bad-session");
+        let mut s = Service::new(path, 90 * DAY, T0);
+        for session in [json!("a b"), json!("x".repeat(65)), json!(7)] {
+            let mut v: Value = serde_json::from_slice(&report("changed", Some(40), true)).unwrap();
+            v["session"] = session;
+            s.record(&v.to_string().into_bytes(), T0 + 1);
+        }
+        assert!(s.sessions.is_empty());
+        assert_eq!(s.buckets.values().map(|b| b.count).sum::<u64>(), 3);
+        assert!(
+            !s.buckets.contains_key(&Key::service(T0)),
+            "no service drop"
+        );
     }
 
     #[test]
@@ -1135,18 +1554,18 @@ mod tests {
     #[test]
     fn would_change_needs_a_byte_candidate_only() {
         let known = report("would_change", Some(40), true);
-        let (key, bucket) = parse_report(&known, T0).unwrap();
+        let (key, bucket) = parse(&known).unwrap();
         assert!(parse_line(&line(&key, &bucket)).is_some());
         // Rejected: a would_change report or line with a null byte candidate.
-        assert!(parse_report(&report("would_change", None, false), T0).is_none());
+        assert!(parse(&report("would_change", None, false)).is_none());
         let mut l: Value = serde_json::from_str(&line(&key, &bucket)).unwrap();
         l["candidate_bytes"] = Value::Null;
         assert!(parse_line(&l.to_string()).is_none());
         // Accepted: null tokens, and a null token candidate.
-        assert!(parse_report(&report("would_change", Some(40), false), T0).is_some());
+        assert!(parse(&report("would_change", Some(40), false)).is_some());
         let mut v: Value = serde_json::from_slice(&known).unwrap();
         v["tokens"]["candidate"] = Value::Null;
-        let (_, unknown) = parse_report(v.to_string().as_bytes(), T0).unwrap();
+        let (_, unknown) = parse(v.to_string().as_bytes()).unwrap();
         let mut l: Value = serde_json::from_str(&line(&key, &bucket)).unwrap();
         l["tokens"]["estimate:deslag-estimate-v1"]["candidate"] = Value::Null;
         assert!(parse_line(&l.to_string()).is_some());
@@ -1154,16 +1573,13 @@ mod tests {
         for outcome in ["changed", "skipped", "failed"] {
             for (candidate, tokens) in [(None, false), (Some(40), true)] {
                 let r = report(outcome, candidate, tokens);
-                assert!(parse_report(&r, T0).is_some(), "{outcome}");
+                assert!(parse(&r).is_some(), "{outcome}");
             }
             let mut v: Value = serde_json::from_slice(&known).unwrap();
             v["outcome"] = json!(outcome);
             v["candidate_bytes"] = Value::Null;
             v["tokens"]["candidate"] = Value::Null;
-            assert!(
-                parse_report(v.to_string().as_bytes(), T0).is_some(),
-                "{outcome}"
-            );
+            assert!(parse(v.to_string().as_bytes()).is_some(), "{outcome}");
         }
         // One unknown token candidate makes the merged sum unknown, in either order.
         for (a, b) in [(&bucket, &unknown), (&unknown, &bucket)] {
@@ -1181,10 +1597,7 @@ mod tests {
         for field in ["original_bytes", "candidate_bytes", "emitted_bytes"] {
             let mut v: Value = serde_json::from_slice(&report("changed", Some(40), true)).unwrap();
             v[field] = json!(big);
-            assert!(
-                parse_report(v.to_string().as_bytes(), T0).is_none(),
-                "{field}"
-            );
+            assert!(parse(v.to_string().as_bytes()).is_none(), "{field}");
         }
     }
 

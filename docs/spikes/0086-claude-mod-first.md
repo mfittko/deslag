@@ -37,6 +37,8 @@ claude plugin validate plugins/claude-mod-experimental
 claude plugin test plugins/claude-mod-experimental
 ```
 
+Note: #90 moved the `turn.step` usage observer to `plugins/claude/hooks/usage.js` and removed `plugins/claude-mod-experimental/`.
+
 To load the mod in a local session (as in live runs A, L and E; see [Live verification](#live-verification)): build `deslag`, write `mod` to the `owner` file in the deslag state directory (`$DESLAG_STATE_DIR`, else `$XDG_STATE_HOME/deslag`, else `~/.local/state/deslag`; see `state_dir` in [deslag-telemetry](../../crates/deslag-telemetry/src/lib.rs)), and start `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 DESLAG_MOD_MODE=observe DESLAG_MOD_BINARY=/abs/path/to/deslag claude --plugin-dir plugins/claude-mod-experimental`. Use `safe` instead of `observe` to rewrite rows.
 
 ### Predeclared budgets

@@ -37,7 +37,13 @@ fn encoded_report_is_small_and_carries_labels_only() {
     let mut ctx = FIRST_SLICE_JSON_MINIFY_CONTEXT;
     ctx.token_counter = Some(&EstimateCounter);
     let report = compress(PRETTY, &ctx).report;
-    let message = encode(&report, Adapter::Hook, ToolCategory::Bash, 3);
+    let message = encode(
+        &report,
+        Adapter::Hook,
+        ToolCategory::Bash,
+        Some("sess-1"),
+        3,
+    );
     assert!(message.len() <= MAX_MESSAGE_BYTES, "{message}");
     assert!(!message.contains("secret-payload"));
     assert!(!message.contains("Bash"));
@@ -49,16 +55,24 @@ fn encoded_report_is_small_and_carries_labels_only() {
     assert_eq!(v["reason"], Value::Null);
     assert_eq!(v["original_bytes"], PRETTY.len());
     assert_eq!(v["dropped"], 3);
+    assert_eq!(v["session"], "sess-1");
     assert_eq!(v["tokens"]["method"], "estimate");
     assert_eq!(v["tokens"]["tokenizer"], EstimateCounter::TOKENIZER);
     assert!(v["tokens"]["candidate"].is_u64());
 
     let plain = compress("x", &FIRST_SLICE_JSON_MINIFY_CONTEXT).report;
-    let v: Value =
-        serde_json::from_str(&encode(&plain, Adapter::Proxy, ToolCategory::Other, 0)).unwrap();
+    let v: Value = serde_json::from_str(&encode(
+        &plain,
+        Adapter::Proxy,
+        ToolCategory::Other,
+        None,
+        0,
+    ))
+    .unwrap();
     assert_eq!(v["tokens"], Value::Null);
     assert_eq!(v["candidate_bytes"], Value::Null);
     assert_eq!(v["reason"], "unsupported_format");
+    assert!(v.get("session").is_none());
 }
 
 #[test]

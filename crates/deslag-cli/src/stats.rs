@@ -8,19 +8,20 @@ use std::{
     process::ExitCode,
 };
 
-use deslag_telemetry::{STATS_FILE, state_dir};
+use deslag_telemetry::{REQUESTS_FILE, STATS_FILE, state_dir};
 use serde_json::{Value, json};
 
-use crate::local::{self, Bucket, HOUR, Key};
+use crate::local::{self, Bucket, HOUR, Key, Request, USAGE_FIELDS};
 
-pub const USAGE: &str = "usage: deslag stats [--json] [--since <n>h|<n>d]";
+pub const USAGE: &str = "usage: deslag stats [--json [--session <id>]] [--since <n>h|<n>d]";
 
 const SCHEMA_VERSION: u64 = 1;
 
 /// Runs `deslag stats <args>` and returns the process exit code: 2 when
-/// `stats.jsonl` exists but cannot be read or when stdout cannot be written.
+/// `stats.jsonl` or `requests.jsonl` exists but cannot be read, or when stdout
+/// cannot be written.
 pub fn command(args: &[&str]) -> ExitCode {
-    let Some((as_json, since_arg)) = parse_args(args) else {
+    let Some((as_json, since_arg, session)) = parse_args(args) else {
         eprintln!("{USAGE}");
         return ExitCode::from(crate::EX_USAGE);
     };
@@ -35,22 +36,26 @@ pub fn command(args: &[&str]) -> ExitCode {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or_else(local::now);
-    let text = match state_dir().map(|d| fs::read(d.join(STATS_FILE))) {
-        Some(Ok(bytes)) => bytes,
-        None => Vec::new(),
-        Some(Err(e)) if e.kind() == io::ErrorKind::NotFound => Vec::new(),
+    let read = |name: &str| match state_dir().map(|d| fs::read(d.join(name))) {
+        Some(Ok(bytes)) => Ok(bytes),
+        None => Ok(Vec::new()),
+        Some(Err(e)) if e.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
         Some(Err(e)) => {
-            eprintln!("deslag: cannot read {STATS_FILE}: {e}");
-            return ExitCode::from(2);
+            eprintln!("deslag: cannot read {name}: {e}");
+            Err(ExitCode::from(2))
         }
     };
+    let (text, requests) = match (read(STATS_FILE), read(REQUESTS_FILE)) {
+        (Ok(text), Ok(requests)) => (text, requests),
+        (Err(code), _) | (_, Err(code)) => return code,
+    };
     let since = local::floor_hour(now.saturating_sub(since_secs));
-    let stats = Stats::read(&text, since, now, running);
+    let stats = Stats::read(&text, &requests, since, now, running, session);
     let mut stdout = io::stdout().lock();
-    let written = if as_json {
-        writeln!(stdout, "{:#}", stats.json())
-    } else {
-        write!(stdout, "{}", stats.table(since_arg))
+    let written = match session {
+        Some(session) => writeln!(stdout, "{:#}", stats.session_json(session)),
+        None if as_json => writeln!(stdout, "{:#}", stats.json()),
+        None => write!(stdout, "{}", stats.table(since_arg)),
     };
     match written {
         Err(e) if e.kind() != io::ErrorKind::BrokenPipe => {
@@ -61,18 +66,23 @@ pub fn command(args: &[&str]) -> ExitCode {
     }
 }
 
-/// `(--json, --since value)`. `None` for any other argument.
-fn parse_args<'a>(args: &[&'a str]) -> Option<(bool, &'a str)> {
-    let (mut as_json, mut since) = (false, "24h");
+/// `(--json, --since value, --session value)`. `None` for any other argument,
+/// for `--session` without `--json` and for an invalid session ID.
+fn parse_args<'a>(args: &[&'a str]) -> Option<(bool, &'a str, Option<&'a str>)> {
+    let (mut as_json, mut since, mut session) = (false, "24h", None);
     let mut args = args.iter();
     while let Some(arg) = args.next() {
         match *arg {
             "--json" => as_json = true,
             "--since" => since = args.next()?,
+            "--session" => session = Some(*args.next()?),
             _ => return None,
         }
     }
-    Some((as_json, since))
+    if session.is_some_and(|s| !as_json || !deslag_telemetry::valid_id(s)) {
+        return None;
+    }
+    Some((as_json, since, session))
 }
 
 /// `<n>h` or `<n>d` with `n >= 1`, in seconds.
@@ -104,6 +114,56 @@ fn saving(
     }
 }
 
+/// Usage totals over `requests.jsonl` lines. `estimated_removed_tokens` is
+/// `None` when one line has it unknown.
+struct Usage {
+    requests: u64,
+    unknown_usage: u64,
+    tokens: [u64; 4],
+    estimated_removed_tokens: Option<u64>,
+}
+
+impl Default for Usage {
+    fn default() -> Self {
+        Usage {
+            requests: 0,
+            unknown_usage: 0,
+            tokens: [0; 4],
+            estimated_removed_tokens: Some(0),
+        }
+    }
+}
+
+impl Usage {
+    fn add(&mut self, r: &Request) {
+        self.requests = self.requests.saturating_add(1);
+        match r.usage {
+            Some(u) => {
+                for (sum, n) in self.tokens.iter_mut().zip(u) {
+                    *sum = sum.saturating_add(n);
+                }
+            }
+            None => self.unknown_usage = self.unknown_usage.saturating_add(1),
+        }
+        self.estimated_removed_tokens = self
+            .estimated_removed_tokens
+            .zip(r.estimated_removed_tokens)
+            .map(|(a, b)| a.saturating_add(b));
+    }
+
+    fn json(&self) -> Value {
+        let mut v = json!({
+            "requests": self.requests,
+            "unknown_usage": self.unknown_usage,
+            "estimated_removed_tokens": self.estimated_removed_tokens,
+        });
+        for (field, n) in USAGE_FIELDS.iter().zip(self.tokens) {
+            v[field] = n.into();
+        }
+        v
+    }
+}
+
 struct Stats {
     since: u64,
     until: u64,
@@ -111,15 +171,43 @@ struct Stats {
     /// Report buckets only; service lines feed `dropped` and the gap check.
     buckets: BTreeMap<Key, Bucket>,
     dropped: u64,
+    /// Totals over the window's requests, of one session when one is given.
+    usage: Usage,
+    /// The window's requests of the given session; empty without one.
+    requests: Vec<Request>,
 }
 
 impl Stats {
-    /// Merges the lines with an hour in `since..=now`. Unparsable lines,
-    /// invalid UTF-8 included, are skipped.
-    fn read(text: &[u8], since: u64, now: u64, running: bool) -> Self {
+    /// Merges the lines with an hour or time in `since..=now`. Unparsable
+    /// lines, invalid UTF-8 included, are skipped. With `session`, usage
+    /// totals and the request list cover that session only.
+    fn read(
+        text: &[u8],
+        requests: &[u8],
+        since: u64,
+        now: u64,
+        running: bool,
+        session: Option<&str>,
+    ) -> Self {
         let mut buckets = BTreeMap::<Key, Bucket>::new();
         let mut covered = BTreeSet::new();
         let (mut dropped, mut any) = (0u64, false);
+        let mut usage = Usage::default();
+        let mut listed = Vec::new();
+        for r in local::parse_requests(requests) {
+            if !(since..=now).contains(&r.time) {
+                continue;
+            }
+            dropped = dropped.saturating_add(r.dropped);
+            match session {
+                None => usage.add(&r),
+                Some(s) if s == r.session => {
+                    usage.add(&r);
+                    listed.push(r);
+                }
+                Some(_) => {}
+            }
+        }
         for (key, bucket) in local::parse_lines(text) {
             if !(since..=now).contains(&key.hour) {
                 continue;
@@ -146,7 +234,32 @@ impl Stats {
             reasons: checks.iter().filter(|c| c.1).map(|c| c.0).collect(),
             buckets,
             dropped,
+            usage,
+            requests: listed,
         }
+    }
+
+    /// The per-request view of one session.
+    fn session_json(&self, session: &str) -> Value {
+        let requests: Vec<Value> = self
+            .requests
+            .iter()
+            .map(|r| {
+                let mut v = r.json();
+                let fields = v.as_object_mut().expect("request json is an object");
+                fields.remove("v");
+                fields.remove("session");
+                v
+            })
+            .collect();
+        json!({
+            "schema_version": SCHEMA_VERSION,
+            "session": session,
+            "window": {"since": self.since, "until": self.until},
+            "partial": {"value": !self.reasons.is_empty(), "reasons": self.reasons},
+            "totals": self.usage.json(),
+            "requests": requests,
+        })
     }
 
     /// Saturating sum of [`saving`] over the buckets with `outcome`; `None`
@@ -176,6 +289,7 @@ impl Stats {
                 "emitted_reduction_bytes": self.reduction("changed"),
                 "would_change_reduction_bytes": self.reduction("would_change"),
                 "dropped": self.dropped,
+                "usage": self.usage.json(),
             },
             "buckets": self
                 .buckets
@@ -240,15 +354,25 @@ impl Stats {
         } else {
             self.reasons.join(", ")
         };
+        let u = &self.usage;
         out + &format!(
             "window: last {since_arg} (since {}, until {})\n\
              emitted reduction: {} bytes; would_change proposals: {} bytes; dropped reports: {}\n\
+             usage: {} requests ({} unknown); input {}, output {}, cache read {}, \
+             cache creation {} tokens; estimated removed {} tokens\n\
              partial: {partial}\n",
             self.since,
             self.until,
             opt(self.reduction("changed")),
             opt(self.reduction("would_change")),
             self.dropped,
+            u.requests,
+            u.unknown_usage,
+            u.tokens[0],
+            u.tokens[1],
+            u.tokens[2],
+            u.tokens[3],
+            opt(u.estimated_removed_tokens),
         )
     }
 }

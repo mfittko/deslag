@@ -501,11 +501,15 @@ fn splice<'a>(
     }
     if let Some(socket) = socket {
         for compressed in &reports {
+            // ponytail: no session. Every submission resends the whole history,
+            // so per-request attribution from here would count a result once
+            // per later request; attributing new blocks only needs replay state.
             local::send_report(
                 socket,
                 compressed,
                 local::Adapter::Proxy,
                 local::ToolCategory::Bash,
+                None,
             );
         }
     }

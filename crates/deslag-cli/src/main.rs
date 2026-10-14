@@ -23,7 +23,7 @@ const USAGE: &str = "usage: deslag hook claude [--minify-json]\n       \
                      deslag proxy --upstream <url> [--listen <addr>] [--minify-json]\n       \
                      deslag local start|run [--retention-days <n>]\n       \
                      deslag local stop|status\n       \
-                     deslag stats [--json] [--since <n>h|<n>d]";
+                     deslag stats [--json [--session <id>]] [--since <n>h|<n>d]";
 const PROXY_USAGE: &str = "usage: deslag proxy --upstream <url> [--listen <addr>] [--minify-json]";
 
 // Exit 2 from a Claude Code hook is blocking and feeds stderr to the model; usage errors avoid it.
@@ -205,9 +205,10 @@ fn claude_hook(
     }
     .map_err(|rejected| format!("compression {}; tool output unchanged", rejected.as_str()))?;
     if let Some(socket) = &socket {
+        let session = event["session_id"].as_str().filter(|s| report::valid_id(s));
         // ponytail: a hook process exits after one result, so a failed send is lost uncounted.
         for compressed in reports.into_inner() {
-            report::send_report(socket, &compressed, report::Adapter::Hook, tool);
+            report::send_report(socket, &compressed, report::Adapter::Hook, tool, session);
         }
     }
     let Some(output) = updated.and_then(|updated| replacement(&event, updated)) else {

@@ -58,9 +58,18 @@
   },
   "schema_version": 1,
   "totals": {
-    "dropped": 3,
+    "dropped": 4,
     "emitted_reduction_bytes": 400,
     "reports": 6,
+    "usage": {
+      "cache_creation_input_tokens": 5,
+      "cache_read_input_tokens": 210,
+      "estimated_removed_tokens": null,
+      "input_tokens": 30,
+      "output_tokens": 5,
+      "requests": 3,
+      "unknown_usage": 1
+    },
     "would_change_reduction_bytes": 200
   },
   "window": {

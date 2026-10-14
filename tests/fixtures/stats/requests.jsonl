@@ -1,0 +1,6 @@
+{"v":1,"time":1799900000,"session":"sess-a","turn":"t0","index":0,"model":"claude-haiku","usage":{"input_tokens":999,"output_tokens":1,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},"compression_reports":0,"estimated_removed_tokens":0,"dropped":0}
+{"v":1,"time":1799993000,"session":"sess-a","turn":"t1","index":0,"model":"claude-haiku","usage":{"input_tokens":10,"output_tokens":2,"cache_read_input_tokens":100,"cache_creation_input_tokens":5},"compression_reports":0,"estimated_removed_tokens":0,"dropped":0}
+{"v":1,"time":1799997000,"session":"sess-a","turn":"t1","index":1,"model":"claude-haiku","usage":{"input_tokens":20,"output_tokens":3,"cache_read_input_tokens":110,"cache_creation_input_tokens":0},"compression_reports":2,"estimated_removed_tokens":40,"dropped":1}
+{"v":1,"time":1800000100,"session":"sess-b","turn":"t9","index":0,"model":"claude-haiku","usage":null,"compression_reports":1,"estimated_removed_tokens":null,"dropped":0}
+{"v":1,"time":1800000200,"session":"bad session","turn":"t9","index":0,"model":"m","usage":null,"compression_reports":0,"estimated_removed_tokens":null,"dropped":7}
+garbage

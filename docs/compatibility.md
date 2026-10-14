@@ -12,6 +12,8 @@ This file records only observed behavior. Untested versions and platforms are un
 | Replacement field | `hookSpecificOutput.updatedToolOutput` |
 | Tested on | 2026-10-11 |
 
+The shipped `plugins/claude/hooks/hooks.json` holds `"modules"` next to `"hooks"` (#90). Its offline validation and test results are in [Claude Code usage module](#claude-code-usage-module). The earlier 2.1.296 live runs in this file used the plugin before it held `"modules"`. No live hook run covers the mixed file on 2.1.296 to 2.1.298.
+
 ### Observed contract
 
 - The client sends one JSON object on stdin. Captured Bash, Read, MCP and subagent payloads are in `tests/fixtures/claude/` (paths and IDs replaced with placeholders).
@@ -102,6 +104,7 @@ The JSON output of run L2 was not saved, so its cost is not recorded. Its cap wa
 - MCP error results, resources, images and other non-text results.
 - Client behavior when the hook stops reading oversize input early (the adapter drains stdin, untested live).
 - Composition with other result-replacement hooks in a live client.
+- One live `PostToolUse` hook run on Claude Code 2.1.296 with the mixed `hooks/hooks.json` (`"modules"` next to `"hooks"`).
 - `--continue` and proxy-mode resume and fork with a live client. Hook-mode resume and fork are recorded in [ADR 0006](decisions/0006-session-identity-and-replay.md).
 
 ## Plugin distribution
@@ -172,3 +175,24 @@ The pre-PR review fixes between runs 7 and 12 cover symlinked version dirs, the 
 ### Pending
 
 - `/plugin marketplace add mfittko/deslag` against `main`. This needs the merge. The same GitHub source at the branch ref `mfittko/deslag#issue-40` passed. That branch-ref run is the accepted pre-merge evidence for the acceptance criterion "`/plugin marketplace add mfittko/deslag` lists the plugin". The post-merge run against `main` completes it.
+
+## Claude Code usage module
+
+The usage module `plugins/claude/hooks/usage.js` observes `turn.step` and sends each model request's provider usage to the local service. See [Observability](observability.md#usage-module). It loads only with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` and sends only with `DESLAG_USAGE_STATS=1`.
+
+### Verified offline
+
+These facts come from `claude plugin test plugins/claude` and `claude plugin validate plugins/claude` on Claude Code 2.1.299. The mixed `hooks/hooks.json` was also checked on 2.1.296.
+
+- `hooks/hooks.json` may hold `"modules"` next to `"hooks"`. Validation passes and lists the module's `turn.step` hook on 2.1.296 and 2.1.299. `claude plugin test plugins/claude` passes 16 of 16 on 2.1.296 and 2.1.299. Clients 2.1.297 and 2.1.298 are untested offline with it.
+- The observer passes every chunk and the final result through unchanged, with the module on and off.
+- A `$.http.fetch` started after the `turn.step` generator returned still runs. Its `socketPath` option reaches a Unix stream socket.
+- The mod API declarations (written by Claude Code 2.1.277) type the `turn.step` result's `usage` as `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens` and `model`, or `null`. Run U1 below confirms the four token fields and `model` live.
+
+### Live capture
+
+| Run | Client | Command | Model | Observed `usage` | total_cost_usd |
+| --- | --- | --- | --- | --- | --- |
+| U1 | 2.1.299 | `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 DESLAG_USAGE_STATS=1 claude -p "Run the Bash command: cat data.json ..." --model haiku --allowedTools Bash` with a copy of `plugins/claude` whose hook runs `deslag hook claude --minify-json`, owner `hook`, `deslag local start` | claude-haiku-5-5 | Two steps of one turn, each with all four token fields and `model` `claude-haiku-5-5`: step 0 `input_tokens` 2, `cache_read_input_tokens` 11,447, `cache_creation_input_tokens` 6,426, `output_tokens` 79; step 1 `input_tokens` 2, `cache_read_input_tokens` 17,873, `cache_creation_input_tokens` 2,303, `output_tokens` 3. `deslag stats --json --session <id>` listed both requests, no drops. The one hook report (a 4,105-byte pretty JSON file) went to step 1 with 723 estimated tokens removed | 0.0020804 |
+
+Status: live verified for the usage fields, the HTTP bridge and the per-request attribution. The `null` usage of a step without a response was not produced live; it stays documented and is covered by tests. The run used a throwaway project directory, `--setting-sources project,local`, `--strict-mcp-config`, `--plugin-dir`, `--no-session-persistence`, `--max-budget-usd 0.30`, `--output-format json` and a throwaway `DESLAG_STATE_DIR`. No global settings were edited.
