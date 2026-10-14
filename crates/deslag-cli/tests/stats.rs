@@ -46,11 +46,61 @@ fn stats_json(dir: &Path, args: &[&str]) -> Value {
     serde_json::from_str(&stdout(&deslag(dir, Some(NOW), &args))).unwrap()
 }
 
+/// A state dir with both fixture stores.
+fn usage_state_dir(name: &str) -> PathBuf {
+    let dir = state_dir(name, Some(&fixture("stats.jsonl")));
+    fs::write(dir.join("requests.jsonl"), fixture("requests.jsonl")).unwrap();
+    dir
+}
+
 #[test]
 fn json_output_matches_the_snapshot() {
-    let dir = state_dir("snap", Some(&fixture("stats.jsonl")));
+    let dir = usage_state_dir("snap");
     let output = deslag(&dir, Some(NOW), &["stats", "--json", "--since", "2h"]);
     assert_eq!(stdout(&output), fixture("since-2h.json"));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn session_view_lists_each_request_with_usage_and_removed_tokens() {
+    let dir = usage_state_dir("session");
+    let view = stats_json(&dir, &["--session", "sess-a", "--since", "2h"]);
+    assert_eq!(view["schema_version"], 1);
+    assert_eq!(view["session"], "sess-a");
+    // The 1799900000 line is outside the window; other sessions are not listed.
+    assert_eq!(
+        view["requests"],
+        serde_json::json!([
+            {"time": 1799993000u64, "turn": "t1", "index": 0, "model": "claude-haiku",
+             "usage": {"input_tokens": 10, "output_tokens": 2, "cache_read_input_tokens": 100,
+                       "cache_creation_input_tokens": 5},
+             "compression_reports": 0, "estimated_removed_tokens": 0, "dropped": 0},
+            {"time": 1799997000u64, "turn": "t1", "index": 1, "model": "claude-haiku",
+             "usage": {"input_tokens": 20, "output_tokens": 3, "cache_read_input_tokens": 110,
+                       "cache_creation_input_tokens": 0},
+             "compression_reports": 2, "estimated_removed_tokens": 40, "dropped": 1},
+        ])
+    );
+    assert_eq!(view["totals"]["requests"], 2);
+    assert_eq!(view["totals"]["input_tokens"], 30);
+    assert_eq!(view["totals"]["estimated_removed_tokens"], 40);
+
+    // Unknown usage stays unknown, never zero.
+    let b = &stats_json(&dir, &["--session", "sess-b", "--since", "2h"])["totals"];
+    assert_eq!(
+        (b["requests"].clone(), b["unknown_usage"].clone()),
+        (1.into(), 1.into())
+    );
+    assert_eq!(b["input_tokens"], 0);
+    assert!(b["estimated_removed_tokens"].is_null());
+    let none = stats_json(&dir, &["--session", "sess-z"]);
+    assert_eq!(none["requests"], serde_json::json!([]));
+
+    let table = stdout(&deslag(&dir, Some(NOW), &["stats", "--since", "2h"]));
+    assert!(
+        table.contains("usage: 3 requests (1 unknown); input 30, output 5"),
+        "{table}"
+    );
     let _ = fs::remove_dir_all(&dir);
 }
 
@@ -226,6 +276,11 @@ fn bad_stats_arguments_print_usage_and_exit_64() {
         &["stats", "--since", "-1d"],
         &["stats", "--since", "+2h"],
         &["stats", "table"],
+        &["stats", "--session", "sess-a"],
+        &["stats", "--json", "--session"],
+        &["stats", "--json", "--session", "bad id"],
+        &["stats", "--json", "--session", ""],
+        &["stats", "--json", "--session", &"x".repeat(65)],
     ] {
         let output = deslag(&dir, Some(NOW), args);
         assert_eq!(output.status.code(), Some(64), "{args:?}");

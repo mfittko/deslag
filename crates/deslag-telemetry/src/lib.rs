@@ -3,8 +3,8 @@
 //! Adapters send one small datagram per compression result to a Unix socket in
 //! a private state directory. Sending never blocks and never fails the caller:
 //! a missing service, a full buffer or an oversize message drops the report.
-//! A message carries bounded labels and sizes only: no payload content, session
-//! IDs, paths, raw tool names or request IDs.
+//! A message carries bounded labels, sizes and an optional session ID only: no
+//! payload content, paths, raw tool names or request IDs.
 
 use std::{
     fs, io,
@@ -28,6 +28,11 @@ pub const MAX_MESSAGE_BYTES: usize = 512;
 pub const SOCKET_FILE: &str = "local.sock";
 /// Aggregate store file name inside [`state_dir`].
 pub const STATS_FILE: &str = "stats.jsonl";
+/// Per-request usage store file name inside [`state_dir`].
+pub const REQUESTS_FILE: &str = "requests.jsonl";
+/// HTTP bridge socket file name inside [`state_dir`], for clients that cannot
+/// send datagrams, such as the Claude Code usage module.
+pub const HTTP_SOCKET_FILE: &str = "local-http.sock";
 
 /// `$DESLAG_STATE_DIR`, else `$XDG_STATE_HOME/deslag`, else
 /// `$HOME/.local/state/deslag`. Empty or relative values are ignored, as the
@@ -136,10 +141,12 @@ impl ToolCategory {
 /// One compact JSON object. `tokens` is `null` without counts; its label comes
 /// from `original_tokens`, since one counter produces all three counts.
 /// `dropped` is the number of earlier reports this sender failed to deliver.
+/// `"session"` is present only with `session`.
 pub fn encode(
     report: &CompressionReport,
     adapter: Adapter,
     tool: ToolCategory,
+    session: Option<&str>,
     dropped: u64,
 ) -> String {
     let tokens = report.original_tokens.map(|t| {
@@ -151,7 +158,7 @@ pub fn encode(
             "emitted": report.emitted_tokens.map(|e| e.count),
         })
     });
-    json!({
+    let mut message = json!({
         "adapter": adapter.as_str(),
         "tool": tool.as_str(),
         "transform": report.transform_id,
@@ -162,8 +169,11 @@ pub fn encode(
         "emitted_bytes": report.emitted_bytes,
         "tokens": tokens,
         "dropped": dropped,
-    })
-    .to_string()
+    });
+    if let Some(session) = session {
+        message["session"] = session.into();
+    }
+    message.to_string()
 }
 
 /// Sends one datagram to `socket` without blocking. Returns false on any error:
@@ -200,7 +210,7 @@ pub fn compress_reported<'a>(
     if let Some(socket) = socket {
         let mut report = result.report.clone();
         add_estimates(&mut report, input, &result.output);
-        send_report(socket, &report, adapter, tool);
+        send_report(socket, &report, adapter, tool, None);
     }
     result
 }
@@ -223,16 +233,18 @@ pub fn add_estimates(report: &mut CompressionReport, input: &str, emitted: &str)
 }
 
 /// Encodes and sends one report to `socket` without blocking. A failed send is
-/// counted and carried in the next report's `dropped` field.
+/// counted and carried in the next report's `dropped` field. With `session`,
+/// the service attributes the report to that session's next model request.
 pub fn send_report(
     socket: &Path,
     report: &CompressionReport,
     adapter: Adapter,
     tool: ToolCategory,
+    session: Option<&str>,
 ) {
     // Swap, not load: concurrent senders never carry the same drops twice.
     let dropped = DROPPED.swap(0, Ordering::Relaxed);
-    let message = encode(report, adapter, tool, dropped);
+    let message = encode(report, adapter, tool, session, dropped);
     if !send(socket, message.as_bytes()) {
         DROPPED.fetch_add(dropped + 1, Ordering::Relaxed);
     }

@@ -1,7 +1,7 @@
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
-use std::os::unix::net::UnixDatagram;
+use std::os::unix::net::{UnixDatagram, UnixStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::thread;
@@ -607,4 +607,189 @@ fn a_failed_client_bind_is_an_error_not_not_running() {
     fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).unwrap();
     let _ = fs::remove_dir_all(&dir);
     let _ = fs::remove_dir_all(&long);
+}
+
+/// Sends one raw request to the HTTP bridge and returns its status line.
+fn http(dir: &Path, request: &[u8]) -> String {
+    let mut stream = UnixStream::connect(dir.join("local-http.sock")).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    stream.write_all(request).unwrap();
+    let mut reply = String::new();
+    stream.read_to_string(&mut reply).unwrap();
+    assert!(reply.contains("Connection: close"), "{reply}");
+    reply.lines().next().unwrap().to_string()
+}
+
+/// Posts one usage record for request `index` of `session`, as the usage module does.
+fn post_usage(dir: &Path, session: &str, index: u64) -> String {
+    let body = serde_json::json!({"kind":"usage","session":session,"turn":"turn-1","index":index,
+        "model":"claude-haiku","usage":{"input_tokens":100 + index,"output_tokens":5,
+        "cache_read_input_tokens":0,"cache_creation_input_tokens":7},"dropped":index})
+    .to_string();
+    http(dir, &usage_request(&body))
+}
+
+fn usage_request(body: &str) -> Vec<u8> {
+    format!(
+        "POST /usage HTTP/1.1\r\nhost: deslag\r\ncontent-type: application/json\r\n\
+         content-length: {}\r\n\r\n{body}",
+        body.len()
+    )
+    .into_bytes()
+}
+
+fn requests(dir: &Path) -> Vec<serde_json::Value> {
+    fs::read_to_string(dir.join("requests.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect()
+}
+
+const SESSION: &str = "00000000-0000-4000-8000-000000000001";
+
+#[test]
+fn usage_records_take_the_hook_reports_of_their_session() {
+    let dir = hook_state_dir("usage");
+    let _cleanup = RemoveOnDrop(dir.clone());
+    let service = run(&dir);
+    assert_eq!(mode(&dir.join("local-http.sock")), 0o600);
+    assert_eq!(post_usage(&dir, SESSION, 0), "HTTP/1.1 204 No Content");
+    // The fixture event carries SESSION; a report without a session is not attributed.
+    stdout(&deslag(
+        &dir,
+        &["hook", "claude", "--minify-json"],
+        &hook_input(),
+    ));
+    send(
+        &UnixDatagram::unbound().unwrap(),
+        report().to_string().as_bytes(),
+        &dir,
+    );
+    assert_eq!(
+        post_usage(&dir, "other-session", 0),
+        "HTTP/1.1 204 No Content"
+    );
+    assert_eq!(post_usage(&dir, SESSION, 1), "HTTP/1.1 204 No Content");
+
+    // Malformed requests: 400, never forwarded. An invalid record is a service drop.
+    assert_eq!(
+        http(&dir, b"GET /usage HTTP/1.1\r\n\r\n"),
+        "HTTP/1.1 400 Bad Request"
+    );
+    assert_eq!(
+        http(&dir, b"POST /usage HTTP/1.1\r\n\r\n"),
+        "HTTP/1.1 400 Bad Request"
+    );
+    let big = "x".repeat(513);
+    assert_eq!(http(&dir, &usage_request(&big)), "HTTP/1.1 400 Bad Request");
+    let partial = r#"{"kind":"usage","session":"s","turn":"t","index":0,"model":"m","usage":{"input_tokens":1},"dropped":0}"#;
+    assert_eq!(
+        http(&dir, &usage_request(partial)),
+        "HTTP/1.1 204 No Content"
+    );
+    service.stop();
+    assert!(!dir.join("local-http.sock").exists());
+
+    assert_eq!(mode(&dir.join("requests.jsonl")), 0o600);
+    let lines = requests(&dir);
+    let take = |l: &serde_json::Value| {
+        (
+            l["session"].clone(),
+            l["index"].clone(),
+            l["compression_reports"].clone(),
+        )
+    };
+    let got: Vec<_> = lines.iter().map(take).collect();
+    assert_eq!(
+        got,
+        [
+            (SESSION.into(), 0.into(), 0.into()),
+            ("other-session".into(), 0.into(), 0.into()),
+            (SESSION.into(), 1.into(), 1.into()),
+        ]
+    );
+    assert!(
+        lines[2]["estimated_removed_tokens"].as_u64().unwrap() > 0,
+        "{lines:?}"
+    );
+    let stats = fs::read_to_string(dir.join("stats.jsonl")).unwrap();
+    assert!(
+        !stats.contains(SESSION),
+        "buckets hold no session ids: {stats}"
+    );
+
+    let view = stdout(&deslag(
+        &dir,
+        &["stats", "--json", "--session", SESSION],
+        b"",
+    ));
+    let view: serde_json::Value = serde_json::from_str(&view).unwrap();
+    let listed = view["requests"].as_array().unwrap();
+    assert_eq!(listed.len(), 2, "{view}");
+    assert_eq!(listed[1]["usage"]["input_tokens"], 101);
+    assert_eq!(
+        listed[1]["estimated_removed_tokens"],
+        lines[2]["estimated_removed_tokens"]
+    );
+    assert_eq!(view["totals"]["input_tokens"], 201);
+    let all = stdout(&deslag(&dir, &["stats", "--json"], b""));
+    let all: serde_json::Value = serde_json::from_str(&all).unwrap();
+    assert_eq!(all["totals"]["usage"]["requests"], 3);
+    // Record drops (0 + 0 + 1) plus the partial record's service drop.
+    assert_eq!(all["totals"]["dropped"], 2, "{all}");
+}
+
+#[test]
+fn usage_records_work_with_hook_compression_off() {
+    // No owner file: the hook does not compress and sends no report.
+    let dir = state_dir("usageoff");
+    let _cleanup = RemoveOnDrop(dir.clone());
+    let service = run(&dir);
+    stdout(&deslag(
+        &dir,
+        &["hook", "claude", "--minify-json"],
+        &hook_input(),
+    ));
+    assert_eq!(post_usage(&dir, SESSION, 0), "HTTP/1.1 204 No Content");
+    service.stop();
+    let lines = requests(&dir);
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0]["compression_reports"], 0);
+    assert_eq!(lines[0]["estimated_removed_tokens"], 0);
+    assert_eq!(lines[0]["usage"]["input_tokens"], 100);
+}
+
+#[test]
+fn rotation_drops_old_and_malformed_request_lines() {
+    let dir = state_dir("reqrot");
+    let _cleanup = RemoveOnDrop(dir.clone());
+    fs::create_dir_all(&dir).unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let line = |time: u64| {
+        format!(
+            r#"{{"v":1,"time":{time},"session":"s","turn":"t","index":0,"model":"m","usage":null,"compression_reports":0,"estimated_removed_tokens":null,"dropped":0}}"#
+        )
+    };
+    let (old, recent) = (line(now - 2 * 24 * 3600), line(now));
+    fs::write(
+        dir.join("requests.jsonl"),
+        format!(
+            "{old}\ngarbage\n{recent}\n{}\n",
+            recent.replace("\"s\"", "\"a b\"")
+        ),
+    )
+    .unwrap();
+    run_with(&dir, &["--retention-days", "1"]).stop();
+    let text = fs::read_to_string(dir.join("requests.jsonl")).unwrap();
+    let kept: serde_json::Value = serde_json::from_str(text.trim()).unwrap();
+    assert_eq!(
+        kept,
+        serde_json::from_str::<serde_json::Value>(&recent).unwrap()
+    );
 }
