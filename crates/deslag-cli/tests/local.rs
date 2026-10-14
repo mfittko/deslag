@@ -71,6 +71,17 @@ impl Drop for RemoveOnDrop {
     }
 }
 
+/// Stops a `deslag local start` service on drop, so a failing assertion never
+/// orphans it.
+struct StopOnDrop(PathBuf);
+
+impl Drop for StopOnDrop {
+    fn drop(&mut self) {
+        let _ = deslag(&self.0, &["local", "stop"], b"");
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
 /// Sends one datagram, retrying while macOS returns ENOBUFS for the service's
 /// small receive queue.
 fn send(client: &UnixDatagram, message: &[u8], dir: &Path) {
@@ -237,6 +248,7 @@ fn hook_output_is_unchanged_with_a_stale_socket() {
     assert_eq!(with_stale.status.code(), Some(0));
     assert!(with_stale.stderr.is_empty());
     assert_eq!(with_stale.stdout, without.stdout);
+    assert!(stdout(&deslag(&dir, &["local", "status"], b"")).contains("not running"));
     let _ = fs::remove_dir_all(&dir);
     let _ = fs::remove_dir_all(&absent);
 }
@@ -305,6 +317,8 @@ fn bad_local_arguments_print_usage_and_exit_64() {
         &["local", "run", "--retention-days", "0"],
         &["local", "run", "--retention-days", "x"],
         &["local", "run", "extra"],
+        &["local", "stop", "--retention-days", "3"],
+        &["local", "start", "--retention-days", "x"],
     ] {
         let output = deslag(&dir, args, b"");
         assert_eq!(output.status.code(), Some(64), "{args:?}");
@@ -483,4 +497,103 @@ fn a_report_without_tokens_is_aggregated() {
     let (reports, dropped) = record("notokens", &[v.to_string().into_bytes()]);
     assert_eq!(dropped, 0);
     assert_eq!(reports.len(), 1, "{reports:?}");
+}
+
+#[test]
+fn start_status_and_stop_drive_the_service_lifecycle() {
+    let dir = hook_state_dir("cli");
+    let _guard = StopOnDrop(dir.clone());
+    assert!(stdout(&deslag(&dir, &["local", "status"], b"")).contains("not running"));
+    for round in 1..=2 {
+        assert!(stdout(&deslag(&dir, &["local", "start"], b"")).contains("started"));
+        assert!(stdout(&deslag(&dir, &["local", "start"], b"")).contains("already running"));
+        assert!(stdout(&deslag(&dir, &["local", "status"], b"")).contains(": running"));
+        stdout(&deslag(
+            &dir,
+            &["hook", "claude", "--minify-json"],
+            &hook_input(),
+        ));
+        assert!(stdout(&deslag(&dir, &["local", "stop"], b"")).contains("stopped"));
+        assert!(!dir.join("local.sock").exists());
+        let text = fs::read_to_string(dir.join("stats.jsonl")).unwrap();
+        assert_eq!(text.matches(r#""adapter":"hook""#).count(), round, "{text}");
+    }
+    assert!(stdout(&deslag(&dir, &["local", "stop"], b"")).contains("not running"));
+}
+
+#[test]
+fn start_with_retention_on_a_running_service_says_it_keeps_its_retention() {
+    let dir = state_dir("keep");
+    let _guard = StopOnDrop(dir.clone());
+    assert!(stdout(&deslag(&dir, &["local", "start"], b"")).contains("started"));
+    let again = stdout(&deslag(
+        &dir,
+        &["local", "start", "--retention-days", "7"],
+        b"",
+    ));
+    assert!(
+        again.contains("already running; it keeps its retention"),
+        "{again}"
+    );
+}
+
+#[test]
+fn a_silent_socket_is_not_responding_and_no_state_dir_is_not_running() {
+    let dir = state_dir("silent");
+    fs::create_dir_all(&dir).unwrap();
+    let _silent = UnixDatagram::bind(dir.join("local.sock")).unwrap();
+    // `start` must not spawn a second service next to a busy one.
+    for command in ["status", "stop", "start"] {
+        let output = deslag(&dir, &["local", command], b"");
+        assert_eq!(output.status.code(), Some(2), "{command}: {output:?}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("not responding"));
+    }
+    let _ = fs::remove_dir_all(&dir);
+
+    for command in ["status", "stop"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_deslag"))
+            .args(["local", command])
+            .env_remove("DESLAG_STATE_DIR")
+            .env_remove("XDG_STATE_HOME")
+            .env_remove("HOME")
+            .output()
+            .unwrap();
+        assert!(stdout(&output).contains("not running"), "{command}");
+    }
+}
+
+#[test]
+fn a_failed_client_bind_is_an_error_not_not_running() {
+    // A read-only state dir: the client cannot bind its ctl socket.
+    let dir = state_dir("rodir");
+    fs::create_dir_all(&dir).unwrap();
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o500)).unwrap();
+    // A ctl socket path past sun_path (104 bytes on macOS, 108 on Linux).
+    let long = dir.with_file_name(format!("dsl-it-{}-{}", std::process::id(), "x".repeat(100)));
+    let _ = fs::remove_dir_all(&long);
+    fs::create_dir_all(&long).unwrap();
+    let mut cases = vec![("long path", &long)];
+    // Root ignores 0o500: when a probe file can be created, the bind would
+    // succeed, so only the read-only case is skipped.
+    let probe = dir.join("probe");
+    if fs::File::create(&probe).is_ok() {
+        let _ = fs::remove_file(&probe);
+    } else {
+        cases.push(("read-only", &dir));
+    }
+    for (case, path) in cases {
+        // `start` must not spawn a service it cannot reach.
+        for command in ["status", "stop", "start"] {
+            let output = deslag(path, &["local", command], b"");
+            assert_eq!(
+                output.status.code(),
+                Some(2),
+                "{case} {command}: {output:?}"
+            );
+            assert!(String::from_utf8_lossy(&output.stderr).contains("control failed"));
+        }
+    }
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).unwrap();
+    let _ = fs::remove_dir_all(&dir);
+    let _ = fs::remove_dir_all(&long);
 }

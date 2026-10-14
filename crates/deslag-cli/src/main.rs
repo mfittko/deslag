@@ -20,7 +20,8 @@ use tokio::net::TcpListener;
 
 const USAGE: &str = "usage: deslag hook claude [--minify-json]\n       \
                      deslag proxy --upstream <url> [--listen <addr>] [--minify-json]\n       \
-                     deslag local run [--retention-days <n>]";
+                     deslag local start|run [--retention-days <n>]\n       \
+                     deslag local stop|status";
 const PROXY_USAGE: &str = "usage: deslag proxy --upstream <url> [--listen <addr>] [--minify-json]";
 
 // Exit 2 from a Claude Code hook is blocking and feeds stderr to the model; usage errors avoid it.
