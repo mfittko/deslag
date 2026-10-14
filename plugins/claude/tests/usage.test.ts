@@ -363,6 +363,79 @@ describe('savings widget', () => {
     expect(await status).toBeUndefined();
   });
 
+  test('with two reads hung, a delivered send neither reads nor sets the line', OPTS, async ($, on) => {
+    const w = world(on, { ...WIDGET });
+    const answers: (() => void)[] = [];
+    w.reply = serve(() => new Promise((r) => answers.push(() => r(json(DOC)))));
+    for (const index of [0, 1]) {
+      const posted = w.fetched();
+      await step($, w, result(index));
+      await posted;
+      expect((await w.fetched()).url).toBe('http://deslag/session/sess-1');
+    }
+    // Steps 0 and 1 read their widget flag already; this signal is step 2's.
+    const thirdFlag = new Promise<void>((r) => (w.onRead = (n) => n === 'DESLAG_SAVINGS_WIDGET' && r()));
+    const posted = w.fetched();
+    await step($, w, result(2));
+    await posted;
+    await thirdFlag;
+    w.onRead = () => {};
+    // One macrotask lets step 2's refresh pass the cap check before a slot frees.
+    await new Promise((r) => setTimeout(r, 0));
+    const settled = new Promise<void>((r) => (w.onSettle = r));
+    answers[0]();
+    await settled;
+    await new Promise((r) => setTimeout(r, 0));
+    // FIFO: a session fetch from step 2 would come before step 3's record.
+    const next = w.fetched();
+    await step($, w, result(3));
+    expect(JSON.parse((await next).init.body).index).toBe(3);
+    expect((await w.fetched()).url).toBe('http://deslag/session/sess-1');
+    // Read 0 settled after newer refreshes started, so it set no line.
+    expect(w.shown).toEqual([]);
+  });
+
+  test('only the latest refresh sets the line', OPTS, async ($, on) => {
+    const w = world(on, { ...WIDGET });
+    const answers: ((doc: any) => void)[] = [];
+    w.reply = serve(() => new Promise((r) => answers.push((doc) => r(json(doc)))));
+    for (const index of [0, 1]) {
+      const posted = w.fetched();
+      await step($, w, result(index));
+      await posted;
+      await w.fetched();
+    }
+    const status = w.status();
+    answers[1]({ ...DOC, totals: { ...DOC.totals, estimated_removed_tokens: 7 } });
+    expect(await status).toContain('session ~7 removed');
+    // The older read's timeout and its late answer are both ignored.
+    w.expire();
+    const settled = new Promise<void>((r) => (w.onSettle = r));
+    answers[0](DOC);
+    await settled;
+    await new Promise((r) => setTimeout(r, 0));
+    expect(w.shown).toHaveLength(1);
+  });
+
+  test('a record dropped without a send leaves the line; a failed delivery clears it', OPTS, async ($, on) => {
+    const w = world(on, { ...WIDGET });
+    w.reply = serve(() => json(DOC));
+    let status = w.status();
+    await step($, w, result(0));
+    expect(await status).toContain('~120 tokens removed');
+    // An invalid turn id is a local drop: no send, no status call.
+    const sessionRead = new Promise<void>((r) => (w.onSession = r));
+    await step($, w, { ...result(1), turnId: 't:1' });
+    await sessionRead;
+    w.onSession = () => {};
+    await new Promise((r) => setTimeout(r, 0));
+    expect(w.shown).toHaveLength(1);
+    w.reply = () => Promise.reject(new Error('ENOENT'));
+    status = w.status();
+    await step($, w, result(2));
+    expect(await status).toBeUndefined();
+  });
+
   // Service down: the send fails, or the read fails. The line is cleared, the step unchanged.
   const down: [string, (e: any) => any][] = [
     ['send rejected', () => Promise.reject(new Error('ENOENT'))],
