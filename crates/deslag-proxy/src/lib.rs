@@ -77,7 +77,7 @@ impl Upstream {
         })
     }
 
-    /// Enables minification of JSON in Bash tool results of `POST /v1/messages`,
+    /// Enables minification of JSON in Bash and MCP tool results of `POST /v1/messages`,
     /// with per-session replay state in `store`.
     pub fn with_json_minification(mut self, store: session::Store) -> Self {
         self.replay = Some(store);

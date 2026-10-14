@@ -8,7 +8,8 @@ use std::{
 };
 
 use bytes::Bytes;
-use deslag_proxy::{Upstream, serve};
+use deslag_core::BoundedExecutor;
+use deslag_proxy::{Limits, Upstream, serve, serve_with};
 use http_body_util::{BodyExt, Full, channel::Channel, combinators::BoxBody};
 use hyper::{
     HeaderMap, Request, Response, body::Incoming, server::conn::http1, service::service_fn,
@@ -278,6 +279,71 @@ async fn streams_sse_without_buffering() {
     got.extend_from_slice(&rest);
     sender.await.unwrap();
     assert_eq!(String::from_utf8(got).unwrap(), expected);
+}
+
+#[tokio::test]
+async fn streams_sse_with_mutation_enabled() {
+    use deslag_proxy::session::{Mode, Owner, Store, write_owner};
+    let (upstream, mut seen, mut tx) = streaming_mock().await;
+    let dir = std::env::temp_dir().join(format!("deslag-sse-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    write_owner(&dir, Owner::Proxy).unwrap();
+    let store = Store {
+        dir: dir.clone(),
+        mode: Mode::Safe,
+    };
+    // The session starts before its first tool result.
+    store.replay("sse", "m", &[], |_| true).unwrap();
+    // No test reports to a real state dir. SAFETY: only std reads the
+    // environment here, and std serializes that access.
+    unsafe { std::env::set_var("DESLAG_STATE_DIR", "/nonexistent/deslag-test") };
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let proxy = listener.local_addr().unwrap();
+    let upstream = Upstream::parse(&format!("http://{upstream}"))
+        .unwrap()
+        .with_json_minification(store);
+    // A budget no debug build on a slow runner can miss, as in minify_json.rs.
+    let limits = Limits {
+        executor: BoundedExecutor::new(4, Duration::from_secs(60)).unwrap(),
+        ..Limits::default()
+    };
+    tokio::spawn(serve_with(listener, upstream, limits));
+
+    let body = r#"{"model":"m","stream":true,"messages":[
+{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Bash","input":{}}]},
+{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"[ 1 ]"}]}]}"#;
+    let resp = send(
+        proxy,
+        Request::post("/v1/messages")
+            .header("x-claude-code-session-id", "sse")
+            .body(Full::new(Bytes::from_static(body.as_bytes())))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(resp.headers()["content-type"], "text/event-stream");
+    let up = seen.recv().await.unwrap();
+    assert_eq!(up.body, body.replace(r#""[ 1 ]""#, r#""[1]""#).as_bytes());
+    let mut body = resp.into_body();
+
+    // Each fragment reaches the client while upstream is still open.
+    for fragment in [
+        "event: message_start\ndata: {\"ty",
+        "pe\":\"message_start\"}\n\n",
+    ] {
+        tx.send_data(Bytes::from_static(fragment.as_bytes()))
+            .await
+            .unwrap();
+        let mut got = Vec::new();
+        while got.len() < fragment.len() {
+            let frame = timeout(WAIT, body.frame()).await.unwrap().unwrap().unwrap();
+            got.extend_from_slice(&frame.into_data().unwrap());
+        }
+        assert_eq!(got, fragment.as_bytes());
+    }
+    drop(tx);
+    let rest = timeout(WAIT, body.collect()).await.unwrap().unwrap();
+    assert!(rest.to_bytes().is_empty());
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[tokio::test]
