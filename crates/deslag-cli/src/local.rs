@@ -512,6 +512,15 @@ fn line(key: &Key, b: &Bucket) -> String {
     v.to_string()
 }
 
+/// Parses every line of `stats.jsonl` bytes. A line that is not valid UTF-8
+/// is skipped whole, so no replacement character can make it parse.
+pub(crate) fn parse_lines(bytes: &[u8]) -> impl Iterator<Item = (Key, Bucket)> + '_ {
+    bytes
+        .split(|b| *b == b'\n')
+        .filter_map(|l| std::str::from_utf8(l.strip_suffix(b"\r").unwrap_or(l)).ok())
+        .filter_map(parse_line)
+}
+
 /// Parses one `stats.jsonl` line. `None` for a malformed line, another
 /// schema version, a value outside the allowlists, an hour that is not a
 /// multiple of `HOUR`, a partly null dimension key, or a `would_change`
@@ -729,12 +738,8 @@ fn rotate(path: &Path, now: u64, retention: u64) -> io::Result<()> {
     let mut text = Vec::new();
     file.read_to_end(&mut text)?;
     let cutoff = floor_hour(now.saturating_sub(retention));
-    // Lossy: an invalid byte only spoils its own line, which parse_line rejects.
     let mut merged = BTreeMap::<Key, Bucket>::new();
-    for (key, bucket) in String::from_utf8_lossy(&text)
-        .lines()
-        .filter_map(parse_line)
-    {
+    for (key, bucket) in parse_lines(&text) {
         if key.hour >= cutoff {
             merged.entry(key).or_default().merge(&bucket);
         }
@@ -1104,6 +1109,27 @@ mod tests {
                 "{kind:?}"
             );
         }
+    }
+
+    #[test]
+    fn parse_lines_rejects_a_line_with_invalid_utf8() {
+        let want = Bucket {
+            count: 1,
+            ..Bucket::default()
+        };
+        let good = line(&Key::service(T0), &want);
+        // An invalid byte inside an extra string field: lossy decoding would accept it.
+        let mut bad = good.clone().into_bytes();
+        bad.truncate(bad.len() - 1);
+        bad.extend_from_slice(b",\"x\":\"\xff\"}");
+        assert!(parse_line(&String::from_utf8_lossy(&bad)).is_some());
+        let mut bytes = bad;
+        bytes.extend_from_slice(b"\n");
+        bytes.extend_from_slice(good.as_bytes());
+        bytes.extend_from_slice(b"\r\n");
+        let parsed: Vec<_> = parse_lines(&bytes).collect();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].1, want);
     }
 
     #[test]

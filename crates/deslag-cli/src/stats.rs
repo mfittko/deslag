@@ -35,11 +35,10 @@ pub fn command(args: &[&str]) -> ExitCode {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or_else(local::now);
-    // Lossy: an invalid byte only spoils its own line, which parse_line skips.
     let text = match state_dir().map(|d| fs::read(d.join(STATS_FILE))) {
-        Some(Ok(bytes)) => String::from_utf8_lossy(&bytes).into_owned(),
-        None => String::new(),
-        Some(Err(e)) if e.kind() == io::ErrorKind::NotFound => String::new(),
+        Some(Ok(bytes)) => bytes,
+        None => Vec::new(),
+        Some(Err(e)) if e.kind() == io::ErrorKind::NotFound => Vec::new(),
         Some(Err(e)) => {
             eprintln!("deslag: cannot read {STATS_FILE}: {e}");
             return ExitCode::from(2);
@@ -115,12 +114,13 @@ struct Stats {
 }
 
 impl Stats {
-    /// Merges the lines with an hour in `since..=now`. Unparsable lines are skipped.
-    fn read(text: &str, since: u64, now: u64, running: bool) -> Self {
+    /// Merges the lines with an hour in `since..=now`. Unparsable lines,
+    /// invalid UTF-8 included, are skipped.
+    fn read(text: &[u8], since: u64, now: u64, running: bool) -> Self {
         let mut buckets = BTreeMap::<Key, Bucket>::new();
         let mut covered = BTreeSet::new();
         let (mut dropped, mut any) = (0u64, false);
-        for (key, bucket) in text.lines().filter_map(local::parse_line) {
+        for (key, bucket) in local::parse_lines(text) {
             if !(since..=now).contains(&key.hour) {
                 continue;
             }
