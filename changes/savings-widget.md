@@ -7,3 +7,4 @@
 ### Changed
 
 - `deslag stats` reports the `no_data` partial reason only when the window has no lines and the service is not running. A running service with an empty window no longer reports `no_data` (#91)
+- The plugin and marketplace descriptions name the hook adapter, the opt-in usage module and the opt-in savings widget, and no longer call the plugin a no-op (#91)

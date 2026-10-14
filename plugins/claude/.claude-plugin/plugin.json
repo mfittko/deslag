@@ -1,7 +1,7 @@
 {
   "name": "deslag",
   "version": "0.1.0-alpha.2",
-  "description": "PostToolUse hook adapter for deslag (currently a no-op; compression not yet enabled). Run /deslag:install to install the matching deslag binary.",
+  "description": "PostToolUse hook adapter for deslag (compresses only when the hook runs with --minify-json), an opt-in usage module and an opt-in savings widget. Run /deslag:install to install the matching deslag binary.",
   "author": {
     "name": "mfittko"
   }
