@@ -8,11 +8,11 @@
 
 Issue #86 asks whether Claude Code Mods should replace the PostToolUse settings hook and the Anthropic HTTP proxy as deslag's primary Claude integration, and where instrumentation belongs. The spike record is [docs/spikes/0086-claude-mod-first.md](../spikes/0086-claude-mod-first.md). Its evidence ledger separates documented, observed, offline-verified and live-verified claims.
 
-Established offline on Claude Code 2.1.296 and 2.1.299 (`claude plugin test`, no model): a `session.append` hook on the `tool-result` door rewrites the stored row; a bridge to the native binary through `$.process.run` fails open on every tested malformed response and row shape; another rewriting mod can change the row after deslag's proposal; a `turn.step` observer forwards chunks and the final result. The native bridge (`deslag codec --protocol 1`) is at or below the hook's cost from 2 KiB to 1 MiB.
+Established offline on Claude Code 2.1.296 and 2.1.299 (`claude plugin test`, no model): a `session.append` hook on the `tool-result` door rewrites the stored row; a bridge to the native binary through `$.process.run` fails open on every tested malformed response and row shape; another rewriting mod can change the row after deslag's proposal; a `turn.step` observer forwards chunks and the final result. The native bridge (`deslag codec --protocol 1`) is at or below the hook's p95 cost from 2 KiB to 1 MiB.
 
 Live on 2.1.299 (USD 0.024 of an operator-authorized USD 1.00 cap, haiku only): the model reads the rewritten row, and it survives `--resume`, `--continue` and `--fork-session` with the mod disabled. The client cuts large Bash output before both the hook and the mod, so that limit does not separate them. `$.process.run` cuts stdout silently at 4 MiB and adds about 1 ms per call.
 
-Remaining limits of the mod: at this boundary Bash `stdout` and `stderr` arrive joined, so Bash rows with stderr pass through; the transcript keeps the original structured record; `$.process.run` is CLI only. Live usage data from `turn.step` is not yet captured.
+Remaining limits of the mod: at this boundary Bash `stdout` and `stderr` arrive joined, so Bash rows with stderr pass through, except that when `stdout` is empty and `stderr` alone is one JSON document, the mod cannot tell it from `stdout` and minifies it, which the hook never does (a gate item for the opt-in mod compression step in [docs/phases/phase-mod-1.md](../phases/phase-mod-1.md)); the transcript keeps the original structured record; `$.process.run` is CLI only. Live usage data from `turn.step` is not yet captured.
 
 ## Decision
 
