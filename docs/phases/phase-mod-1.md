@@ -14,11 +14,11 @@ The evidence ledger (E1 to E21), the benchmark, the comparison table and the liv
 
 Staged plan. Each step is one small PR with its own tests; none deletes the proxy or changes a release promise. Step 1 is the spike itself (PR #87). The step numbers keep the spike's numbering. Steps 3 (`Owner::Mod`) and 5 (mod compression) were dropped by ADR 0008.
 
-| Step | Change | Depends on | Acceptance | Rollback |
-| --- | --- | --- | --- | --- |
-| 2 | Remaining live verification (see Pending checks) under an operator-authorized cap; record the mod row in [`docs/compatibility.md`](../compatibility.md) | 1, budget authorization | Usage capture, classic-hook ordering and in-session lifecycle recorded with versions, commands and costs | Docs only |
-| 4 | Usage observer in `plugins/claude` as an opt-in mod module, feeding the #21 local service over a bounded bridge | 2 (usage capture), #21 | Hook compression is unaffected; drops are counted; no awaited I/O in the hot path | Disable the mod module; the hook is unaffected |
-| 6 | Decide whether the proxy requirement leaves the Claude MVP | 1 | Operator decision recorded in a new ADR | Keep the proxy requirement |
+| Step | Change | Depends on | Acceptance | Rollback | State |
+| --- | --- | --- | --- | --- | --- |
+| 2 | Remaining live verification (see Pending checks) under an operator-authorized cap; record the mod row in [`docs/compatibility.md`](../compatibility.md) | 1, budget authorization | Usage capture, classic-hook ordering and in-session lifecycle recorded with versions, commands and costs | Docs only | Usage capture done in step 4; the other checks are open |
+| 4 | Usage observer in `plugins/claude` as an opt-in mod module, feeding the #21 local service over a bounded bridge | 2 (usage capture), #21 | Hook compression is unaffected; drops are counted; no awaited I/O in the hot path | Disable the mod module; the hook is unaffected | Done: `plugins/claude/hooks/usage.js`, see [Observability](../observability.md#usage-module) |
+| 6 | Decide whether the proxy requirement leaves the Claude MVP | 1 | Operator decision recorded in a new ADR | Keep the proxy requirement | Open |
 
 Issue impact (proposals, not edits to those issues):
 
@@ -34,7 +34,7 @@ Issue impact (proposals, not edits to those issues):
 
 ### Pending checks
 
-- `turn.step` usage in a live session (E18). The observer has no export channel yet, so this needs the step-4 bridge or a probe.
+- Done in step 4: `turn.step` usage in a live session (E18). The result is recorded in [`docs/compatibility.md`](../compatibility.md#claude-code-usage-module).
 - Ordering against the classic PostToolUse hook in one session, and whether `classic.PostToolUse` lets a mod observe hook outcomes.
 - Model switch, reload, upgrade and disable inside a running session.
 - Linux x86_64, headless SDK and Desktop surfaces.

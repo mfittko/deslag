@@ -172,3 +172,22 @@ The pre-PR review fixes between runs 7 and 12 cover symlinked version dirs, the 
 ### Pending
 
 - `/plugin marketplace add mfittko/deslag` against `main`. This needs the merge. The same GitHub source at the branch ref `mfittko/deslag#issue-40` passed. That branch-ref run is the accepted pre-merge evidence for the acceptance criterion "`/plugin marketplace add mfittko/deslag` lists the plugin". The post-merge run against `main` completes it.
+
+## Claude Code usage module
+
+The usage module `plugins/claude/hooks/usage.js` observes `turn.step` and sends each model request's provider usage to the local service. See [Observability](observability.md#usage-module). It loads only with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` and sends only with `DESLAG_USAGE_STATS=1`.
+
+### Verified offline
+
+These facts come from `claude plugin test plugins/claude` and `claude plugin validate plugins/claude` on Claude Code 2.1.299.
+
+- `hooks/hooks.json` may hold `"modules"` next to `"hooks"`. Validation passes and lists the module's `turn.step` hook.
+- The observer passes every chunk and the final result through unchanged, with the module on and off.
+- A `$.http.fetch` started after the `turn.step` generator returned still runs. Its `socketPath` option reaches a Unix stream socket.
+- The mod API declarations (written by Claude Code 2.1.277) type the `turn.step` result's `usage` as `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens` and `model`, or `null`. The live capture below confirms or refutes this.
+
+### Live capture
+
+| Run | Client | Command | Model | Observed `usage` | total_cost_usd |
+| --- | --- | --- | --- | --- | --- |
+<!-- live usage capture row: filled after the live run -->

@@ -95,6 +95,8 @@ The plugin does not download anything on its own. Run `/deslag:install` once aft
 
 For a local checkout, `claude --plugin-dir plugins/claude` loads the plugin. Its hook also needs `/deslag:install`, or a binary built with `cargo build --release -p deslag-cli` and copied to `<data dir>/bin/<version>/deslag`. The data dir is `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/data/<plugin id>/`. The plugin id is `deslag-deslag` for the marketplace install; for another install, list `plugins/data/` under the config dir. Claude Code does not export the plugin data path to your shell, so use the concrete path. After a manual copy, run `touch "<data dir>/.deslag-data"` so that `/deslag:uninstall` recognizes the data directory and removes the binary.
 
+The plugin also holds an opt-in usage module. It sends the provider token usage of each model request to the `deslag local` service, and it never changes the model stream. Run `deslag local start`, then start Claude Code with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 DESLAG_USAGE_STATS=1`. `deslag stats --json --session <id>` then lists each request with its usage and the estimated tokens that hook compression removed. See [Observability](docs/observability.md#usage-module).
+
 Benchmarks: `benchmarks/run.sh > docs/benchmarks/baseline.md` runs all runners in release mode and records machine and commit metadata. The committed [baseline](docs/benchmarks/baseline.md) is a measurement only; PLAN §13.2 budgets stay provisional.
 
 Work runs through [dev-loops](https://github.com/mfittko/dev-loops). Repository settings live in [`.devloops`](.devloops).
