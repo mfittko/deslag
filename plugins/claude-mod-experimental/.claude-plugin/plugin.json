@@ -1,0 +1,20 @@
+{
+  "name": "deslag-mod-experimental",
+  "version": "0.0.0-spike",
+  "description": "Spike only, not in the marketplace: deslag compression and usage observation as a Claude Code mod.",
+  "author": {
+    "name": "mfittko"
+  },
+  "userConfig": {
+    "mode": {
+      "type": "string",
+      "title": "Compression mode",
+      "description": "off (default), observe or safe. Safe also needs the deslag owner file to read mod."
+    },
+    "binary": {
+      "type": "string",
+      "title": "deslag binary",
+      "description": "Absolute path to a deslag build that has codec --protocol 1."
+    }
+  }
+}
