@@ -92,7 +92,7 @@ fn observe_proposals_stay_separate_from_emitted_reductions() {
 }
 
 #[test]
-fn unknown_values_are_null_never_zero() {
+fn null_would_change_candidate_is_skipped_and_unknown_tokens_show_dash() {
     let line = r#"{"v":1,"hour":1799996400,"adapter":"proxy","transform":"json-minify","outcome":"would_change","reason":null,"tool":"bash","count":1,"original_bytes":500,"candidate_bytes":300,"emitted_bytes":500,"tokens":{},"dropped":0}"#;
     // A null would_change candidate is malformed; merged, it would overstate the proposal.
     let unknown = line.replace("300", "null");

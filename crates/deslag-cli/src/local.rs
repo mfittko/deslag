@@ -444,7 +444,8 @@ fn opt_u64(v: &Value, field: &str) -> Option<Option<u64>> {
 }
 
 /// Parses and validates one report datagram into its key and a one-report bucket.
-/// `None` also for a byte size above `u32::MAX`; the caller counts it as a drop.
+/// `None` also for a byte size above `u32::MAX` and for a `would_change` report
+/// with a null byte or token candidate; the caller counts either as a drop.
 fn parse_report(message: &[u8], hour: u64) -> Option<(Key, Bucket)> {
     let v: Value = serde_json::from_slice(message).ok()?;
     let key = Key {
@@ -506,7 +507,7 @@ fn line(key: &Key, b: &Bucket) -> String {
 /// Parses one `stats.jsonl` line. `None` for a malformed line, another
 /// schema version, a value outside the allowlists, an hour that is not a
 /// multiple of `HOUR`, a partly null dimension key, or a `would_change`
-/// line with a null candidate.
+/// line with a null byte or token candidate.
 pub(crate) fn parse_line(text: &str) -> Option<(Key, Bucket)> {
     let v: Value = serde_json::from_str(text).ok()?;
     if u64_of(&v, "v")? != 1 {
