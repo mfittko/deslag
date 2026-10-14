@@ -1,5 +1,6 @@
 //! `deslag` command-line entry point.
 
+mod codec;
 mod hook_conflicts;
 mod local;
 
@@ -26,6 +27,7 @@ const PROXY_USAGE: &str = "usage: deslag proxy --upstream <url> [--listen <addr>
 
 // Exit 2 from a Claude Code hook is blocking and feeds stderr to the model; usage errors avoid it.
 const EX_USAGE: u8 = 64;
+const EX_DATAERR: u8 = 65;
 
 // ponytail: fixed 16 MiB ceiling on hook input; larger payloads pass through untouched.
 // Make it configurable when real tool outputs routinely exceed it.
@@ -57,6 +59,27 @@ fn main() -> ExitCode {
                 Err(message) => eprintln!("deslag: {message}"),
             }
             ExitCode::SUCCESS
+        }
+        // Experimental mod bridge; see codec.rs. Not part of the documented CLI.
+        ["codec", "--protocol", "1"] => {
+            let owner = || codec::owner_is_mod(session::state_dir().as_deref());
+            let exec = BoundedExecutor::default();
+            match codec::run(
+                io::stdin().lock(),
+                MAX_HOOK_INPUT_BYTES,
+                owner,
+                &exec,
+                minify,
+            ) {
+                Ok(line) => match writeln!(io::stdout().lock(), "{line}") {
+                    Ok(()) => ExitCode::SUCCESS,
+                    Err(_) => ExitCode::from(1),
+                },
+                Err(message) => {
+                    eprintln!("deslag: {message}");
+                    ExitCode::from(EX_DATAERR)
+                }
+            }
         }
         ["proxy", args @ ..] => match proxy(args) {
             Ok(()) => ExitCode::SUCCESS,
