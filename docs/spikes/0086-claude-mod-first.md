@@ -1,6 +1,6 @@
 # Spike: Claude Code mod-first integration and instrumentation placement
 
-**Status:** historical evidence record. [ADR 0008](../decisions/0008-mod-instrumentation-only.md) drops mod compression and removes the codec bridge; the mod is for instrumentation only.
+**Status:** historical evidence record. [ADR 0008](../decisions/0008-mod-instrumentation-only.md) drops mod compression and removes the codec bridge; the mod is for instrumentation only. The codec bridge and mod-compression commands below no longer run on this revision.
 
 ## Question
 
