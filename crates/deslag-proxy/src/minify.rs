@@ -774,7 +774,12 @@ mod tests {
             ),
             ("bash-bash", body(&format!("{bash},{bash}")), true),
             // A second use with a conflicting or unreadable name fails closed.
-            ("bash-escaped", second(r#","name":"Read""#), false),
+            ("bash-escaped", second(r#","name":"\u0042ash""#), false),
+            (
+                "escaped-only",
+                body(r#"{"type":"tool_use","id":"t","name":"\u0042ash","input":{}}"#),
+                false,
+            ),
             ("bash-no-name", second(""), false),
             ("bash-number", second(r#","name":5"#), false),
             ("bash-read", second(r#","name":"Read""#), false),
