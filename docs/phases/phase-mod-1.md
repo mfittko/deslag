@@ -17,7 +17,7 @@ Staged plan. Each step is one small PR with its own tests; none deletes the prox
 | Step | Change | Depends on | Acceptance | Rollback |
 | --- | --- | --- | --- | --- |
 | 2 | Remaining live verification (see Pending checks) under an operator-authorized cap; record the mod row in [`docs/compatibility.md`](../compatibility.md) | 1, budget authorization | Usage capture, classic-hook ordering and in-session lifecycle recorded with versions, commands and costs | Docs only |
-| 4 | Usage observer and compression counters in `plugins/claude` as an opt-in mod module, feeding the #21 local service over a bounded bridge | 2 (usage capture), #21 | Works with compression off; drops are counted; no awaited I/O in the hot path | Disable the mod module; the hook is unaffected |
+| 4 | Usage observer in `plugins/claude` as an opt-in mod module, feeding the #21 local service over a bounded bridge | 2 (usage capture), #21 | Hook compression is unaffected; drops are counted; no awaited I/O in the hot path | Disable the mod module; the hook is unaffected |
 | 6 | Decide whether the proxy requirement leaves the Claude MVP | 1 | Operator decision recorded in a new ADR | Keep the proxy requirement |
 
 Issue impact (proposals, not edits to those issues):
