@@ -51,12 +51,12 @@ The service appends one line per bucket when an hour closes, and when `stop` or 
 | `count` | Reports in the bucket. |
 | `original_bytes`, `emitted_bytes` | Summed input and output sizes. |
 | `candidate_bytes` | Summed candidate sizes of the reports that had a candidate. `null` when none had one. |
-| `tokens` | Token sums per `<method>:<tokenizer>` label. The only stored label is `estimate:deslag-estimate-v1`. The method `exact` is reserved for a future tokenizer; the service drops a report that carries it. Only reports with token counts contribute. `{}` means unknown. A token `candidate` is `null` when unknown. |
+| `tokens` | Token sums per `<method>:<tokenizer>` label. The only stored label is `estimate:deslag-estimate-v1`. The method `exact` is reserved for a future tokenizer; the service drops a report that carries it. Only reports with token counts contribute. `{}` means unknown. A token `candidate` is `null` when unknown. Adapters without a token counter send a `null` token candidate for `would_change`. A sum with one `null` token candidate is `null`. |
 | `dropped` | Reports the adapter failed to deliver before this one. |
 
 A service line has every dimension `null` and `count` 0. The service writes one for every hour it covered. Its `dropped` counts reports the service rejected in that hour. `stats` treats a closed hour without a service line as a gap.
 
-Lines older than the retention window are removed at service start and after each hour close. This rotation also merges lines with equal keys, so lines from frequent `stats` runs collapse into one line per key. Rotation also removes malformed lines, invalid UTF-8 included, and token labels outside the allowlist; `stats` skips them too. A line is malformed when its `hour` is not a multiple of 3600, or when its dimensions are neither all set (`reason` may be `null`) nor all `null`, or when a `would_change` line has a `null` byte or token candidate. The service counts a report with a byte size above 2^32 - 1 as a service drop, since no real tool result is that large. It also drops a `would_change` report with a `null` byte or token candidate, since deslag-core always sets one in observe mode.
+Lines older than the retention window are removed at service start and after each hour close. This rotation also merges lines with equal keys, so lines from frequent `stats` runs collapse into one line per key. Rotation also removes malformed lines, invalid UTF-8 included, and token labels outside the allowlist; `stats` skips them too. A line is malformed when its `hour` is not a multiple of 3600, or when its dimensions are neither all set (`reason` may be `null`) nor all `null`, or when a `would_change` line has a `null` `candidate_bytes`. A line is also malformed when it has another `v`, a value outside the allowlists, or a missing or non-integer field. The service counts a report with a byte size above 2^32 - 1 as a service drop, since no real tool result is that large. It also drops a `would_change` report with a `null` `candidate_bytes`, since deslag-core always sets it in observe mode. A `null` token candidate is kept.
 
 ## `deslag stats --json`
 
@@ -105,4 +105,4 @@ The table shows one row per dimension set, summed across the window. `saved` is 
 - The proxy reports once per submission. A conversation resends its history, so the same tool result counts again on every request.
 - A killed service loses the open hour since the last write. `deslag local stop` and `deslag stats` write the open hour; there is no signal handling.
 - macOS limits socket paths to 104 bytes. A long state directory path makes `local start` fail to bind.
-- `deslag local status` and `deslag local stop` exit 0 whether or not the service runs. Read their output instead. `stop` exits 2 only when the service fails to write its buckets.
+- `deslag local status` and `deslag local stop` exit 0 whether or not the service runs. Their output states whether the service runs. `stop` exits 2 only when the service fails to write its buckets.

@@ -408,9 +408,16 @@ impl Bucket {
         self.candidate_bytes = add_opt(self.candidate_bytes, other.candidate_bytes);
         self.emitted_bytes = self.emitted_bytes.saturating_add(other.emitted_bytes);
         for (label, t) in &other.tokens {
-            let sum = self.tokens.entry(label.clone()).or_default();
+            let Some(sum) = self.tokens.get_mut(label) else {
+                self.tokens.insert(label.clone(), t.clone());
+                continue;
+            };
             sum.original = sum.original.saturating_add(t.original);
-            sum.candidate = add_opt(sum.candidate, t.candidate);
+            // One unknown token candidate makes the sum unknown, never a partial sum.
+            sum.candidate = sum
+                .candidate
+                .zip(t.candidate)
+                .map(|(a, b)| a.saturating_add(b));
             sum.emitted = sum.emitted.saturating_add(t.emitted);
         }
         self.dropped = self.dropped.saturating_add(other.dropped);
@@ -445,7 +452,7 @@ fn opt_u64(v: &Value, field: &str) -> Option<Option<u64>> {
 
 /// Parses and validates one report datagram into its key and a one-report bucket.
 /// `None` also for a byte size above `u32::MAX` and for a `would_change` report
-/// with a null byte or token candidate; the caller counts either as a drop.
+/// with a null byte candidate; the caller counts either as a drop.
 fn parse_report(message: &[u8], hour: u64) -> Option<(Key, Bucket)> {
     let v: Value = serde_json::from_slice(message).ok()?;
     let key = Key {
@@ -489,12 +496,13 @@ fn parse_report(message: &[u8], hour: u64) -> Option<(Key, Bucket)> {
     Some((key, bucket))
 }
 
-/// `false` for a `would_change` bucket with a null byte or token candidate.
-/// deslag-core always sets the candidate for `would_change`; a null one would
-/// merge into a known sum and overstate the proposal.
+/// `false` for a `would_change` bucket with a null byte candidate. deslag-core
+/// always sets `candidate_bytes` for `would_change`; a null one would merge
+/// into a known sum and overstate the proposal. A null token candidate is
+/// accepted: adapters without a token counter send one, and
+/// [`Bucket::merge`] keeps the summed token candidate unknown.
 fn proposal_known(key: &Key, b: &Bucket) -> bool {
-    key.outcome != Some("would_change")
-        || b.candidate_bytes.is_some() && b.tokens.values().all(|t| t.candidate.is_some())
+    key.outcome != Some("would_change") || b.candidate_bytes.is_some()
 }
 
 /// One `stats.jsonl` line, schema `"v":1`.
@@ -507,7 +515,7 @@ fn line(key: &Key, b: &Bucket) -> String {
 /// Parses one `stats.jsonl` line. `None` for a malformed line, another
 /// schema version, a value outside the allowlists, an hour that is not a
 /// multiple of `HOUR`, a partly null dimension key, or a `would_change`
-/// line with a null byte or token candidate.
+/// line with a null byte candidate.
 pub(crate) fn parse_line(text: &str) -> Option<(Key, Bucket)> {
     let v: Value = serde_json::from_str(text).ok()?;
     if u64_of(&v, "v")? != 1 {
@@ -1099,20 +1107,98 @@ mod tests {
     }
 
     #[test]
-    fn would_change_with_a_null_candidate_is_rejected() {
+    fn would_change_needs_a_byte_candidate_only() {
         let known = report("would_change", Some(40), true);
         let (key, bucket) = parse_report(&known, T0).unwrap();
         assert!(parse_line(&line(&key, &bucket)).is_some());
+        // Rejected: a would_change report or line with a null byte candidate.
         assert!(parse_report(&report("would_change", None, false), T0).is_none());
-        assert!(parse_report(&report("skipped", None, false), T0).is_some());
-        let mut v: Value = serde_json::from_slice(&known).unwrap();
-        v["tokens"]["candidate"] = Value::Null;
-        assert!(parse_report(v.to_string().as_bytes(), T0).is_none());
         let mut l: Value = serde_json::from_str(&line(&key, &bucket)).unwrap();
-        l["tokens"]["estimate:deslag-estimate-v1"]["candidate"] = Value::Null;
-        assert!(parse_line(&l.to_string()).is_none());
-        l = serde_json::from_str(&line(&key, &bucket)).unwrap();
         l["candidate_bytes"] = Value::Null;
         assert!(parse_line(&l.to_string()).is_none());
+        // Accepted: null tokens, and a null token candidate.
+        assert!(parse_report(&report("would_change", Some(40), false), T0).is_some());
+        let mut v: Value = serde_json::from_slice(&known).unwrap();
+        v["tokens"]["candidate"] = Value::Null;
+        let (_, unknown) = parse_report(v.to_string().as_bytes(), T0).unwrap();
+        let mut l: Value = serde_json::from_str(&line(&key, &bucket)).unwrap();
+        l["tokens"]["estimate:deslag-estimate-v1"]["candidate"] = Value::Null;
+        assert!(parse_line(&l.to_string()).is_some());
+        // Accepted: other outcomes with any candidate fields.
+        for outcome in ["changed", "skipped", "failed"] {
+            for (candidate, tokens) in [(None, false), (Some(40), true)] {
+                let r = report(outcome, candidate, tokens);
+                assert!(parse_report(&r, T0).is_some(), "{outcome}");
+            }
+            let mut v: Value = serde_json::from_slice(&known).unwrap();
+            v["outcome"] = json!(outcome);
+            v["candidate_bytes"] = Value::Null;
+            v["tokens"]["candidate"] = Value::Null;
+            assert!(
+                parse_report(v.to_string().as_bytes(), T0).is_some(),
+                "{outcome}"
+            );
+        }
+        // One unknown token candidate makes the merged sum unknown, in either order.
+        for (a, b) in [(&bucket, &unknown), (&unknown, &bucket)] {
+            let mut sum = a.clone();
+            sum.merge(b);
+            let t = &sum.tokens["estimate:deslag-estimate-v1"];
+            assert_eq!((t.original, t.candidate), (20, None));
+            assert_eq!(sum.candidate_bytes, Some(80));
+        }
+    }
+
+    #[test]
+    fn sizes_above_u32_max_are_rejected() {
+        let big = u64::from(u32::MAX) + 1;
+        for field in ["original_bytes", "candidate_bytes", "emitted_bytes"] {
+            let mut v: Value = serde_json::from_slice(&report("changed", Some(40), true)).unwrap();
+            v[field] = json!(big);
+            assert!(
+                parse_report(v.to_string().as_bytes(), T0).is_none(),
+                "{field}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_observe_report_without_a_token_counter_is_kept() {
+        let (_dir, path) = temp_file("observe");
+        let socket = path.with_file_name("observe.sock");
+        let receiver = UnixDatagram::bind(&socket).unwrap();
+        let ctx = deslag_core::CompressionContext {
+            mode: deslag_core::Mode::Observe,
+            ..deslag_core::FIRST_SLICE_JSON_MINIFY_CONTEXT
+        };
+        assert!(ctx.token_counter.is_none());
+        let input = "{ \"a\" : [ 1 , 2 , 3 ] ,  \"b\" : \"text\" }";
+        deslag_telemetry::compress_reported(
+            input,
+            &ctx,
+            Some(&socket),
+            deslag_telemetry::Adapter::Hook,
+            deslag_telemetry::ToolCategory::Bash,
+        );
+        let mut buf = vec![0; MAX_MESSAGE_BYTES];
+        let n = receiver.recv(&mut buf).unwrap();
+        let sent: Value = serde_json::from_slice(&buf[..n]).unwrap();
+        assert_eq!(sent["outcome"], "would_change");
+        assert_eq!(sent["tokens"]["candidate"], Value::Null);
+
+        let mut s = Service::new(path, 90 * DAY, T0);
+        s.record(&buf[..n], T0 + 1);
+        let (key, b) = s.buckets.iter().next().unwrap();
+        assert_eq!(s.buckets.len(), 1, "kept, not a service drop");
+        assert_eq!(key.outcome, Some("would_change"));
+        assert!(
+            b.original_bytes > b.candidate_bytes.unwrap(),
+            "proposal is non-zero"
+        );
+        let json = bucket_json(key, b);
+        assert_eq!(
+            json["tokens"]["estimate:deslag-estimate-v1"]["candidate"],
+            Value::Null
+        );
     }
 }
