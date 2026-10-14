@@ -165,6 +165,6 @@ Reasons:
 
 Staged plan. Step 1 is this spike: codec bridge, experimental mod, benchmark, live checks Q1 to Q3 and ADR 0007. Steps 2 to 6 graduated into the phase plan, [docs/phases/phase-mod-1.md](../phases/phase-mod-1.md). That file is the only copy of the staged plan and its step gates.
 
-The issue impact and the session boundaries for owner changes are plan content, so they live only in the phase plan, [docs/phases/phase-mod-1.md](../phases/phase-mod-1.md).
+The issue impact is plan content, so it lives only in the phase plan, [docs/phases/phase-mod-1.md](../phases/phase-mod-1.md). [ADR 0008](../decisions/0008-mod-instrumentation-only.md) removed the owner-change boundaries with the `mod` owner value.
 
 Spike exit: graduated (operator decision, 2026-10-14) into [docs/phases/phase-mod-1.md](../phases/phase-mod-1.md), the plan for step 2 and the staged rollout.
