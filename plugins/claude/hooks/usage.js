@@ -13,6 +13,9 @@ const MAX_IN_FLIGHT = 4;
 let inFlight = 0;
 // Records not delivered yet, carried in the next record's `dropped` field.
 let dropped = 0;
+// Settles when the send that carries drops knows its outcome. Later sends wait
+// for it, so no record overtakes the carrier and leaves its drops uncarried.
+let carrier = null;
 
 // Unknown usage stays unknown: no usage or a partial usage object is null,
 // never zero.
@@ -49,9 +52,12 @@ async function send($, e, result) {
       dropped++;
       return;
     }
+    while (carrier) await carrier;
     // Swap, not read: concurrent sends never carry the same drops twice.
     const carried = dropped;
     dropped = 0;
+    let settle;
+    if (carried) carrier = new Promise((r) => (settle = r));
     try {
       const session = await $.session.id();
       const model = result?.usage?.model ?? e.model;
@@ -83,6 +89,11 @@ async function send($, e, result) {
       if (!res?.ok) dropped += carried + 1;
     } catch {
       dropped += carried + 1;
+    } finally {
+      if (settle) {
+        carrier = null;
+        settle();
+      }
     }
   } finally {
     if (!over) inFlight--;

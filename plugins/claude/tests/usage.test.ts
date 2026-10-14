@@ -143,6 +143,32 @@ describe('turn.step usage observer', () => {
     expect(carried).toBe(2);
   });
 
+  test('a later record waits for the pending carrier and carries its drops on failure', OPTS, async ($, on) => {
+    const w = world(on, { DESLAG_USAGE_STATS: '1', DESLAG_STATE_DIR: '/state' });
+    let calls = 0;
+    let fail = () => {};
+    w.reply = () => {
+      calls++;
+      if (calls === 1) throw new Error('ENOENT');
+      if (calls === 2) return new Promise((r) => (fail = () => r({ status: 503, ok: false, headers: {}, text: '' })));
+      return OK;
+    };
+    let sent = w.fetched();
+    await step($, w, result(0));
+    await sent;
+    // One macrotask lets step 0's failure settle, so step 1 is the carrier.
+    await new Promise((r) => setTimeout(r, 0));
+    sent = w.fetched();
+    await step($, w, result(1));
+    expect(JSON.parse((await sent).init.body).dropped).toBe(1);
+    // Step 2 settles while the carrier is pending; its record must not overtake it.
+    sent = w.fetched();
+    await step($, w, result(2));
+    fail();
+    const body = JSON.parse((await sent).init.body);
+    expect([body.index, body.dropped]).toEqual([2, 2]);
+  });
+
   test('a step over four sends in flight is dropped and counted', OPTS, async ($, on) => {
     const w = world(on, { DESLAG_USAGE_STATS: '1', DESLAG_STATE_DIR: '/state' });
     const release: (() => void)[] = [];
