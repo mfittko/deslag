@@ -1,7 +1,7 @@
 // Run with `claude plugin test plugins/claude`. The engine's own turn.step
 // chain runs; the test's hooks beneath the plugin answer the environment,
 // the session id and every `$.http.fetch`. No binary, network or model is
-// involved. Background sends are awaited through the fetch hook, never a timer.
+// involved. Background sends are awaited through hook signals, never a timed wait.
 import { describe, expect, test } from 'claude-code/testing';
 
 const FULL = { input_tokens: 3, output_tokens: 1, cache_read_input_tokens: 7, cache_creation_input_tokens: 0 };
@@ -25,6 +25,8 @@ function world(on: any, env: Record<string, string | undefined>) {
     fetched: () => new Promise<any>((r) => (queued.length ? r(queued.shift()) : waiting.push(r))),
     // Called with each env name read, before its value is returned.
     onRead: (_name: string) => {},
+    // Called on each session id read, in the same segment that reads `session`.
+    onSession: () => {},
     // Replies settled so far; `onSettle` runs after each one.
     settled: 0,
     onSettle: () => {},
@@ -34,7 +36,10 @@ function world(on: any, env: Record<string, string | undefined>) {
     w.onRead(e.name);
     return { value: w.env[e.name] };
   });
-  on('session.id', async () => ({ value: w.session }));
+  on('session.id', async () => {
+    w.onSession();
+    return { value: w.session };
+  });
   on('http.fetch', async (_$: unknown, e: any) => {
     const wake = waiting.shift();
     if (wake) wake(e);
@@ -154,6 +159,9 @@ describe('turn.step usage observer', () => {
     const allSettled = new Promise<void>((r) => (w.onSettle = () => w.settled === 4 && r()));
     for (const r of release) r();
     await allSettled;
+    // The fetch hook signals before usage.js runs its `finally`. One macrotask
+    // drains every microtask hop back into it, so inFlight is 0 afterwards.
+    await new Promise((r) => setTimeout(r, 0));
     let carried = 0;
     for (let index = 5; index < 9 && carried < 1; index++) {
       const sent = w.fetched();
@@ -191,13 +199,18 @@ describe('turn.step usage observer', () => {
     ['empty model', (_w, r) => (r.usage.model = '')],
     ['model containing \'"\'', (_w, r) => (r.usage.model = 'claude"haiku')],
     ["model containing '\\'", (_w, r) => (r.usage.model = 'claude\\haiku')],
+    ['missing index', (_w, r) => (r.index = undefined)],
   ];
   for (const [form, spoil] of invalid) {
     test(`${form}: no send, counted as a drop`, OPTS, async ($, on) => {
       const w = world(on, { DESLAG_USAGE_STATS: '1', DESLAG_STATE_DIR: '/state' });
       const bad = result(0);
       spoil(w, bad);
+      // Step 0's send reads the session after the step returns. Reset it only after that read.
+      const sessionRead = new Promise<void>((r) => (w.onSession = r));
       await step($, w, bad);
+      await sessionRead;
+      w.onSession = () => {};
       w.session = 'sess-1';
       let carried = 0;
       for (let index = 1; index < 5 && carried < 1; index++) {

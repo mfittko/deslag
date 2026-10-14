@@ -26,6 +26,8 @@ export function usageOf(result) {
 const validId = (s) => typeof s === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(s);
 // The service's valid_model: 1 to 64 bytes of printable ASCII without '"' and '\'.
 const validModel = (s) => typeof s === 'string' && /^[ -~]{1,64}$/.test(s) && !/["\\]/.test(s);
+// The service reads index as a u64.
+const validIndex = (n) => Number.isSafeInteger(n) && n >= 0;
 
 // Same order as deslag_telemetry::state_dir; empty or relative values are ignored.
 async function socketPath($) {
@@ -53,9 +55,10 @@ async function send($, e, result) {
     try {
       const session = await $.session.id();
       const model = result?.usage?.model ?? e.model;
+      const index = result?.index ?? e.index;
       // The service rejects a record that fails these rules after the bridge
       // answered 204, so the record and its carried drops would go uncounted.
-      if (!validId(session) || !validId(e.turnId) || !validModel(model)) {
+      if (!validId(session) || !validId(e.turnId) || !validModel(model) || !validIndex(index)) {
         dropped += carried + 1;
         return;
       }
@@ -64,7 +67,7 @@ async function send($, e, result) {
         kind: 'usage',
         session,
         turn: e.turnId,
-        index: result?.index ?? e.index,
+        index,
         model,
         usage: usageOf(result),
         dropped: carried,
