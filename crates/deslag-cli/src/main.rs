@@ -3,6 +3,7 @@
 mod codec;
 mod hook_conflicts;
 mod local;
+mod stats;
 
 use std::cell::RefCell;
 use std::ffi::OsString;
@@ -22,7 +23,8 @@ use tokio::net::TcpListener;
 const USAGE: &str = "usage: deslag hook claude [--minify-json]\n       \
                      deslag proxy --upstream <url> [--listen <addr>] [--minify-json]\n       \
                      deslag local start|run [--retention-days <n>]\n       \
-                     deslag local stop|status";
+                     deslag local stop|status\n       \
+                     deslag stats [--json] [--since <n>h|<n>d]";
 const PROXY_USAGE: &str = "usage: deslag proxy --upstream <url> [--listen <addr>] [--minify-json]";
 
 // Exit 2 from a Claude Code hook is blocking and feeds stderr to the model; usage errors avoid it.
@@ -89,6 +91,7 @@ fn main() -> ExitCode {
             }
         },
         ["local", args @ ..] => local::command(args),
+        ["stats", args @ ..] => stats::command(args),
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(EX_USAGE)

@@ -3,11 +3,12 @@
 //! The service receives report datagrams from adapters (see
 //! `deslag_telemetry`), aggregates them in memory into hourly buckets and
 //! appends each closed bucket as one line to the private `stats.jsonl`. The
-//! `stop` and `flush` control messages and a fatal receive error write the open
-//! hour: a killed service loses that hour, and its stale socket file stays
-//! until the next `run` removes it. A failed write is logged to stderr, and its
-//! buckets stay in memory for the next attempt. The log is visible only under
-//! `deslag local run`: `deslag local start` discards the service's stderr.
+//! `stop` and `flush` control messages, sent by `deslag local stop` and
+//! `deslag stats`, and a fatal receive error also write the open hour. A killed
+//! service loses the unwritten part of that hour, and its stale socket file
+//! stays until the next `run` removes it. A failed write is logged to stderr,
+//! and its buckets stay in memory for the next attempt. The log is visible only
+//! under `deslag local run`: `deslag local start` discards the service's stderr.
 //!
 //! The service answers `ping`, `flush` and `stop` with `ok`. When the write
 //! fails, `flush` and `stop` answer `flush failed: <error>` instead, and the
@@ -37,10 +38,10 @@ use serde_json::{Map, Value, json};
 pub const USAGE: &str = "usage: deslag local start|run [--retention-days <n>]\n       \
                          deslag local stop|status";
 
-const HOUR: u64 = 3600;
+pub(crate) const HOUR: u64 = 3600;
 const DAY: u64 = 24 * HOUR;
 const DEFAULT_RETENTION_DAYS: u64 = 90;
-const CONTROL_TIMEOUT: Duration = Duration::from_secs(2);
+pub(crate) const CONTROL_TIMEOUT: Duration = Duration::from_secs(2);
 
 // Allowlists for every string a report may carry. Anything else is dropped.
 const ADAPTERS: &[&str] = &["hook", "proxy"];
@@ -65,6 +66,8 @@ const REASONS: &[&str] = &[
     "invalid_candidate",
 ];
 /// Allowed (method, tokenizer) pairs: the estimate tokenizer never labels exact counts.
+/// The only stored label is `estimate:deslag-estimate-v1`; `exact` is reserved
+/// for a future tokenizer.
 const TOKEN_LABELS: &[(&str, &str)] = &[("estimate", EstimateCounter::TOKENIZER)];
 /// Held by the running service: a second `run` fails instead of stealing the socket.
 const LOCK_FILE: &str = "local.lock";
@@ -198,7 +201,7 @@ fn start(retention: Option<u64>) -> Result<String, String> {
 /// Sends a control `command` from a temporary bound socket and waits up to
 /// `timeout` for `ok`. `InvalidData` carries an error the service replied.
 /// A missing state dir is `NotFound`; [`reachable`] classifies the other errors.
-fn control(command: &str, timeout: Duration) -> io::Result<()> {
+pub(crate) fn control(command: &str, timeout: Duration) -> io::Result<()> {
     let dir =
         state_dir().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no state directory"))?;
     let client_path = dir.join(format!("ctl-{}.sock", std::process::id()));
@@ -329,13 +332,13 @@ fn serve(
     }
 }
 
-fn now() -> u64 {
+pub(crate) fn now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs())
 }
 
-fn floor_hour(t: u64) -> u64 {
+pub(crate) fn floor_hour(t: u64) -> u64 {
     t - t % HOUR
 }
 
@@ -405,9 +408,16 @@ impl Bucket {
         self.candidate_bytes = add_opt(self.candidate_bytes, other.candidate_bytes);
         self.emitted_bytes = self.emitted_bytes.saturating_add(other.emitted_bytes);
         for (label, t) in &other.tokens {
-            let sum = self.tokens.entry(label.clone()).or_default();
+            let Some(sum) = self.tokens.get_mut(label) else {
+                self.tokens.insert(label.clone(), t.clone());
+                continue;
+            };
             sum.original = sum.original.saturating_add(t.original);
-            sum.candidate = add_opt(sum.candidate, t.candidate);
+            // One unknown token candidate makes the sum unknown, never a partial sum.
+            sum.candidate = sum
+                .candidate
+                .zip(t.candidate)
+                .map(|(a, b)| a.saturating_add(b));
             sum.emitted = sum.emitted.saturating_add(t.emitted);
         }
         self.dropped = self.dropped.saturating_add(other.dropped);
@@ -420,6 +430,18 @@ fn pick(v: &Value, field: &str, allowed: &[&'static str]) -> Option<&'static str
     allowed.iter().copied().find(|a| *a == s)
 }
 
+/// `Some(None)` for `null`, `Some(Some(_))` for an allowed value, `None` otherwise.
+fn dim(v: &Value, field: &str, allowed: &[&'static str]) -> Option<Option<&'static str>> {
+    match v.get(field)? {
+        Value::Null => Some(None),
+        _ => pick(v, field, allowed).map(Some),
+    }
+}
+
+fn u64_of(v: &Value, field: &str) -> Option<u64> {
+    v.get(field)?.as_u64()
+}
+
 /// `Some(None)` for `null`, `None` for a missing or non-integer field.
 fn opt_u64(v: &Value, field: &str) -> Option<Option<u64>> {
     match v.get(field)? {
@@ -429,19 +451,16 @@ fn opt_u64(v: &Value, field: &str) -> Option<Option<u64>> {
 }
 
 /// Parses and validates one report datagram into its key and a one-report bucket.
+/// `None` also for a byte size above `u32::MAX` and for a `would_change` report
+/// with a null byte candidate; the caller counts either as a drop.
 fn parse_report(message: &[u8], hour: u64) -> Option<(Key, Bucket)> {
     let v: Value = serde_json::from_slice(message).ok()?;
-    let u64_of = |v: &Value, field: &str| v.get(field)?.as_u64();
-    let reason = match v.get("reason")? {
-        Value::Null => None,
-        _ => Some(pick(&v, "reason", REASONS)?),
-    };
     let key = Key {
         hour,
         adapter: Some(pick(&v, "adapter", ADAPTERS)?),
         transform: Some(pick(&v, "transform", TRANSFORMS)?),
         outcome: Some(pick(&v, "outcome", OUTCOMES)?),
-        reason,
+        reason: dim(&v, "reason", REASONS)?,
         tool: Some(pick(&v, "tool", TOOLS)?),
     };
     let mut tokens = BTreeMap::new();
@@ -464,11 +483,100 @@ fn parse_report(message: &[u8], hour: u64) -> Option<(Key, Bucket)> {
         tokens,
         dropped: u64_of(&v, "dropped")?,
     };
+    // A size above u32::MAX is not a real tool result; it counts as a drop.
+    let sizes = [bucket.original_bytes, bucket.emitted_bytes];
+    if sizes
+        .into_iter()
+        .chain(bucket.candidate_bytes)
+        .any(|n| n > u32::MAX.into())
+        || !proposal_known(&key, &bucket)
+    {
+        return None;
+    }
     Some((key, bucket))
+}
+
+/// `false` for a `would_change` bucket with a null byte candidate. deslag-core
+/// always sets `candidate_bytes` for `would_change`; a null one would merge
+/// into a known sum and overstate the proposal. A null token candidate is
+/// accepted: adapters without a token counter send one, and
+/// [`Bucket::merge`] keeps the summed token candidate unknown.
+fn proposal_known(key: &Key, b: &Bucket) -> bool {
+    key.outcome != Some("would_change") || b.candidate_bytes.is_some()
 }
 
 /// One `stats.jsonl` line, schema `"v":1`.
 fn line(key: &Key, b: &Bucket) -> String {
+    let mut v = bucket_json(key, b);
+    v["v"] = json!(1);
+    v.to_string()
+}
+
+/// Parses every line of `stats.jsonl` bytes. A line that is not valid UTF-8
+/// is skipped whole, so no replacement character can make it parse.
+pub(crate) fn parse_lines(bytes: &[u8]) -> impl Iterator<Item = (Key, Bucket)> + '_ {
+    bytes
+        .split(|b| *b == b'\n')
+        .filter_map(|l| std::str::from_utf8(l.strip_suffix(b"\r").unwrap_or(l)).ok())
+        .filter_map(parse_line)
+}
+
+/// Parses one `stats.jsonl` line. `None` for a malformed line, another
+/// schema version, a value outside the allowlists, an hour that is not a
+/// multiple of `HOUR`, a partly null dimension key, or a `would_change`
+/// line with a null byte candidate.
+pub(crate) fn parse_line(text: &str) -> Option<(Key, Bucket)> {
+    let v: Value = serde_json::from_str(text).ok()?;
+    if u64_of(&v, "v")? != 1 {
+        return None;
+    }
+    let key = Key {
+        hour: u64_of(&v, "hour")?,
+        adapter: dim(&v, "adapter", ADAPTERS)?,
+        transform: dim(&v, "transform", TRANSFORMS)?,
+        outcome: dim(&v, "outcome", OUTCOMES)?,
+        reason: dim(&v, "reason", REASONS)?,
+        tool: dim(&v, "tool", TOOLS)?,
+    };
+    // A report line sets adapter, transform, outcome and tool. A service line
+    // sets no dimension. Any other mix, or an unaligned hour, is malformed.
+    let dims = [key.adapter, key.transform, key.outcome, key.tool];
+    let set = dims.iter().filter(|d| d.is_some()).count();
+    if !key.hour.is_multiple_of(HOUR) || !(set == dims.len() || set == 0 && key.reason.is_none()) {
+        return None;
+    }
+    let tokens = v
+        .get("tokens")?
+        .as_object()?
+        .iter()
+        // Unknown labels are dropped; the rest of the line stays.
+        .filter(|(label, _)| {
+            TOKEN_LABELS
+                .iter()
+                .any(|(m, t)| **label == format!("{m}:{t}"))
+        })
+        .map(|(label, t)| {
+            let sums = Tokens {
+                original: u64_of(t, "original")?,
+                candidate: opt_u64(t, "candidate")?,
+                emitted: u64_of(t, "emitted")?,
+            };
+            Some((label.clone(), sums))
+        })
+        .collect::<Option<_>>()?;
+    let bucket = Bucket {
+        count: u64_of(&v, "count")?,
+        original_bytes: u64_of(&v, "original_bytes")?,
+        candidate_bytes: opt_u64(&v, "candidate_bytes")?,
+        emitted_bytes: u64_of(&v, "emitted_bytes")?,
+        tokens,
+        dropped: u64_of(&v, "dropped")?,
+    };
+    proposal_known(&key, &bucket).then_some((key, bucket))
+}
+
+/// The dimensions and sums of one bucket as a JSON object.
+pub(crate) fn bucket_json(key: &Key, b: &Bucket) -> Value {
     let tokens: Map<String, Value> = b
         .tokens
         .iter()
@@ -479,7 +587,6 @@ fn line(key: &Key, b: &Bucket) -> String {
         })
         .collect();
     json!({
-        "v": 1,
         "hour": key.hour,
         "adapter": key.adapter,
         "transform": key.transform,
@@ -493,7 +600,6 @@ fn line(key: &Key, b: &Bucket) -> String {
         "tokens": tokens,
         "dropped": b.dropped,
     })
-    .to_string()
 }
 
 /// In-memory aggregation. All methods take `now` so tests inject the clock.
@@ -617,8 +723,9 @@ fn open_private(path: &Path) -> io::Result<fs::File> {
     Ok(file)
 }
 
-/// Removes lines whose hour is before the hour that contains `now - retention`,
-/// via a 0600 temp file renamed over `path`. Unparsable lines, invalid UTF-8 included, are removed too.
+/// Removes lines whose hour is before the hour that contains `now - retention`
+/// and merges lines with equal keys, via a 0600 temp file renamed over `path`.
+/// Lines `parse_line` rejects, invalid UTF-8 included, are removed too.
 // ponytail: reads the whole file; 90 days of hourly buckets stays in the low MBs.
 fn rotate(path: &Path, now: u64, retention: u64) -> io::Result<()> {
     // A symlinked `path` is refused, so the rename cannot replace it.
@@ -631,18 +738,14 @@ fn rotate(path: &Path, now: u64, retention: u64) -> io::Result<()> {
     let mut text = Vec::new();
     file.read_to_end(&mut text)?;
     let cutoff = floor_hour(now.saturating_sub(retention));
-    let kept: Vec<u8> = text
-        .split(|&b| b == b'\n')
-        .filter(|l| {
-            serde_json::from_slice::<Value>(l)
-                .ok()
-                .and_then(|v| v.get("hour")?.as_u64())
-                .is_some_and(|h| h >= cutoff)
-        })
-        .flat_map(|l| l.iter().chain(b"\n"))
-        .copied()
-        .collect();
-    if kept == text {
+    let mut merged = BTreeMap::<Key, Bucket>::new();
+    for (key, bucket) in parse_lines(&text) {
+        if key.hour >= cutoff {
+            merged.entry(key).or_default().merge(&bucket);
+        }
+    }
+    let kept: String = merged.iter().map(|(k, b)| line(k, b) + "\n").collect();
+    if kept.as_bytes() == text {
         // The rewrite path gets 0600 from its temp file; an unchanged store needs the chmod,
         // done on the open handle so a path swapped after the open cannot redirect it.
         return file.set_permissions(fs::Permissions::from_mode(0o600));
@@ -655,7 +758,7 @@ fn rotate(path: &Path, now: u64, retention: u64) -> io::Result<()> {
         .create_new(true)
         .mode(0o600)
         .open(&tmp)
-        .and_then(|mut f| f.write_all(&kept))
+        .and_then(|mut f| f.write_all(kept.as_bytes()))
         .and_then(|()| fs::rename(&tmp, path));
     if result.is_err() {
         let _ = fs::remove_file(&tmp);
@@ -838,27 +941,51 @@ mod tests {
     }
 
     #[test]
-    fn rotation_drops_lines_outside_the_window() {
+    fn rotation_drops_old_and_invalid_lines_and_merges_equal_keys() {
         let (_dir, path) = temp_file("rotate");
         let retention = 2 * DAY;
-        let text: String = [T0 - 3 * DAY, T0 - 2 * DAY, T0 - DAY, T0]
+        let mut text: String = [T0 - 3 * DAY, T0 - 2 * DAY, T0 - DAY]
             .iter()
-            .map(|h| format!("{{\"v\":1,\"hour\":{h}}}\n"))
-            .collect::<String>()
-            + "garbage\n";
+            .map(|h| line(&Key::service(*h), &Bucket::default()) + "\n")
+            .collect();
+        // Two equal-key T0 lines with non-zero sums: the merge must add them.
+        let bucket = |n: u64| Bucket {
+            count: n,
+            original_bytes: 10 * n,
+            candidate_bytes: Some(7 * n),
+            emitted_bytes: 5 * n,
+            dropped: 2 * n,
+            ..Bucket::default()
+        };
+        text += &(line(&Key::service(T0), &bucket(1)) + "\n");
+        text += &(line(&Key::service(T0), &bucket(3)) + "\n");
+        text += "garbage\n{\"v\":1,\"hour\":0}\n";
+        let mut v: Value =
+            serde_json::from_str(&line(&Key::service(T0), &Bucket::default())).unwrap();
+        v["tokens"] = json!({"/etc/passwd": {"original": 1, "candidate": null, "emitted": 1}});
+        text += &(v.to_string() + "\n");
         fs::write(&path, text).unwrap();
         rotate(&path, T0 + 10, retention).unwrap();
-        let hours: Vec<u64> = lines(&path)
-            .iter()
-            .map(|l| l["hour"].as_u64().unwrap())
-            .collect();
+        let got = lines(&path);
+        let hours: Vec<u64> = got.iter().map(|l| l["hour"].as_u64().unwrap()).collect();
         assert_eq!(hours, [T0 - 2 * DAY, T0 - DAY, T0]);
+        assert_eq!(
+            got[2]["tokens"],
+            json!({}),
+            "unknown token labels are dropped"
+        );
+        let want = bucket(4);
+        assert_eq!(got[2]["count"], want.count);
+        assert_eq!(got[2]["original_bytes"], want.original_bytes);
+        assert_eq!(got[2]["candidate_bytes"], json!(want.candidate_bytes));
+        assert_eq!(got[2]["emitted_bytes"], want.emitted_bytes);
+        assert_eq!(got[2]["dropped"], want.dropped);
         let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
         rotate(&path.with_extension("missing"), T0, retention).unwrap();
 
         // Dropping a blank line and adding the final newline keep the length.
-        let valid = format!("{{\"v\":1,\"hour\":{T0}}}");
+        let valid = line(&Key::service(T0), &Bucket::default());
         fs::write(&path, format!("\n{valid}")).unwrap();
         rotate(&path, T0, retention).unwrap();
         assert_eq!(fs::read_to_string(&path).unwrap(), valid + "\n");
@@ -928,6 +1055,37 @@ mod tests {
     }
 
     #[test]
+    fn rotation_drops_unaligned_hours_and_partly_null_keys() {
+        let (_dir, path) = temp_file("shape");
+        let full = json!({"v":1,"hour":T0,"adapter":"hook","transform":"json-minify",
+            "outcome":"changed","reason":null,"tool":"bash","count":1,"original_bytes":10,
+            "candidate_bytes":null,"emitted_bytes":5,"tokens":{},"dropped":0});
+        let with = |field: &str, value: Value| {
+            let mut v = full.clone();
+            v[field] = value;
+            v.to_string() + "\n"
+        };
+        let service = line(&Key::service(T0), &Bucket::default());
+        let mut text = full.to_string() + "\n" + &service + "\n";
+        // Rejected: an unaligned hour, a null adapter with other dimensions set,
+        // and an adapter with a null transform, outcome or tool.
+        text += &with("hour", json!(T0 + 1));
+        text += &with("adapter", Value::Null);
+        for field in ["transform", "outcome", "tool"] {
+            text += &with(field, Value::Null);
+        }
+        let mut reasoned: Value = serde_json::from_str(&service).unwrap();
+        reasoned["reason"] = json!("below_min_bytes");
+        text += &(reasoned.to_string() + "\n");
+        fs::write(&path, text).unwrap();
+        rotate(&path, T0 + 10, DAY).unwrap();
+        let got = lines(&path);
+        assert_eq!(got.len(), 2, "{got:?}");
+        assert!(got[0]["adapter"].is_null(), "service line kept");
+        assert_eq!(got[1]["adapter"], "hook", "full report line kept");
+    }
+
+    #[test]
     fn only_a_missing_or_refused_socket_means_not_running() {
         use io::ErrorKind::*;
         let of = |kind: io::ErrorKind| reachable(Err(io::Error::from(kind)));
@@ -951,5 +1109,122 @@ mod tests {
                 "{kind:?}"
             );
         }
+    }
+
+    #[test]
+    fn parse_lines_rejects_a_line_with_invalid_utf8() {
+        let want = Bucket {
+            count: 1,
+            ..Bucket::default()
+        };
+        let good = line(&Key::service(T0), &want);
+        // An invalid byte inside an extra string field: lossy decoding would accept it.
+        let mut bad = good.clone().into_bytes();
+        bad.truncate(bad.len() - 1);
+        bad.extend_from_slice(b",\"x\":\"\xff\"}");
+        assert!(parse_line(&String::from_utf8_lossy(&bad)).is_some());
+        let mut bytes = bad;
+        bytes.extend_from_slice(b"\n");
+        bytes.extend_from_slice(good.as_bytes());
+        bytes.extend_from_slice(b"\r\n");
+        let parsed: Vec<_> = parse_lines(&bytes).collect();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].1, want);
+    }
+
+    #[test]
+    fn would_change_needs_a_byte_candidate_only() {
+        let known = report("would_change", Some(40), true);
+        let (key, bucket) = parse_report(&known, T0).unwrap();
+        assert!(parse_line(&line(&key, &bucket)).is_some());
+        // Rejected: a would_change report or line with a null byte candidate.
+        assert!(parse_report(&report("would_change", None, false), T0).is_none());
+        let mut l: Value = serde_json::from_str(&line(&key, &bucket)).unwrap();
+        l["candidate_bytes"] = Value::Null;
+        assert!(parse_line(&l.to_string()).is_none());
+        // Accepted: null tokens, and a null token candidate.
+        assert!(parse_report(&report("would_change", Some(40), false), T0).is_some());
+        let mut v: Value = serde_json::from_slice(&known).unwrap();
+        v["tokens"]["candidate"] = Value::Null;
+        let (_, unknown) = parse_report(v.to_string().as_bytes(), T0).unwrap();
+        let mut l: Value = serde_json::from_str(&line(&key, &bucket)).unwrap();
+        l["tokens"]["estimate:deslag-estimate-v1"]["candidate"] = Value::Null;
+        assert!(parse_line(&l.to_string()).is_some());
+        // Accepted: other outcomes with any candidate fields.
+        for outcome in ["changed", "skipped", "failed"] {
+            for (candidate, tokens) in [(None, false), (Some(40), true)] {
+                let r = report(outcome, candidate, tokens);
+                assert!(parse_report(&r, T0).is_some(), "{outcome}");
+            }
+            let mut v: Value = serde_json::from_slice(&known).unwrap();
+            v["outcome"] = json!(outcome);
+            v["candidate_bytes"] = Value::Null;
+            v["tokens"]["candidate"] = Value::Null;
+            assert!(
+                parse_report(v.to_string().as_bytes(), T0).is_some(),
+                "{outcome}"
+            );
+        }
+        // One unknown token candidate makes the merged sum unknown, in either order.
+        for (a, b) in [(&bucket, &unknown), (&unknown, &bucket)] {
+            let mut sum = a.clone();
+            sum.merge(b);
+            let t = &sum.tokens["estimate:deslag-estimate-v1"];
+            assert_eq!((t.original, t.candidate), (20, None));
+            assert_eq!(sum.candidate_bytes, Some(80));
+        }
+    }
+
+    #[test]
+    fn sizes_above_u32_max_are_rejected() {
+        let big = u64::from(u32::MAX) + 1;
+        for field in ["original_bytes", "candidate_bytes", "emitted_bytes"] {
+            let mut v: Value = serde_json::from_slice(&report("changed", Some(40), true)).unwrap();
+            v[field] = json!(big);
+            assert!(
+                parse_report(v.to_string().as_bytes(), T0).is_none(),
+                "{field}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_observe_report_without_a_token_counter_is_kept() {
+        let (_dir, path) = temp_file("observe");
+        let socket = path.with_file_name("observe.sock");
+        let receiver = UnixDatagram::bind(&socket).unwrap();
+        let ctx = deslag_core::CompressionContext {
+            mode: deslag_core::Mode::Observe,
+            ..deslag_core::FIRST_SLICE_JSON_MINIFY_CONTEXT
+        };
+        assert!(ctx.token_counter.is_none());
+        let input = "{ \"a\" : [ 1 , 2 , 3 ] ,  \"b\" : \"text\" }";
+        deslag_telemetry::compress_reported(
+            input,
+            &ctx,
+            Some(&socket),
+            deslag_telemetry::Adapter::Hook,
+            deslag_telemetry::ToolCategory::Bash,
+        );
+        let mut buf = vec![0; MAX_MESSAGE_BYTES];
+        let n = receiver.recv(&mut buf).unwrap();
+        let sent: Value = serde_json::from_slice(&buf[..n]).unwrap();
+        assert_eq!(sent["outcome"], "would_change");
+        assert_eq!(sent["tokens"]["candidate"], Value::Null);
+
+        let mut s = Service::new(path, 90 * DAY, T0);
+        s.record(&buf[..n], T0 + 1);
+        let (key, b) = s.buckets.iter().next().unwrap();
+        assert_eq!(s.buckets.len(), 1, "kept, not a service drop");
+        assert_eq!(key.outcome, Some("would_change"));
+        assert!(
+            b.original_bytes > b.candidate_bytes.unwrap(),
+            "proposal is non-zero"
+        );
+        let json = bucket_json(key, b);
+        assert_eq!(
+            json["tokens"]["estimate:deslag-estimate-v1"]["candidate"],
+            Value::Null
+        );
     }
 }
