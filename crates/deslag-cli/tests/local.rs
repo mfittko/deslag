@@ -296,8 +296,14 @@ fn run_applies_the_retention_days_argument() {
         .unwrap()
         .as_secs();
     let hour = now - now % 3600;
-    let old = format!(r#"{{"hour":{},"dropped":1}}"#, hour - 2 * 24 * 3600);
-    let recent = format!(r#"{{"hour":{hour},"dropped":2}}"#);
+    // Canonical service lines: rotation drops lines it cannot parse.
+    let service_line = |hour: u64, dropped: u64| {
+        format!(
+            r#"{{"adapter":null,"candidate_bytes":null,"count":0,"dropped":{dropped},"emitted_bytes":0,"hour":{hour},"original_bytes":0,"outcome":null,"reason":null,"tokens":{{}},"tool":null,"transform":null,"v":1}}"#
+        )
+    };
+    let old = service_line(hour - 2 * 24 * 3600, 1);
+    let recent = service_line(hour, 2);
     let stats = dir.join("stats.jsonl");
     fs::write(&stats, format!("{old}\n{recent}\n")).unwrap();
     fs::set_permissions(&stats, fs::Permissions::from_mode(0o600)).unwrap();
@@ -440,6 +446,7 @@ fn invalid_or_unlisted_reports_count_as_drops() {
         ("adapter", serde_json::json!("other")),
         ("reason", serde_json::json!("session-123")),
         ("original_bytes", serde_json::json!(-1)),
+        ("emitted_bytes", serde_json::json!(u64::from(u32::MAX) + 1)),
         (
             "tokens",
             serde_json::json!({"method":"estimate","tokenizer":"/etc/passwd","original":1,"candidate":null,"emitted":1}),
@@ -469,9 +476,10 @@ fn invalid_or_unlisted_reports_count_as_drops() {
 
 #[test]
 fn full_range_u64_sizes_and_tokens_parse() {
-    // serde_json's arbitrary_precision is on workspace-wide; as_u64 must still accept u64::MAX.
+    // serde_json's arbitrary_precision is on workspace-wide; as_u64 must still accept
+    // u64::MAX. Sizes stop at the u32::MAX cap that parse_report applies.
     let mut v = report();
-    v["original_bytes"] = serde_json::json!(u64::MAX);
+    v["original_bytes"] = serde_json::json!(u32::MAX);
     v["tokens"]["original"] = serde_json::json!(u64::MAX);
     let mut messages = vec![v.to_string().into_bytes()];
     for bad in [
@@ -485,7 +493,10 @@ fn full_range_u64_sizes_and_tokens_parse() {
     let (reports, dropped) = record("u64", &messages);
     assert_eq!(dropped, 3);
     assert_eq!(reports.len(), 1, "{reports:?}");
-    assert_eq!(reports[0]["original_bytes"].as_u64(), Some(u64::MAX));
+    assert_eq!(
+        reports[0]["original_bytes"].as_u64(),
+        Some(u64::from(u32::MAX))
+    );
     let tokens = &reports[0]["tokens"]["estimate:deslag-estimate-v1"];
     assert_eq!(tokens["original"].as_u64(), Some(u64::MAX));
 }
