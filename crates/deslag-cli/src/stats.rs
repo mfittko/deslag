@@ -4,7 +4,8 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    io::{self, Write},
+    io::{self, Read, Seek, SeekFrom, Write},
+    path::Path,
     process::ExitCode,
 };
 
@@ -63,6 +64,40 @@ pub(crate) fn session_document(
 ) -> Result<String, String> {
     let stats = Stats::load(since_secs, Some(session), control)?;
     Ok(format!("{:#}\n", stats.session_json(session)))
+}
+
+/// The tail of `requests.jsonl` that holds every line with a `time` of at
+/// least `since`. Lines are in time order, so the read goes backward in
+/// doubling chunks and stops at the first complete line older than `since`.
+/// The tail may start with older or malformed lines; readers filter them.
+// ponytail: a clock set back can append older times after newer ones; lines
+// of the window before such a stop point are not read.
+fn read_since(path: &Path, since: u64) -> io::Result<Vec<u8>> {
+    let mut file = fs::File::open(path)?;
+    let mut start = file.metadata()?.len();
+    let mut tail = Vec::new();
+    while start > 0 {
+        let step = start.min((tail.len() as u64).max(64 * 1024));
+        start -= step;
+        let mut chunk = vec![0; step as usize];
+        file.seek(SeekFrom::Start(start))?;
+        file.read_exact(&mut chunk)?;
+        chunk.append(&mut tail);
+        tail = chunk;
+        // The bytes before the first newline may be a partial line.
+        let complete = match tail.iter().position(|b| *b == b'\n') {
+            Some(i) if start > 0 => &tail[i + 1..],
+            Some(_) => &tail[..],
+            None => continue,
+        };
+        if local::parse_requests(complete)
+            .next()
+            .is_some_and(|r| r.time < since)
+        {
+            break;
+        }
+    }
+    Ok(tail)
 }
 
 /// `(--json, --since value, --session value)`. `None` for any other argument,
@@ -179,23 +214,35 @@ struct Stats {
 impl Stats {
     /// Sends `control` to a running service, then reads the state dir's files
     /// for the last `since_secs`. Errs when a file exists but cannot be read.
+    /// A failed `flush` counts as a stopped service. A failed `requests`, which
+    /// the service's own HTTP bridge sends, errs, so a session read never
+    /// answers without the queued requests.
     fn load(since_secs: u64, session: Option<&str>, control: &str) -> Result<Self, String> {
         // A running service writes its open hour (`flush`) or its queued
         // requests (`requests`) first, so the current hour is complete.
-        let running = local::control(control, local::CONTROL_TIMEOUT).is_ok();
+        let running = match local::control(control, local::CONTROL_TIMEOUT) {
+            Ok(()) => true,
+            Err(e) if control == "requests" => {
+                return Err(format!("cannot write queued requests: {e}"));
+            }
+            Err(_) => false,
+        };
         // Undocumented fixed clock for tests.
         let now = std::env::var("DESLAG_NOW")
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or_else(local::now);
-        let read = |name: &str| match state_dir().map(|d| fs::read(d.join(name))) {
+        let since = local::floor_hour(now.saturating_sub(since_secs));
+        let read = |name: &str, read: &dyn Fn(&Path) -> io::Result<Vec<u8>>| match state_dir()
+            .map(|d| read(&d.join(name)))
+        {
             Some(Ok(bytes)) => Ok(bytes),
             None => Ok(Vec::new()),
             Some(Err(e)) if e.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
             Some(Err(e)) => Err(format!("cannot read {name}: {e}")),
         };
-        let (text, requests) = (read(STATS_FILE)?, read(REQUESTS_FILE)?);
-        let since = local::floor_hour(now.saturating_sub(since_secs));
+        let text = read(STATS_FILE, &|p| fs::read(p))?;
+        let requests = read(REQUESTS_FILE, &|p| read_since(p, since))?;
         Ok(Stats::read(&text, &requests, since, now, running, session))
     }
 
@@ -396,5 +443,37 @@ impl Stats {
             u.tokens[3],
             opt(u.estimated_removed_tokens),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_since_stops_at_the_first_line_older_than_since() {
+        let dir = std::env::temp_dir().join(format!("deslag-read-since-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(REQUESTS_FILE);
+        let line = |time: u64| {
+            format!(
+                r#"{{"v":1,"time":{time},"session":"s","turn":"t","index":0,"model":"m","usage":null,"compression_reports":0,"estimated_removed_tokens":null,"dropped":0}}"#
+            ) + "\n"
+        };
+        // Old lines over several chunks, a malformed line, then the window.
+        let old: String = (0..20_000).map(line).collect();
+        let new: String = (100_000..100_003).map(line).collect();
+        fs::write(&path, format!("{old}not json\n{new}")).unwrap();
+        let tail = read_since(&path, 100_000).unwrap();
+        assert!(tail.ends_with(new.as_bytes()));
+        assert!(tail.len() < old.len() / 2, "read {} bytes", tail.len());
+        let times: Vec<u64> = local::parse_requests(&tail)
+            .map(|r| r.time)
+            .filter(|t| *t >= 100_000)
+            .collect();
+        assert_eq!(times, [100_000, 100_001, 100_002]);
+        // A window older than every line reads the whole file.
+        assert_eq!(read_since(&path, 0).unwrap(), fs::read(&path).unwrap());
+        fs::remove_dir_all(&dir).unwrap();
     }
 }

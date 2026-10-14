@@ -300,12 +300,14 @@ enum HttpRequest {
 /// connection. Forwards each `POST /usage` body as one datagram to `target`:
 /// 204 when the datagram was sent, 503 when it was not (service busy).
 /// Answers `GET /session/<id>` with 200 and the `deslag stats --json
-/// --session <id>` document of the last 24 hours, or 500 when a state file
-/// cannot be read. Anything else is 400.
+/// --session <id>` document of the last 24 hours, or 500 when the queued
+/// requests cannot be written or a state file cannot be read. Anything else
+/// is 400.
 // ponytail: one connection at a time with a 500 ms deadline per request; a
 // slow client delays the rest, and the usage module drops what does not fit
-// its cap. A session read writes the queued requests and parses
-// requests.jsonl on every call; cache the parsed window if reads outgrow that.
+// its cap. A session read writes the queued requests and parses the last 24
+// hours of requests.jsonl, read backward from its end, on every call; keep
+// per-session totals in the service if one day of traffic outgrows that.
 fn bridge(listener: &UnixListener, target: &Path) {
     for stream in listener.incoming() {
         let Ok(mut stream) = stream else {

@@ -145,11 +145,12 @@ let generation = 0;
 // Opt-in with DESLAG_SAVINGS_WIDGET=1. Shows the line after a delivered send,
 // and clears it on a failed delivery, a failed read or a read slower than
 // READ_TIMEOUT_MS. A record dropped without a send (send cap, invalid ids, no
-// state dir) or a refresh over the read cap leaves the line unchanged.
+// state dir) leaves the line unchanged. A refresh over the read cap leaves it
+// unchanged too, but still ends every older read's claim on the line.
 async function refresh($, sent) {
   if (sent == null || (await $.env.get('DESLAG_SAVINGS_WIDGET')) !== '1') return;
-  if (sent && reads >= MAX_READS) return;
   const mine = ++generation;
+  if (sent && reads >= MAX_READS) return;
   let text;
   if (sent) {
     reads++;

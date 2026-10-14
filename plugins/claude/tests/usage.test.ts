@@ -395,6 +395,32 @@ describe('savings widget', () => {
     expect(w.shown).toEqual([]);
   });
 
+  test('a refresh over the read cap still makes both hung reads stale', OPTS, async ($, on) => {
+    const w = world(on, { ...WIDGET });
+    const answers: (() => void)[] = [];
+    w.reply = serve(() => new Promise((r) => answers.push(() => r(json(DOC)))));
+    for (const index of [0, 1]) {
+      const posted = w.fetched();
+      await step($, w, result(index));
+      await posted;
+      await w.fetched();
+    }
+    const thirdFlag = new Promise<void>((r) => (w.onRead = (n) => n === 'DESLAG_SAVINGS_WIDGET' && r()));
+    const posted = w.fetched();
+    await step($, w, result(2));
+    await posted;
+    await thirdFlag;
+    w.onRead = () => {};
+    // One macrotask lets step 2's refresh hit the cap and return.
+    await new Promise((r) => setTimeout(r, 0));
+    // The newest hung read settles after step 2's newer delivered record.
+    const settled = new Promise<void>((r) => (w.onSettle = r));
+    answers[1]();
+    await settled;
+    await new Promise((r) => setTimeout(r, 0));
+    expect(w.shown).toEqual([]);
+  });
+
   test('only the latest refresh sets the line', OPTS, async ($, on) => {
     const w = world(on, { ...WIDGET });
     const answers: ((doc: any) => void)[] = [];

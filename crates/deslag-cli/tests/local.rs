@@ -869,6 +869,24 @@ fn an_unreadable_requests_file_answers_500_and_the_bridge_keeps_serving() {
 }
 
 #[test]
+fn a_session_read_that_cannot_write_the_queued_requests_answers_500() {
+    let dir = state_dir("bridgewrite500");
+    let _cleanup = RemoveOnDrop(dir.clone());
+    // Killed on drop: `stop` cannot write the queued record either.
+    let _service = run(&dir);
+    // Readable, but read-only after the startup rotation set it to 0600.
+    let path = dir.join("requests.jsonl");
+    fs::write(&path, "").unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o400)).unwrap();
+    assert_eq!(post_usage(&dir, SESSION, 0), "HTTP/1.1 204 No Content");
+    let read = format!("GET /session/{SESSION} HTTP/1.1\r\n\r\n");
+    assert_eq!(
+        http(&dir, read.as_bytes()),
+        "HTTP/1.1 500 Internal Server Error"
+    );
+}
+
+#[test]
 fn rotation_drops_old_and_malformed_request_lines() {
     let dir = state_dir("reqrot");
     let _cleanup = RemoveOnDrop(dir.clone());
