@@ -7,6 +7,53 @@ until a release folds them in; see `changes/README.md` and `docs/release.md`.
 
 ## Unreleased
 
+## 0.1.0-alpha.3 - 2026-10-14
+
+### Added
+
+- Every transform applies the context token gain thresholds `min_estimated_token_savings` (default 64) and `min_estimated_savings_permille` (default 100, ratio 0.10) when a token counter is set, and skips with `insufficient_gain` below them (#63)
+- `deslag hook claude --minify-json` also minifies JSON in the text blocks of MCP tool results; Bash image results, stderr and all other fields and tools stay unchanged (#17)
+- `deslag hook claude --minify-json` leaves the output unchanged and reports on stderr when another `PostToolUse` hook in user, project or enabled-plugin settings may also replace it (#17)
+- `deslag local run [--retention-days N]` runs an optional foreground service that aggregates compression reports into hourly buckets in a private `stats.jsonl` (#21)
+- `deslag local start [--retention-days N]` starts that service in the background, `deslag local stop` writes the open hour and stops it, and `deslag local status` reports whether it runs (#21)
+- The service answers `ping`, `flush` and `stop` with `ok`. When the `stats.jsonl` write fails, `flush` and `stop` log the error to stderr, answer `flush failed: <error>` and keep the service running (#21)
+- The drop count of an hour is the sum of `dropped` over all its `stats.jsonl` lines: report lines carry sender delivery failures and service lines carry service drops (#21)
+- `deslag_telemetry::ensure_state_dir` follows a symlinked state directory and refuses a non-directory or a directory not owned by the current user, so `deslag local start` and `run` fail in those cases (#21)
+- `deslag stats [--json] [--since <n>h|<n>d]` prints the aggregates as a table or as versioned JSON (#21)
+- The local service answers `GET /session/<id>` on `local-http.sock` with the `deslag stats --json --session <id>` document of the last 24 hours (#91)
+- The local service answers a `requests` control message on `local.sock`. It writes only the queued `requests.jsonl` lines, plus the buckets when one holds drops, and answers `ok`, or `flush failed: <error>` when the write fails (#91)
+- The Claude Code usage module has an opt-in savings widget. With `DESLAG_SAVINGS_WIDGET=1`, the status line shows the estimated tokens removed from each model request next to its provider input tokens, plus the session total of the last 24 hours, labeled as an estimate (#91)
+- `docs/demo.md` walks through hook compression and the savings widget in a throwaway session (#91)
+- The proxy pins one decision per tool result in a local session manifest, replays it on every later request and returns `400` when the replay state cannot reproduce the history (#18)
+- With replay, a busy, expired or panicked proxy compression job no longer forwards the whole body unrewritten: the new tool result is recorded as `unchanged`, and a result pinned as json-minify is re-encoded outside the bounded executor, so history bytes never change (#18)
+- `deslag_proxy::session` stores the compression owner (`hook`, `proxy` or `none`) in `<state dir>/owner` and keeps per-session replay manifests that pin one decision per tool result, committed atomically and removed once their mtime is older than 30 days (a replay that commits nothing refreshes the mtime at most once a day, so an idle manifest can be removed up to one day before 30 days without use); nothing calls it yet (#18)
+- The Claude Code plugin has an opt-in usage module that sends the provider usage of each model request to the local service. Enable it with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` and `DESLAG_USAGE_STATS=1`. Failed and dropped sends are counted (#90)
+- The local service accepts usage records over the HTTP socket `local-http.sock` and stores one line per model request in `requests.jsonl` (#90)
+- Hook compression reports carry the session ID, and the service attributes them to the next model request of that session (#90)
+- `deslag stats --json` reports `totals.usage`, and `deslag stats --json --session <id>` lists the requests of one session with provider usage and estimated removed tokens (#90)
+
+### Changed
+
+- `deslag hook claude --minify-json` and the proxy run compression under the bounded executor (4 parallel jobs, 10 ms per job); a busy, expired or panicked job leaves the hook output unchanged with the stderr diagnostic `deslag: compression <busy|budget_exceeded|job_panicked>; tool output unchanged` and forwards the original proxy body; a panicked job also prints the default Rust panic message to stderr (#63)
+- The proxy moves request rewriting from the async worker threads to the blocking thread pool. The inspection permit stays held until the rewrite ends, also when the client disconnects; `deslag_proxy::Limits` gains an `executor` field and is no longer `Copy` (#63)
+- The `lines-v2` encoder no longer stops templating below back-to-back or periodic outlier lines; it writes the best-paying group prefix and stops a group before a paying run when the run's first row adds a variable index or when the run directive saves more than the run's copies would as group rows. The `line-templates` transform version is now 2 (#59)
+- The local service counts a report with a byte size above 2^32 - 1 as a service drop, since no real tool result is that large (#21)
+- The local service counts a `would_change` report with a null `candidate_bytes` as a service drop, since deslag-core always sets it in observe mode. A null token candidate is kept, and a token sum that includes one is null (#21)
+- Rotation merges `stats.jsonl` lines with equal keys into one line. It removes every line that fails validation: another schema version, a value outside the allowlists, a missing or non-integer field, an hour that is not a multiple of 3600, partly null dimensions, or outcome `would_change` with a null `candidate_bytes`. It removes unknown token labels and keeps the rest of the line. Before, rotation kept any JSON line with a numeric `hour` (#21)
+- The release workflow publishes through `scripts/release/publish.sh`, with tests for re-runs on complete, empty and partial releases (#45)
+- `deslag stats` reports the `no_data` partial reason only when the window has no lines and the service is not running. A running service with an empty window no longer reports `no_data` (#91)
+- The plugin and marketplace descriptions name the hook adapter, the opt-in usage module and the opt-in savings widget, and no longer call the plugin a no-op (#91)
+- `--minify-json` on `deslag hook claude` and `deslag proxy` now requires an owner file in the state dir: each compresses only when `<state dir>/owner` names that component. An existing `--minify-json` setup without an owner file stops compressing after upgrade. Change the owner only between sessions: after a mid-session change from `proxy` to `hook`, the proxy keeps replaying earlier decisions while the hook compresses new results (#18)
+- `deslag proxy --minify-json` now needs a state directory and fails at startup without one. It rewrites only requests with an `X-Claude-Code-Session-Id` header and removes manifests not modified for 30 days at startup (#18)
+- The `table-v2` encoder now picks the table or bucket block for a hole or a sub-block array after sub-tables apply to both candidates, as it already did for a bare array, so every site uses the same selection order. The chosen block can still differ beyond its labels when label length changes a reference-cell decision or the nesting level reaches its limit. Selection compares bytes only, so with a token counter a bare array whose table-v1 text fails only the token check now passes through where a longer bucket block used to win. The `json-table` transform version is now 5 (#65)
+- The plugin's `hooks/hooks.json` holds `"modules"` next to `"hooks"`. This mixed file passes `claude plugin validate` and `claude plugin test` on Claude Code 2.1.296 and 2.1.299. A live hook run on 2.1.296 is pending (#90)
+- `totals.dropped` in `deslag stats --json` also counts the drops carried by usage records (#90)
+
+### Fixed
+
+- `bump.sh` refreshes `fuzz/Cargo.lock`, and `check-versions.sh` fails when it pins another `deslag-core` version (#67)
+- The `json-table` transform encodes a 1 MiB bare array in about 9 to 10 ms instead of about 20 ms at p50 on the benchmark machine. The encoder minifies the input once, builds the table block once for the table-v1 and table-v2 forms, and skips the sub-table rewrite for arrays without stringified JSON. Output bytes are unchanged (#79)
+
 ## 0.1.0-alpha.2 - 2026-10-12
 
 ### Added
