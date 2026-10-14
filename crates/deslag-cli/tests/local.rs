@@ -750,6 +750,58 @@ fn usage_records_take_the_hook_reports_of_their_session() {
 }
 
 #[test]
+fn the_bridge_answers_a_session_read_with_the_stats_document() {
+    let dir = state_dir("session");
+    let _cleanup = RemoveOnDrop(dir.clone());
+    let service = run(&dir);
+    assert_eq!(post_usage(&dir, SESSION, 0), "HTTP/1.1 204 No Content");
+    let mut stream = UnixStream::connect(dir.join("local-http.sock")).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    write!(
+        stream,
+        "GET /session/{SESSION} HTTP/1.1\r\nhost: deslag\r\n\r\n"
+    )
+    .unwrap();
+    let mut reply = String::new();
+    stream.read_to_string(&mut reply).unwrap();
+    let (head, body) = reply.split_once("\r\n\r\n").unwrap();
+    assert!(head.starts_with("HTTP/1.1 200 OK\r\n"), "{reply}");
+    assert!(head.contains("Content-Type: application/json"), "{head}");
+    assert!(
+        head.contains(&format!("Content-Length: {}", body.len())),
+        "{head}"
+    );
+    let doc: serde_json::Value = serde_json::from_str(body).unwrap();
+    assert_eq!(doc["schema_version"], 1);
+    assert_eq!(doc["session"], SESSION);
+    let listed = doc["requests"].as_array().unwrap();
+    assert_eq!(listed.len(), 1, "{doc}");
+    assert_eq!(listed[0]["usage"]["input_tokens"], 100);
+    assert_eq!(listed[0]["estimated_removed_tokens"], 0);
+    // Same document as the CLI, except the clock.
+    let cli = stdout(&deslag(
+        &dir,
+        &["stats", "--json", "--session", SESSION],
+        b"",
+    ));
+    let mut cli: serde_json::Value = serde_json::from_str(&cli).unwrap();
+    cli["window"] = doc["window"].clone();
+    assert_eq!(cli, doc);
+
+    for bad in ["a%20b", "a:b", &"x".repeat(65), ""] {
+        let request = format!("GET /session/{bad} HTTP/1.1\r\n\r\n");
+        assert_eq!(
+            http(&dir, request.as_bytes()),
+            "HTTP/1.1 400 Bad Request",
+            "{bad}"
+        );
+    }
+    service.stop();
+}
+
+#[test]
 fn usage_records_work_with_hook_compression_off() {
     // No owner file: the hook does not compress and sends no report.
     let dir = state_dir("usageoff");

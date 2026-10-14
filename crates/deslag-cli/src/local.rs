@@ -18,7 +18,8 @@
 //! HTTP socket `local-http.sock`, which forwards each body as one datagram.
 //! Each becomes one line of the private `requests.jsonl`, written with the
 //! buckets. Compression reports with a `session` count toward the next usage
-//! record of that session.
+//! record of that session. `GET /session/<id>` on the same socket answers
+//! the session's `deslag stats --json --session <id>` document.
 
 use std::{
     collections::BTreeMap,
@@ -284,13 +285,25 @@ fn run(retention_days: u64) -> Result<(), String> {
 /// Read budget of one HTTP bridge request, headers included.
 const MAX_HTTP_BYTES: usize = 2048;
 
-/// Forwards each `POST /usage` body from the HTTP socket as one datagram to
-/// `target`, one connection at a time. Answers 204 when the datagram was
-/// sent, 503 when it was not (service busy) and 400 for anything else, and
-/// always closes the connection.
+/// One request the HTTP bridge accepts.
+#[derive(Debug, PartialEq)]
+enum HttpRequest {
+    /// The body of a `POST /usage`.
+    Usage(Vec<u8>),
+    /// The session ID of a `GET /session/<id>`.
+    Session(String),
+}
+
+/// Answers the HTTP socket one connection at a time, and always closes the
+/// connection. Forwards each `POST /usage` body as one datagram to `target`:
+/// 204 when the datagram was sent, 503 when it was not (service busy).
+/// Answers `GET /session/<id>` with 200 and the `deslag stats --json
+/// --session <id>` document of the last 24 hours, or 500 when a state file
+/// cannot be read. Anything else is 400.
 // ponytail: one connection at a time with a 500 ms deadline per request; a
 // slow client delays the rest, and the usage module drops what does not fit
-// its cap.
+// its cap. A session read flushes the service and parses requests.jsonl on
+// every call; cache the parsed window if reads outgrow that.
 fn bridge(listener: &UnixListener, target: &Path) {
     for stream in listener.incoming() {
         let Ok(mut stream) = stream else {
@@ -298,28 +311,53 @@ fn bridge(listener: &UnixListener, target: &Path) {
             thread::sleep(Duration::from_millis(100));
             continue;
         };
-        let status = match read_usage(&mut stream) {
-            Some(body) if deslag_telemetry::send(target, &body) => "204 No Content",
-            Some(_) => "503 Service Unavailable",
-            None => "400 Bad Request",
+        let (status, body) = match read_request(&mut stream) {
+            Some(HttpRequest::Usage(body)) if deslag_telemetry::send(target, &body) => {
+                ("204 No Content", None)
+            }
+            Some(HttpRequest::Usage(_)) => ("503 Service Unavailable", None),
+            Some(HttpRequest::Session(id)) => {
+                match crate::stats::session_document(&id, 24 * HOUR) {
+                    Ok(doc) => ("200 OK", Some(doc)),
+                    Err(e) => {
+                        log(io::Error::other(e));
+                        ("500 Internal Server Error", None)
+                    }
+                }
+            }
+            None => ("400 Bad Request", None),
         };
         let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
-        let _ = write!(stream, "HTTP/1.1 {status}\r\nConnection: close\r\n\r\n");
+        let _ = match body {
+            Some(body) => write!(
+                stream,
+                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\n\
+                 Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            ),
+            None => write!(stream, "HTTP/1.1 {status}\r\nConnection: close\r\n\r\n"),
+        };
     }
 }
 
-/// The body of one `POST /usage` request with a `Content-Length` of at most
-/// [`MAX_MESSAGE_BYTES`] and a body that starts with `{`, so control messages
-/// such as `stop` never pass. `None` for any other request, a read error, a
-/// read past [`MAX_HTTP_BYTES`] or a request not complete within 500 ms.
-fn read_usage(stream: &mut UnixStream) -> Option<Vec<u8>> {
+/// One `POST /usage` with a `Content-Length` of at most [`MAX_MESSAGE_BYTES`]
+/// and a body that starts with `{`, so control messages such as `stop` never
+/// pass, or one `GET /session/<id>` with a valid ID. `None` for any other
+/// request, a read error, a read past [`MAX_HTTP_BYTES`] or a request not
+/// complete within 500 ms.
+fn read_request(stream: &mut UnixStream) -> Option<HttpRequest> {
     let deadline = Instant::now() + Duration::from_millis(500);
     let mut buf = [0; MAX_HTTP_BYTES];
     let mut n = 0;
     loop {
         if let Some(end) = buf[..n].windows(4).position(|w| w == b"\r\n\r\n") {
             let mut lines = std::str::from_utf8(&buf[..end]).ok()?.split("\r\n");
-            if !lines.next()?.starts_with("POST /usage ") {
+            let first = lines.next()?;
+            if let Some(path) = first.strip_prefix("GET /session/") {
+                let (id, _) = path.split_once(' ')?;
+                return valid_id(id).then(|| HttpRequest::Session(id.to_string()));
+            }
+            if !first.starts_with("POST /usage ") {
                 return None;
             }
             let len: usize = lines.find_map(|l| {
@@ -333,7 +371,9 @@ fn read_usage(stream: &mut UnixStream) -> Option<Vec<u8>> {
             }
             if n >= body + len {
                 let body = &buf[body..body + len];
-                return body.starts_with(b"{").then(|| body.to_vec());
+                return body
+                    .starts_with(b"{")
+                    .then(|| HttpRequest::Usage(body.to_vec()));
             }
         }
         if n == buf.len() {
@@ -1128,20 +1168,23 @@ mod tests {
     }
 
     #[test]
-    fn read_usage_returns_a_complete_request_body() {
+    fn read_request_returns_a_complete_request_body() {
         let (mut client, mut server) = UnixStream::pair().unwrap();
         client
             .write_all(b"POST /usage HTTP/1.1\r\nContent-Length: 2\r\n\r\n{}")
             .unwrap();
-        assert_eq!(read_usage(&mut server), Some(b"{}".to_vec()));
+        assert_eq!(
+            read_request(&mut server),
+            Some(HttpRequest::Usage(b"{}".to_vec()))
+        );
     }
 
     #[test]
-    fn read_usage_gives_up_on_a_stalled_request_at_the_deadline() {
+    fn read_request_gives_up_on_a_stalled_request_at_the_deadline() {
         let (mut client, mut server) = UnixStream::pair().unwrap();
         client.write_all(b"POST /usage HTTP/1.1\r\n").unwrap();
         let start = Instant::now();
-        assert_eq!(read_usage(&mut server), None);
+        assert_eq!(read_request(&mut server), None);
         assert!(start.elapsed() < Duration::from_secs(1));
         drop(client);
     }

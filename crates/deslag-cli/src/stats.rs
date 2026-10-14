@@ -29,41 +29,35 @@ pub fn command(args: &[&str]) -> ExitCode {
         eprintln!("{USAGE}");
         return ExitCode::from(crate::EX_USAGE);
     };
-    // A running service writes its open hour first, so the current hour is complete.
-    let running = local::control("flush", local::CONTROL_TIMEOUT).is_ok();
-    // Undocumented fixed clock for tests.
-    let now = std::env::var("DESLAG_NOW")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or_else(local::now);
-    let read = |name: &str| match state_dir().map(|d| fs::read(d.join(name))) {
-        Some(Ok(bytes)) => Ok(bytes),
-        None => Ok(Vec::new()),
-        Some(Err(e)) if e.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
-        Some(Err(e)) => {
-            eprintln!("deslag: cannot read {name}: {e}");
-            Err(ExitCode::from(2))
+    let out = match session {
+        Some(session) => session_document(session, since_secs),
+        None => Stats::load(since_secs, None).map(|stats| match as_json {
+            true => format!("{:#}\n", stats.json()),
+            false => stats.table(since_arg),
+        }),
+    };
+    let out = match out {
+        Ok(out) => out,
+        Err(e) => {
+            eprintln!("deslag: {e}");
+            return ExitCode::from(2);
         }
     };
-    let (text, requests) = match (read(STATS_FILE), read(REQUESTS_FILE)) {
-        (Ok(text), Ok(requests)) => (text, requests),
-        (Err(code), _) | (_, Err(code)) => return code,
-    };
-    let since = local::floor_hour(now.saturating_sub(since_secs));
-    let stats = Stats::read(&text, &requests, since, now, running, session);
-    let mut stdout = io::stdout().lock();
-    let written = match session {
-        Some(session) => writeln!(stdout, "{:#}", stats.session_json(session)),
-        None if as_json => writeln!(stdout, "{:#}", stats.json()),
-        None => write!(stdout, "{}", stats.table(since_arg)),
-    };
-    match written {
+    match io::stdout().lock().write_all(out.as_bytes()) {
         Err(e) if e.kind() != io::ErrorKind::BrokenPipe => {
             eprintln!("deslag: cannot write stats: {e}");
             ExitCode::from(2)
         }
         _ => ExitCode::SUCCESS,
     }
+}
+
+/// The `deslag stats --json --session <id>` output, newline included. The
+/// service's HTTP bridge answers `GET /session/<id>` with it for the default
+/// 24h window.
+pub(crate) fn session_document(session: &str, since_secs: u64) -> Result<String, String> {
+    let stats = Stats::load(since_secs, Some(session))?;
+    Ok(format!("{:#}\n", stats.session_json(session)))
 }
 
 /// `(--json, --since value, --session value)`. `None` for any other argument,
@@ -178,6 +172,27 @@ struct Stats {
 }
 
 impl Stats {
+    /// Flushes a running service, then reads the state dir's files for the
+    /// last `since_secs`. Errs when a file exists but cannot be read.
+    fn load(since_secs: u64, session: Option<&str>) -> Result<Self, String> {
+        // A running service writes its open hour first, so the current hour is complete.
+        let running = local::control("flush", local::CONTROL_TIMEOUT).is_ok();
+        // Undocumented fixed clock for tests.
+        let now = std::env::var("DESLAG_NOW")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or_else(local::now);
+        let read = |name: &str| match state_dir().map(|d| fs::read(d.join(name))) {
+            Some(Ok(bytes)) => Ok(bytes),
+            None => Ok(Vec::new()),
+            Some(Err(e)) if e.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
+            Some(Err(e)) => Err(format!("cannot read {name}: {e}")),
+        };
+        let (text, requests) = (read(STATS_FILE)?, read(REQUESTS_FILE)?);
+        let since = local::floor_hour(now.saturating_sub(since_secs));
+        Ok(Stats::read(&text, &requests, since, now, running, session))
+    }
+
     /// Merges the lines with an hour or time in `since..=now`. Unparsable
     /// lines, invalid UTF-8 included, are skipped. With `session`, usage
     /// totals and the request list cover that session only.
