@@ -155,7 +155,7 @@ After a usage record is delivered, the module starts one background `GET /sessio
 deslag: ~120 tokens removed (estimate) of 5,432 input tokens · session ~1,200 removed (estimate)
 ```
 
-The removed counts come from the `deslag-estimate-v1` estimator and carry the `(estimate)` label. The input count is provider-reported usage. A `null` count shows as `unknown`, never as 0. The line shows no money figures.
+The removed counts come from the `deslag-estimate-v1` estimator and carry the `(estimate)` label. The input count is provider-reported usage. A `null` count shows as `unknown`. A 0 in the line is a reported count of 0. The line shows no money figures.
 
 The module clears the line when the delivery of the usage record fails, the read fails, the answer is not `2xx`, the body is not a session document with at least one request, or the read takes longer than 1 s. A record dropped without a send (the send cap, an invalid ID, model or index, or no state directory) leaves the line unchanged. At most 2 reads are unsettled at a time. The host fetch has no abort, so a hung read holds its slot until it settles, and the line does not refresh while both slots are held. Only the latest refresh sets the line: an older read's late answer or timeout is ignored. Without `DESLAG_SAVINGS_WIDGET=1`, or with the usage module off, the module reads nothing and sets no status line.
 
@@ -167,7 +167,7 @@ Each read answers the full session document of the last 24 hours. A long session
 
 ## Per-request lines
 
-Each valid usage record becomes one line of `requests.jsonl`. The service writes the lines with the buckets: at each hour close, `stop` and `stats`. Keys are in alphabetical order.
+Each valid usage record becomes one line of `requests.jsonl`. The service writes the lines with the buckets: at each hour close, `stop` and `stats`. Each [session read](#session-read) writes the request lines only, without the buckets. Keys are in alphabetical order.
 
 ```json
 {"compression_reports":2,"dropped":1,"estimated_removed_tokens":40,"index":1,"model":"claude-haiku","session":"sess-a","time":1799997000,"turn":"t1","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":110,"input_tokens":20,"output_tokens":3},"v":1}

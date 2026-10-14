@@ -443,6 +443,7 @@ describe('savings widget', () => {
     ['read answered 400', serve(() => ({ status: 400, ok: false, headers: {}, text: '' }))],
     ['read answered bad JSON', serve(() => ({ status: 200, ok: true, headers: {}, text: '{' }))],
     ['read answered no requests', serve(() => json({ ...DOC, requests: [] }))],
+    ['read answered another schema', serve(() => json({ ...DOC, schema_version: 2 }))],
   ];
   for (const [form, reply] of down) {
     test(`service down (${form}): no line`, OPTS, async ($, on) => {

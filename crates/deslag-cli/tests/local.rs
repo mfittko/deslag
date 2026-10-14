@@ -755,7 +755,17 @@ fn the_bridge_answers_a_session_read_with_the_stats_document() {
     let _cleanup = RemoveOnDrop(dir.clone());
     let service = run(&dir);
     assert_eq!(post_usage(&dir, SESSION, 0), "HTTP/1.1 204 No Content");
-    let stats_before = fs::read(dir.join("stats.jsonl")).unwrap_or_default();
+    // Bucket lines only: an hour change during the test makes `tick` append a
+    // service line (`count` 0), which the session read does not cause.
+    let bucket_lines = || -> Vec<String> {
+        fs::read_to_string(dir.join("stats.jsonl"))
+            .unwrap_or_default()
+            .lines()
+            .filter(|l| serde_json::from_str::<serde_json::Value>(l).unwrap()["count"] != 0)
+            .map(String::from)
+            .collect()
+    };
+    let stats_before = bucket_lines();
     let mut stream = UnixStream::connect(dir.join("local-http.sock")).unwrap();
     stream
         .set_read_timeout(Some(Duration::from_secs(5)))
@@ -782,10 +792,7 @@ fn the_bridge_answers_a_session_read_with_the_stats_document() {
     assert_eq!(listed[0]["usage"]["input_tokens"], 100);
     assert_eq!(listed[0]["estimated_removed_tokens"], 0);
     // The read writes the queued request but appends no bucket lines.
-    assert_eq!(
-        fs::read(dir.join("stats.jsonl")).unwrap_or_default(),
-        stats_before
-    );
+    assert_eq!(bucket_lines(), stats_before);
     // Running, so no `no_data`; the hours before this run have no service line.
     assert_eq!(
         doc["partial"]["reasons"],

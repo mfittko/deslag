@@ -93,7 +93,7 @@ The model request that reads the tool result takes the hook's report. After that
 deslag: ~1,234 tokens removed (estimate) of 5,678 input tokens · session ~1,234 removed (estimate)
 ```
 
-`unknown` means that a count was not available. It never stands for 0. When the service is not running, the widget shows no line.
+`unknown` means that a count was not available. A 0 is a reported count of 0. When the service is not running, the widget shows no line.
 
 ## 6. Check the stats
 
