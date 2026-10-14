@@ -41,7 +41,7 @@ Every bucket has these dimensions. Each value comes from a fixed allowlist. The 
 
 ## JSONL line format
 
-The service appends one line per bucket when an hour closes, and when `stop` or `stats` makes it write the open hour. Lines are additive: the same key can appear on several lines, and readers sum them. Keys are in alphabetical order.
+The service appends one line per bucket when an hour closes, and when `stop` or `stats` makes it write the open hour. A [session read](#session-read) writes the open hour as well, only when a bucket holds drops. Lines are additive: the same key can appear on several lines, and readers sum them. Keys are in alphabetical order.
 
 ```json
 {"adapter":"hook","candidate_bytes":600,"count":2,"dropped":1,"emitted_bytes":600,"hour":1799992800,"original_bytes":1000,"outcome":"changed","reason":null,"tokens":{"estimate:deslag-estimate-v1":{"candidate":150,"emitted":150,"original":250}},"tool":"bash","transform":"json-minify","v":1}
@@ -167,7 +167,7 @@ Each read answers the full session document of the last 24 hours. A long session
 
 ## Per-request lines
 
-Each valid usage record becomes one line of `requests.jsonl`. The service writes the lines with the buckets: at each hour close, `stop` and `stats`. Each [session read](#session-read) writes the request lines only, without the buckets. Keys are in alphabetical order.
+Each valid usage record becomes one line of `requests.jsonl`. The service writes the lines with the buckets: at each hour close, `stop` and `stats`. Each [session read](#session-read) writes the request lines, and the buckets only when one holds drops. Keys are in alphabetical order.
 
 ```json
 {"compression_reports":2,"dropped":1,"estimated_removed_tokens":40,"index":1,"model":"claude-haiku","session":"sess-a","time":1799997000,"turn":"t1","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":110,"input_tokens":20,"output_tokens":3},"v":1}
