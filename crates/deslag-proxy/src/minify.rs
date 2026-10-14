@@ -1,4 +1,12 @@
-//! Opt-in JSON minification of Bash tool results in Messages requests.
+//! Opt-in JSON minification of Bash and MCP tool results in Messages requests.
+//!
+//! A `tool_result` is eligible when its `tool_use_id` names a `tool_use` of
+//! `Bash` or of an `mcp__*` tool and it is not `"is_error": true`. Only its
+//! string `content` and the `text` of its `"type": "text"` content items are
+//! approved for change. Every other block and field, including `thinking` and
+//! its `signature`, `redacted_thinking`, `cache_control`, `is_error` and
+//! unknown types and fields, stays byte-identical. An ineligible new result is
+//! recorded as `unchanged`. Local reports carry the tool category of the result.
 //!
 //! The request is never re-serialized. Each rewritten string lexeme is located
 //! by its byte span in the original body and spliced; all other bytes are
@@ -29,7 +37,7 @@
 //! changes the bytes of already-sent history.
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fmt,
     path::Path,
     pin::Pin,
@@ -347,28 +355,33 @@ fn rewrite(
     job: Job,
     socket: Option<&Path>,
 ) -> Result<Option<Vec<u8>>, ReplayError> {
-    let Some((model, bash_ids, results)) = tool_results(body) else {
+    let Some((model, results)) = tool_results(body) else {
         return Ok(None);
     };
     let candidates: Vec<Candidate> = results
         .iter()
-        .map(|(id, newest, content, targets)| Candidate {
-            id,
-            newest: *newest,
-            source: canonical(*content),
-            texts: targets.iter().filter_map(|t| parse(t)).collect(),
+        .map(|r| Candidate {
+            id: r.id,
+            newest: r.newest,
+            source: canonical(r.content),
+            texts: r.targets.iter().filter_map(|t| parse(t)).collect(),
         })
         .collect();
-    // `decide` runs only for a new result. Only a Bash result whose text
+    let eligible: HashSet<&str> = results
+        .iter()
+        .filter(|r| r.tool != local::ToolCategory::Other && !r.is_error)
+        .map(|r| r.id)
+        .collect();
+    // `decide` runs only for a new result. Only an eligible result whose text
     // json-minify changes is encoded.
     let encode = store.replay(scope, model, &candidates, |c| {
-        bash_ids.contains(c.id) && changes(&c.texts, exec, job)
+        eligible.contains(c.id) && changes(&c.texts, exec, job)
     })?;
     let targets = results
         .iter()
         .zip(encode)
         .filter(|(_, encode)| *encode)
-        .flat_map(|((_, _, _, targets), _)| targets.iter().copied());
+        .flat_map(|(r, _)| r.targets.iter().map(|t| (*t, r.tool)));
     Ok(splice(body, targets, job, socket))
 }
 
@@ -408,16 +421,22 @@ fn canonical(content: Option<&RawValue>) -> String {
     })
 }
 
-/// Model, Bash tool_use ids, and per tool result its id, whether it is in the
-/// last message, its whole content, and its string targets in document order.
-type ToolResults<'a> = (
-    &'a str,
-    HashSet<&'a str>,
-    Vec<(&'a str, bool, Option<&'a RawValue>, Vec<&'a RawValue>)>,
-);
+/// One `tool_result` block of a user message.
+struct ToolResult<'a> {
+    id: &'a str,
+    /// The block is in the last message.
+    newest: bool,
+    content: Option<&'a RawValue>,
+    /// The approved string fields, in document order.
+    targets: Vec<&'a RawValue>,
+    /// Category of the `tool_use` that `id` names; `Other` when none does.
+    tool: local::ToolCategory,
+    /// `"is_error": true`.
+    is_error: bool,
+}
 
 /// `None` when the body is not a JSON object with a non-empty `messages` array.
-fn tool_results(body: &[u8]) -> Option<ToolResults<'_>> {
+fn tool_results(body: &[u8]) -> Option<(&str, Vec<ToolResult<'_>>)> {
     let root: Obj = serde_json::from_slice(body).ok()?;
     let raw = parse::<Vec<&RawValue>>(root.get("messages")?)?;
     let last = raw.len().checked_sub(1)?;
@@ -438,9 +457,10 @@ fn tool_results(body: &[u8]) -> Option<ToolResults<'_>> {
                     .map(move |b| (i, b))
             })
     };
-    let bash_ids = blocks("assistant")
-        .filter(|(_, b)| b.str("type") == Some("tool_use") && b.str("name") == Some("Bash"))
-        .filter_map(|(_, b)| b.str("id"))
+    let tools: HashMap<&str, local::ToolCategory> = blocks("assistant")
+        .filter(|(_, b)| b.str("type") == Some("tool_use"))
+        .filter_map(|(_, b)| Some((b.str("id")?, b.str("name")?)))
+        .map(|(id, name)| (id, local::ToolCategory::from_tool_name(name)))
         .collect();
     let mut results = Vec::new();
     for (i, block) in blocks("user") {
@@ -460,9 +480,16 @@ fn tool_results(body: &[u8]) -> Option<ToolResults<'_>> {
                 None => vec![content],
             },
         };
-        results.push((id, i == last, content, targets));
+        results.push(ToolResult {
+            id,
+            newest: i == last,
+            content,
+            targets,
+            tool: tools.get(id).copied().unwrap_or(local::ToolCategory::Other),
+            is_error: block.get("is_error").and_then(parse) == Some(true),
+        });
     }
-    Some((root.str("model").unwrap_or_default(), bash_ids, results))
+    Some((root.str("model").unwrap_or_default(), results))
 }
 
 /// Replaces each string target that `job` changes. `None` when nothing changed.
@@ -471,7 +498,7 @@ fn tool_results(body: &[u8]) -> Option<ToolResults<'_>> {
 /// fail open.
 fn splice<'a>(
     body: &[u8],
-    targets: impl Iterator<Item = &'a RawValue>,
+    targets: impl Iterator<Item = (&'a RawValue, local::ToolCategory)>,
     job: Job,
     socket: Option<&Path>,
 ) -> Option<Vec<u8>> {
@@ -479,14 +506,14 @@ fn splice<'a>(
     let mut out = Vec::with_capacity(body.len());
     let mut pos = 0;
     let mut reports = Vec::new();
-    for raw in targets {
+    for (raw, tool) in targets {
         let Some(text) = parse::<String>(raw) else {
             continue;
         };
         let (changed, mut compressed) = job(&text);
         if socket.is_some() {
             local::add_estimates(&mut compressed, &text, changed.as_deref().unwrap_or(&text));
-            reports.push(compressed);
+            reports.push((compressed, tool));
         }
         let Some(minified) = changed else {
             continue;
@@ -500,17 +527,11 @@ fn splice<'a>(
         pos = start + raw.get().len();
     }
     if let Some(socket) = socket {
-        for compressed in &reports {
+        for (compressed, tool) in &reports {
             // ponytail: no session. Every submission resends the whole history,
             // so per-request attribution from here would count a result once
             // per later request; attributing new blocks only needs replay state.
-            local::send_report(
-                socket,
-                compressed,
-                local::Adapter::Proxy,
-                local::ToolCategory::Bash,
-                None,
-            );
+            local::send_report(socket, compressed, local::Adapter::Proxy, *tool, None);
         }
     }
     if pos == 0 {
@@ -829,7 +850,18 @@ mod tests {
         let report: serde_json::Value = serde_json::from_slice(&buf[..n]).unwrap();
         assert_eq!(report["adapter"], "proxy");
         assert_eq!(report["outcome"], "changed");
+        assert_eq!(report["tool"], "bash");
         assert!(receiver.recv(&mut buf).is_err(), "one block, one report");
+        // An MCP result reports its own category.
+        let mcp = fresh("service-mcp");
+        let body = String::from_utf8(body.to_vec()).unwrap();
+        let body = body.replace(r#""name":"Bash""#, r#""name":"mcp__s__t""#);
+        let out = rewrite(body.as_bytes(), &mcp, "s", &generous(), minify, Some(&path));
+        assert!(out.unwrap().is_some());
+        let n = receiver.recv(&mut buf).unwrap();
+        let report: serde_json::Value = serde_json::from_slice(&buf[..n]).unwrap();
+        assert_eq!(report["tool"], "mcp");
+        let _ = std::fs::remove_dir_all(&mcp.dir);
         // A result whose job panicked is recorded `unchanged` and not reported.
         let other = fresh("service-panic");
         let two = TWO_RESULTS.as_bytes();

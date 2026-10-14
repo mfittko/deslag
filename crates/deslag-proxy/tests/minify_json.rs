@@ -1,4 +1,4 @@
-//! Opt-in JSON minification of Bash tool results, against a local mock upstream.
+//! Opt-in JSON minification of Bash and MCP tool results, against a local mock upstream.
 
 use std::{
     convert::Infallible,
@@ -258,6 +258,53 @@ async fn ineligible_requests_are_byte_identical() {
     for body in ["not json", "[]", r#"{"messages": "x"}"#, ""] {
         assert_eq!(relay(&mut on, messages(), body).await.body, body);
     }
+}
+
+/// `{BASH}` marks the approved fields of eligible Bash and MCP results. Thinking
+/// with its signature, redacted thinking, unknown blocks and fields, cache
+/// controls, error results and other tools' results stay byte-identical.
+const PROTECTED: &str = r#"{
+  "model": "m", "future_root": { "k" : [ 1 ] },
+  "messages": [
+    { "role": "user", "content": "go", "future_message": true },
+    { "role": "assistant", "content": [
+      { "type": "thinking", "thinking": {PRETTY}, "signature": "sig  ==" },
+      { "type": "redacted_thinking", "data": {PRETTY} },
+      { "type": "future_block", "text": {PRETTY} },
+      { "type": "tool_use", "id": "b", "name": "Bash", "input": { }, "future_field": 1 },
+      { "type": "tool_use", "id": "e", "name": "Bash", "input": { } },
+      { "type": "tool_use", "id": "m", "name": "mcp__srv__get", "input": { } },
+      { "type": "tool_use", "id": "me", "name": "mcp__srv__get", "input": { } },
+      { "type": "tool_use", "id": "r", "name": "Read", "input": { } },
+      { "type": "tool_use", "id": "x", "name": "mcpx", "input": { } }
+    ] },
+    { "role": "user", "content": [
+      { "type": "tool_result", "tool_use_id": "b", "content": {BASH}, "future_field": {PRETTY} },
+      { "type": "tool_result", "tool_use_id": "e", "content": {PRETTY}, "is_error": true },
+      { "type": "tool_result", "tool_use_id": "m", "content": [
+        { "type": "text", "text": {BASH}, "cache_control": { "type": "ephemeral" } },
+        { "type": "future_item", "text": {PRETTY} },
+        { "type": "text", "text": {BASH}, "future_field": {PRETTY} }
+      ] },
+      { "type": "tool_result", "tool_use_id": "me", "is_error": true, "content": [ { "type": "text", "text": {PRETTY} } ] },
+      { "type": "tool_result", "tool_use_id": "r", "content": {PRETTY} },
+      { "type": "tool_result", "tool_use_id": "x", "content": {PRETTY} },
+      { "type": "tool_result", "tool_use_id": "unknown", "content": {PRETTY} },
+      { "type": "future_block", "content": {PRETTY} },
+      { "type": "text", "text": {PRETTY}, "cache_control": { "type": "ephemeral", "ttl": "1h" } }
+    ] }
+  ]
+}"#;
+
+#[tokio::test]
+async fn protected_blocks_and_fields_stay_byte_identical() {
+    let (input, expected) = render(PROTECTED);
+    let mut p = proxy(true).await;
+    let seen = relay(&mut p, messages(), input.clone()).await;
+    assert_eq!(String::from_utf8(seen.body.to_vec()).unwrap(), expected);
+    // The resend replays the pinned decisions, error results included.
+    let again = relay(&mut p, messages(), input).await;
+    assert_eq!(again.body, seen.body);
 }
 
 #[tokio::test]
