@@ -1,4 +1,4 @@
-//! `deslag local`: the optional stats service.
+//! `deslag local`: the optional stats service and its control commands.
 //!
 //! The service receives report datagrams from adapters (see
 //! `deslag_telemetry`), aggregates them in memory into hourly buckets and
@@ -6,7 +6,8 @@
 //! `stop` and `flush` control messages and a fatal receive error write the open
 //! hour: a killed service loses that hour, and its stale socket file stays
 //! until the next `run` removes it. A failed write is logged to stderr, and its
-//! buckets stay in memory for the next attempt.
+//! buckets stay in memory for the next attempt. The log is visible only under
+//! `deslag local run`: `deslag local start` discards the service's stderr.
 //!
 //! The service answers `ping`, `flush` and `stop` with `ok`. When the write
 //! fails, `flush` and `stop` answer `flush failed: <error>` instead, and the
@@ -19,23 +20,27 @@ use std::{
     os::unix::{
         fs::{OpenOptionsExt, PermissionsExt},
         net::UnixDatagram,
+        process::CommandExt,
     },
     path::Path,
-    process::ExitCode,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    process::{Command, ExitCode, Stdio},
+    thread,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use deslag_core::{
     EXACT_LINE_RUNS_ID, EstimateCounter, JSON_MINIFY_ID, JSON_TABLE_ID, LINE_TEMPLATES_ID,
 };
-use deslag_telemetry::{MAX_MESSAGE_BYTES, SOCKET_FILE, STATS_FILE, ensure_state_dir};
+use deslag_telemetry::{MAX_MESSAGE_BYTES, SOCKET_FILE, STATS_FILE, ensure_state_dir, state_dir};
 use serde_json::{Map, Value, json};
 
-pub const USAGE: &str = "usage: deslag local run [--retention-days <n>]";
+pub const USAGE: &str = "usage: deslag local start|run [--retention-days <n>]\n       \
+                         deslag local stop|status";
 
 const HOUR: u64 = 3600;
 const DAY: u64 = 24 * HOUR;
 const DEFAULT_RETENTION_DAYS: u64 = 90;
+const CONTROL_TIMEOUT: Duration = Duration::from_secs(2);
 
 // Allowlists for every string a report may carry. Anything else is dropped.
 const ADAPTERS: &[&str] = &["hook", "proxy"];
@@ -67,15 +72,41 @@ const LOCK_FILE: &str = "local.lock";
 /// Runs `deslag local <args>` and returns the process exit code.
 pub fn command(args: &[&str]) -> ExitCode {
     let retention = match args {
-        ["run"] => DEFAULT_RETENTION_DAYS,
-        ["run", "--retention-days", n] => match n.parse::<u64>() {
-            Ok(n) if (1..=36_500).contains(&n) => n,
+        [_] => None,
+        [_, "--retention-days", n] => match n.parse::<u64>() {
+            Ok(n) if (1..=36_500).contains(&n) => Some(n),
             _ => return usage(),
         },
         _ => return usage(),
     };
-    match run(retention) {
-        Ok(()) => ExitCode::SUCCESS,
+    let result = match (args[0], retention) {
+        ("run", r) => run(r.unwrap_or(DEFAULT_RETENTION_DAYS)).map(|()| String::new()),
+        ("start", r) => start(r),
+        ("stop", None) => match control("stop", CONTROL_TIMEOUT) {
+            Err(e) if e.kind() == io::ErrorKind::InvalidData => Err(format!("stop failed: {e}")),
+            stop => reachable(stop).map(|up| {
+                format!(
+                    "deslag local: {}",
+                    if up { "stopped" } else { "not running" }
+                )
+            }),
+        },
+        ("status", None) => reachable(control("ping", CONTROL_TIMEOUT)).map(|up| {
+            format!(
+                "deslag local: {}\nstate dir: {}",
+                if up { "running" } else { "not running" },
+                state_dir().map_or_else(|| "unset".to_string(), |d| d.display().to_string())
+            )
+        }),
+        _ => return usage(),
+    };
+    match result {
+        Ok(message) => {
+            if !message.is_empty() {
+                println!("{message}");
+            }
+            ExitCode::SUCCESS
+        }
         Err(message) => {
             eprintln!("deslag: {message}");
             ExitCode::from(2)
@@ -88,6 +119,109 @@ fn usage() -> ExitCode {
     ExitCode::from(crate::EX_USAGE)
 }
 
+const NOT_RESPONDING: &str = "service not responding";
+
+/// Maps a control result to whether the service answered. Only `NotFound`
+/// (no state dir, no socket file) and `ConnectionRefused` (stale socket) mean
+/// not running. A timeout means alive but busy. Every other error, such as a
+/// failed client bind, is a failure: the service may still be running.
+fn reachable(result: io::Result<()>) -> Result<bool, String> {
+    match result {
+        Ok(()) => Ok(true),
+        Err(e) => match e.kind() {
+            io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused => Ok(false),
+            io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock => Err(NOT_RESPONDING.to_string()),
+            _ => Err(format!("control failed: {e}")),
+        },
+    }
+}
+
+fn already_running(retention: Option<u64>) -> String {
+    let note = if retention.is_some() {
+        "; it keeps its retention (stop and start to change it)"
+    } else {
+        ""
+    };
+    format!("deslag local: already running{note}")
+}
+
+/// Spawns a detached `local run` and waits until it answers `ping`.
+fn start(retention: Option<u64>) -> Result<String, String> {
+    if reachable(control("ping", CONTROL_TIMEOUT))? {
+        return Ok(already_running(retention));
+    }
+    let exe = std::env::current_exe().map_err(|e| format!("cannot find own binary: {e}"))?;
+    let mut cmd = Command::new(exe);
+    cmd.args(["local", "run"]);
+    if let Some(days) = retention {
+        cmd.args(["--retention-days", &days.to_string()]);
+    }
+    let mut child = cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .process_group(0)
+        .spawn()
+        .map_err(|e| format!("cannot start service: {e}"))?;
+    let deadline = Instant::now() + CONTROL_TIMEOUT;
+    // Set when the child exits. A concurrent `start` may have won the lock
+    // and not bound the socket yet, so polling continues until the deadline.
+    let mut exited = None;
+    let started = |exited: Option<_>| match exited {
+        Some(_) => already_running(retention),
+        None => "deslag local: started".to_string(),
+    };
+    while Instant::now() < deadline {
+        if control("ping", Duration::from_millis(100)).is_ok() {
+            return Ok(started(exited));
+        }
+        if exited.is_none() {
+            exited = child.try_wait().ok().flatten();
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    // A slow first answer still counts. Otherwise reap the child, so a failed
+    // `start` leaves no service behind.
+    if control("ping", Duration::from_millis(100)).is_ok() {
+        return Ok(started(exited));
+    }
+    if let Some(status) = exited {
+        return Err(format!(
+            "service exited ({status}); run `deslag local run` to see why"
+        ));
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    Err("service did not answer within 2 s".to_string())
+}
+
+/// Sends a control `command` from a temporary bound socket and waits up to
+/// `timeout` for `ok`. `InvalidData` carries an error the service replied.
+/// A missing state dir is `NotFound`; [`reachable`] classifies the other errors.
+fn control(command: &str, timeout: Duration) -> io::Result<()> {
+    let dir =
+        state_dir().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no state directory"))?;
+    let client_path = dir.join(format!("ctl-{}.sock", std::process::id()));
+    let _ = fs::remove_file(&client_path);
+    let result = (|| {
+        let client = UnixDatagram::bind(&client_path)?;
+        client.set_read_timeout(Some(timeout))?;
+        client.set_write_timeout(Some(timeout))?;
+        client.send_to(command.as_bytes(), dir.join(SOCKET_FILE))?;
+        let mut buf = [0; MAX_MESSAGE_BYTES];
+        let n = client.recv(&mut buf)?;
+        match &buf[..n] {
+            b"ok" => Ok(()),
+            reply => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                String::from_utf8_lossy(reply),
+            )),
+        }
+    })();
+    let _ = fs::remove_file(&client_path);
+    result
+}
+
 /// The foreground service. Holds [`LOCK_FILE`] while it runs, so only one
 /// service owns the socket. Returns after `stop`.
 fn run(retention_days: u64) -> Result<(), String> {
@@ -98,6 +232,16 @@ fn run(retention_days: u64) -> Result<(), String> {
         Ok(()) => {}
         Err(fs::TryLockError::WouldBlock) => return Err("service already running".to_string()),
         Err(fs::TryLockError::Error(e)) => return Err(format!("cannot lock {LOCK_FILE}: {e}")),
+    }
+    // Client sockets left by killed `control` calls. A live client that bound
+    // its socket during this startup loses its reply and reports
+    // 'service not responding'.
+    for entry in fs::read_dir(&dir).into_iter().flatten().flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with("ctl-") && name.ends_with(".sock") {
+            let _ = fs::remove_file(entry.path());
+        }
     }
     let socket_path = dir.join(SOCKET_FILE);
     let _ = fs::remove_file(&socket_path);
@@ -115,7 +259,8 @@ fn log(e: io::Error) {
 }
 
 /// The receive loop. IO errors in ticks and flushes are logged to stderr, and
-/// their buckets stay in memory for the next attempt.
+/// their buckets stay in memory for the next attempt. The log is visible only
+/// under `deslag local run`: `deslag local start` discards it.
 fn serve(
     socket: &UnixDatagram,
     socket_path: &Path,
@@ -780,5 +925,31 @@ mod tests {
             TOKEN_LABELS,
             [(TokenMethod::Estimate.as_str(), EstimateCounter::TOKENIZER)]
         );
+    }
+
+    #[test]
+    fn only_a_missing_or_refused_socket_means_not_running() {
+        use io::ErrorKind::*;
+        let of = |kind: io::ErrorKind| reachable(Err(io::Error::from(kind)));
+        assert_eq!(reachable(Ok(())), Ok(true));
+        // NotFound covers no socket file and the missing state dir from `control`.
+        for kind in [NotFound, ConnectionRefused] {
+            assert_eq!(of(kind), Ok(false), "{kind:?}");
+        }
+        for kind in [TimedOut, WouldBlock] {
+            assert_eq!(of(kind), Err(NOT_RESPONDING.to_string()), "{kind:?}");
+        }
+        for kind in [
+            PermissionDenied,
+            InvalidInput,
+            AddrInUse,
+            NotADirectory,
+            Other,
+        ] {
+            assert!(
+                of(kind).unwrap_err().starts_with("control failed"),
+                "{kind:?}"
+            );
+        }
     }
 }
