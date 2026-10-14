@@ -1,6 +1,6 @@
 # Demo: savings widget in Claude Code
 
-This guide runs hook compression in a throwaway Claude Code session and shows the savings widget. The widget shows, per model request, the tokens that hook compression removed next to the input tokens the provider reported. The removed count comes from the local `deslag-estimate-v1` estimator, so the widget labels it as an estimate. The input count is provider-reported usage. The widget shows no money figures.
+This guide runs hook compression in a throwaway Claude Code session and shows the savings widget. The widget shows, per model request, the tokens that hook compression removed next to the input tokens the provider reported. The removed count comes from the local `deslag-estimate-v1` estimator, so the widget labels it as an estimate. The input count is provider-reported usage. The session figure totals the removed tokens of the session's requests in the last 24 hours. The widget shows no money figures.
 
 ## Requirements
 

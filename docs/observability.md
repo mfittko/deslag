@@ -149,7 +149,7 @@ The service accepts one HTTP connection at a time. It reads at most 2048 bytes a
 CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 DESLAG_USAGE_STATS=1 DESLAG_SAVINGS_WIDGET=1 claude
 ```
 
-After a usage record is delivered, the module starts one background `GET /session/<id>` for the session. The stream never waits for it. On success it sets the status line to the last request's `estimated_removed_tokens` and its provider input tokens (`input_tokens + cache_read_input_tokens + cache_creation_input_tokens`), and the session's `totals.estimated_removed_tokens`:
+After a usage record is delivered, the module starts one background `GET /session/<id>` for the session. The stream never waits for it. On success it sets the status line to the last request's `estimated_removed_tokens` and its provider input tokens (`input_tokens + cache_read_input_tokens + cache_creation_input_tokens`), and the session's `totals.estimated_removed_tokens` of the last 24 hours:
 
 ```text
 deslag: ~120 tokens removed (estimate) of 5,432 input tokens · session ~1,200 removed (estimate)
