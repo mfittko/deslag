@@ -1,6 +1,6 @@
 # 0007: Claude Code mod integration: hybrid now, mod-first compression after live gates
 
-**Status:** accepted — 2026-10-14 ([PR #87](https://github.com/mfittko/deslag/pull/87))
+**Status:** accepted — 2026-10-14 ([PR #87](https://github.com/mfittko/deslag/pull/87)). Decisions 3, 4 and 5 (mod compression) are superseded by [ADR 0008](0008-mod-instrumentation-only.md).
 **Date:** 2026-10-14
 **Decided by:** mfittko
 
@@ -17,16 +17,16 @@ Remaining limits of the mod: at this boundary Bash `stdout` and `stderr` arrive 
 ## Decision
 
 1. Claude compression stays with the PostToolUse hook for now. The proxy code and its acceptance criteria are kept.
-2. Instrumentation for Claude Code moves into a mod once a live capture confirms that `turn.step` reports usage as declared. It lives in one installable plugin with separate internal modules for compression and observation (Option A). A second installable observability mod is not built unless a consumer outside deslag needs it.
-3. Mod compression becomes an opt-in alternative to the hook only after live verification of: the model reading the rewritten row and its stability across resume, continue and fork; the large-output preview ordering; and the `$.process.run` output limit and overhead. These three checks passed on 2.1.299 in the spike, so the opt-in mod compression step may proceed. The default is decided later from a paired evaluation.
-4. Ownership extends the existing owner file with the value `mod`. The hook and the proxy already read that value as `none`.
-5. The bridge is a subprocess with a versioned stdin/stdout envelope. No daemon, WASM port or JavaScript codec.
+2. Instrumentation for Claude Code moves into a mod once a live capture confirms that `turn.step` reports usage as declared. It lives in one installable plugin with separate internal modules for compression and observation (Option A). ADR 0008 removes the compression module. A second installable observability mod is not built unless a consumer outside deslag needs it.
+3. Superseded by [ADR 0008](0008-mod-instrumentation-only.md): the mod does not compress. Original text: Mod compression becomes an opt-in alternative to the hook only after live verification of: the model reading the rewritten row and its stability across resume, continue and fork; the large-output preview ordering; and the `$.process.run` output limit and overhead. These three checks passed on 2.1.299 in the spike, so the opt-in mod compression step may proceed. The default is decided later from a paired evaluation.
+4. Superseded by [ADR 0008](0008-mod-instrumentation-only.md): the owner file gets no `mod` value. Original text: Ownership extends the existing owner file with the value `mod`. The hook and the proxy already read that value as `none`.
+5. Superseded by [ADR 0008](0008-mod-instrumentation-only.md): the bridge is removed. Original text: The bridge is a subprocess with a versioned stdin/stdout envelope. No daemon, WASM port or JavaScript codec.
 
 ## Consequences
 
 - No change to v0.1 release promises, default codecs or the frozen evaluation.
-- The staged plan in the phase plan, [docs/phases/phase-mod-1.md](../phases/phase-mod-1.md), defines the follow-up PRs: remaining live verification, `Owner::Mod`, mod instrumentation feeding the #21 local service, then opt-in mod compression.
+- The staged plan in the phase plan, [docs/phases/phase-mod-1.md](../phases/phase-mod-1.md), defines the follow-up PRs: remaining live verification and mod instrumentation feeding the #21 local service. The `Owner::Mod` and opt-in mod compression steps were dropped by ADR 0008.
 - A mod does not keep original outputs off disk. Documentation must not present it as redaction.
-- `$.process.run` is CLI only. Surfaces without it get no mod compression and fall back to the hook or pass through.
-- The bridge must validate a complete envelope, because `$.process.run` truncates stdout without an error.
-- The experimental mod in `plugins/claude-mod-experimental/` is not in the marketplace and defaults to off.
+- (Superseded by ADR 0008.) `$.process.run` is CLI only. Surfaces without it get no mod compression and fall back to the hook or pass through.
+- (Superseded by ADR 0008.) The bridge must validate a complete envelope, because `$.process.run` truncates stdout without an error.
+- The experimental mod in `plugins/claude-mod-experimental/` is not in the marketplace. ADR 0008 removed its `mode` and `binary` options; it now holds only the `turn.step` usage observer.
