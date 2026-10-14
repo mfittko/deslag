@@ -76,6 +76,7 @@ const REASONS: &[&str] = &[
     "escaped_key",
     "insufficient_gain",
     "invalid_candidate",
+    "hook_conflict",
 ];
 /// Allowed (method, tokenizer) pairs: the estimate tokenizer never labels exact counts.
 /// The only stored label is `estimate:<EstimateCounter::TOKENIZER>`; `exact` is reserved
@@ -1541,6 +1542,7 @@ mod tests {
                 EscapedKey,
                 InsufficientGain,
                 InvalidCandidate,
+                HookConflict,
             ]
         );
         // Exact counts have no allowed tokenizer yet; a new variant must be reviewed here.

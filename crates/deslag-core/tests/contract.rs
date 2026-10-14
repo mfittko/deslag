@@ -229,6 +229,7 @@ fn reason_names_are_snake_case() {
         (Reason::EscapedKey, "escaped_key"),
         (Reason::InsufficientGain, "insufficient_gain"),
         (Reason::InvalidCandidate, "invalid_candidate"),
+        (Reason::HookConflict, "hook_conflict"),
     ] {
         assert_eq!(reason.as_str(), name);
     }

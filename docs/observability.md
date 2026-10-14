@@ -34,10 +34,10 @@ Every bucket has these dimensions. Each value comes from a fixed allowlist. The 
 | `adapter` | `hook`, `proxy` |
 | `transform` | `json-minify`, `json-table`, `exact-line-runs`, `line-templates` |
 | `outcome` | `changed`, `would_change`, `skipped`, `failed` |
-| `reason` | `null`, `mode_off`, `transform_disabled`, `below_min_bytes`, `above_max_bytes`, `unsupported_format`, `depth_limit`, `duplicate_key`, `escaped_key`, `insufficient_gain`, `invalid_candidate` |
+| `reason` | `null`, `mode_off`, `transform_disabled`, `below_min_bytes`, `above_max_bytes`, `unsupported_format`, `depth_limit`, `duplicate_key`, `escaped_key`, `insufficient_gain`, `invalid_candidate`, `hook_conflict` |
 | `tool` | `bash`, `mcp`, `other` |
 
-`changed` means deslag emitted the smaller output. `would_change` means observe mode found a smaller candidate and emitted the original. Buckets store no payload content, session IDs, paths, raw tool names or request IDs. `requests.jsonl` stores session IDs, turn IDs and model names; see [Per-request lines](#per-request-lines).
+`changed` means deslag emitted the smaller output. `hook_conflict` marks a hook result that another `PostToolUse` hook blocked; it is `skipped`, with the original size emitted and the candidate fields kept as built. `would_change` means observe mode found a smaller candidate and emitted the original. Buckets store no payload content, session IDs, paths, raw tool names or request IDs. `requests.jsonl` stores session IDs, turn IDs and model names; see [Per-request lines](#per-request-lines).
 
 ## JSONL line format
 
