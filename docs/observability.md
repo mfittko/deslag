@@ -16,7 +16,7 @@ Retention defaults to 90 days. Malformed arguments print the usage and exit 64.
 
 ## State directory
 
-The state directory is `$DESLAG_STATE_DIR`, else `$XDG_STATE_HOME/deslag`, else `$HOME/.local/state/deslag`. Empty or relative values are ignored, as the XDG Base Directory spec requires. The service creates the directory with mode 0700 and sets 0700 on an existing directory. A symlink at that path keeps the mode of its target. The directory holds:
+The state directory is `$DESLAG_STATE_DIR`, else `$XDG_STATE_HOME/deslag`, else `$HOME/.local/state/deslag`. Empty or relative values are ignored, as the XDG Base Directory spec requires. The service creates the directory with mode 0700 and sets 0700 on an existing directory. A symlink at that path is followed: its target must be a directory owned by the current user, and the service sets that target to 0700. The directory holds:
 
 - `local.lock`: the single-instance lock (mode 0600). The running service holds an exclusive lock on it, so a second `local run` exits with `service already running`.
 - `local.sock`: the service socket (mode 0600). Adapters send one datagram of at most 512 bytes per compression result. Sending never blocks. A missing service or a full buffer drops the report.
