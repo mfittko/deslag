@@ -25,6 +25,3 @@ serde_json = { version = "1.0.152", features = ["arbitrary_precision"] }
 name = "hook"
 harness = false
 
-[[bench]]
-name = "mod_bridge"
-harness = false
