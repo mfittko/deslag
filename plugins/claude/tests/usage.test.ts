@@ -20,19 +20,29 @@ function world(on: any, env: Record<string, string | undefined>) {
     reads,
     result: undefined as any,
     error: undefined as Error | undefined,
+    session: 'sess-1' as string | undefined,
     reply: (_e: any): Promise<any> | any => OK,
     fetched: () => new Promise<any>((r) => (queued.length ? r(queued.shift()) : waiting.push(r))),
+    // Called with each env name read, before its value is returned.
+    onRead: (_name: string) => {},
+    // Replies settled so far; `onSettle` runs after each one.
+    settled: 0,
+    onSettle: () => {},
   };
   on('env.get', async (_$: unknown, e: any) => {
     reads.push(e.name);
+    w.onRead(e.name);
     return { value: w.env[e.name] };
   });
-  on('session.id', async () => ({ value: 'sess-1' }));
+  on('session.id', async () => ({ value: w.session }));
   on('http.fetch', async (_$: unknown, e: any) => {
     const wake = waiting.shift();
     if (wake) wake(e);
     else queued.push(e);
-    return { value: await w.reply(e) };
+    const value = await w.reply(e);
+    w.settled++;
+    w.onSettle();
+    return { value };
   });
   // The engine's stream: two chunks, then the world's current result.
   on('turn.step', async function* () {
@@ -62,8 +72,11 @@ function result(index: number, usage: any = { ...FULL, model: 'claude-haiku' }) 
 describe('turn.step usage observer', () => {
   test('module off: chunks and result pass through, nothing is sent', OPTS, async ($, on) => {
     const w = world(on, {});
+    const offRead = new Promise<void>((r) => (w.onRead = (n) => n === 'DESLAG_USAGE_STATS' && r()));
     await step($, w, result(0));
-    // Turned on for the second step only: exactly one record arrives.
+    // Turned on for the second step only, after step 0 read it as off: exactly one record arrives.
+    await offRead;
+    w.onRead = () => {};
     w.env.DESLAG_USAGE_STATS = '1';
     w.env.DESLAG_STATE_DIR = '/state';
     const sent = w.fetched();
@@ -137,7 +150,10 @@ describe('turn.step usage observer', () => {
     // The cap is checked when the step settles, so releasing right after it cannot race.
     await step($, w, result(4));
     w.reply = () => OK;
+    // Step 5 waits until the four released sends settled, so it is never capped.
+    const allSettled = new Promise<void>((r) => (w.onSettle = () => w.settled === 4 && r()));
     for (const r of release) r();
+    await allSettled;
     let carried = 0;
     for (let index = 5; index < 9 && carried < 1; index++) {
       const sent = w.fetched();
@@ -146,6 +162,54 @@ describe('turn.step usage observer', () => {
     }
     expect(carried).toBe(1);
   });
+
+  test('session and turn of 1-64 bytes [A-Za-z0-9_-] are sent', OPTS, async ($, on) => {
+    const w = world(on, { DESLAG_USAGE_STATS: '1', DESLAG_STATE_DIR: '/state' });
+    w.session = 'aZ09_-'.repeat(10) + 'abcd';
+    for (const turn of ['t', 'Az-_9'.repeat(12) + 'abcd']) {
+      const sent = w.fetched();
+      await step($, w, { ...result(0), turnId: turn });
+      const body = JSON.parse((await sent).init.body);
+      expect([body.session, body.turn]).toEqual([w.session, turn]);
+    }
+  });
+
+  test('model of 1-64 printable ASCII bytes without quote or backslash is sent', OPTS, async ($, on) => {
+    const w = world(on, { DESLAG_USAGE_STATS: '1', DESLAG_STATE_DIR: '/state' });
+    for (const model of ['m', ' !#[]~ claude/haiku-4.5 (x)'.padEnd(64, '~')]) {
+      const sent = w.fetched();
+      await step($, w, result(0, { ...FULL, model }));
+      expect(JSON.parse((await sent).init.body).model).toBe(model);
+    }
+  });
+
+  // Each invalid record is a local drop that the next valid record carries.
+  const invalid: [string, (w: any, r: any) => void][] = [
+    ['undefined session id', (w) => (w.session = undefined)],
+    ['turn id over 64 bytes', (_w, r) => (r.turnId = 't'.repeat(65))],
+    ["turn id containing ':'", (_w, r) => (r.turnId = 't:1')],
+    ['empty model', (_w, r) => (r.usage.model = '')],
+    ['model containing \'"\'', (_w, r) => (r.usage.model = 'claude"haiku')],
+    ["model containing '\\'", (_w, r) => (r.usage.model = 'claude\\haiku')],
+  ];
+  for (const [form, spoil] of invalid) {
+    test(`${form}: no send, counted as a drop`, OPTS, async ($, on) => {
+      const w = world(on, { DESLAG_USAGE_STATS: '1', DESLAG_STATE_DIR: '/state' });
+      const bad = result(0);
+      spoil(w, bad);
+      await step($, w, bad);
+      w.session = 'sess-1';
+      let carried = 0;
+      for (let index = 1; index < 5 && carried < 1; index++) {
+        const sent = w.fetched();
+        await step($, w, result(index));
+        const body = JSON.parse((await sent).init.body);
+        expect(body.index).toBe(index);
+        carried += body.dropped;
+      }
+      expect(carried).toBe(1);
+    });
+  }
 
   test('a failing step rejects unchanged and still sends a record', OPTS, async ($, on) => {
     const w = world(on, { DESLAG_USAGE_STATS: '1', DESLAG_STATE_DIR: '/state' });

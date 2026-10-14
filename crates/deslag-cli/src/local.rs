@@ -1126,6 +1126,25 @@ mod tests {
         (TempDir(dir), path)
     }
 
+    #[test]
+    fn read_usage_returns_a_complete_request_body() {
+        let (mut client, mut server) = UnixStream::pair().unwrap();
+        client
+            .write_all(b"POST /usage HTTP/1.1\r\nContent-Length: 2\r\n\r\n{}")
+            .unwrap();
+        assert_eq!(read_usage(&mut server), Some(b"{}".to_vec()));
+    }
+
+    #[test]
+    fn read_usage_gives_up_on_a_stalled_request_at_the_deadline() {
+        let (mut client, mut server) = UnixStream::pair().unwrap();
+        client.write_all(b"POST /usage HTTP/1.1\r\n").unwrap();
+        let start = Instant::now();
+        assert_eq!(read_usage(&mut server), None);
+        assert!(start.elapsed() < Duration::from_secs(1));
+        drop(client);
+    }
+
     fn report(outcome: &str, candidate: Option<u64>, tokens: bool) -> Vec<u8> {
         let tokens = if tokens {
             json!({"method":"estimate","tokenizer":"deslag-estimate-v1","original":10,"candidate":4,"emitted":4})

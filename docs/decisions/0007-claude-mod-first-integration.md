@@ -29,4 +29,4 @@ Remaining limits of the mod: at this boundary Bash `stdout` and `stderr` arrive 
 - A mod does not keep original outputs off disk. Documentation must not present it as redaction.
 - (Superseded by ADR 0008.) `$.process.run` is CLI only. Surfaces without it get no mod compression and fall back to the hook or pass through.
 - (Superseded by ADR 0008.) The bridge must validate a complete envelope, because `$.process.run` truncates stdout without an error.
-- The experimental mod in `plugins/claude-mod-experimental/` is not in the marketplace. ADR 0008 removed its `mode` and `binary` options; it now holds only the `turn.step` usage observer.
+- The experimental mod in `plugins/claude-mod-experimental/` is not in the marketplace. ADR 0008 removed its `mode` and `binary` options; it now holds only the `turn.step` usage observer. #90 moved the observer to `plugins/claude/hooks/usage.js` and removed `plugins/claude-mod-experimental/`.

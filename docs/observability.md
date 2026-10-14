@@ -68,7 +68,7 @@ Lines older than the retention window are removed at service start and after eac
   "partial": { "reasons": ["service_not_running", "drops"], "value": true },
   "schema_version": 1,
   "totals": {
-    "dropped": 3,
+    "dropped": 4,
     "emitted_reduction_bytes": 400,
     "reports": 6,
     "usage": {
@@ -107,7 +107,7 @@ Partial reasons:
 - `service_not_running`: the service did not answer, or it failed to write its open hour. The current hour is missing. A running service writes its open hour before `stats` reads the file.
 - `drops`: a line in the window, in either store, has `dropped` above 0.
 - `gaps`: a closed hour in the window has no service line, so the service never ran in that hour. A killed service that restarts within the same hour loses its unwritten reports of that hour without a gap.
-- `no_data`: the window has no lines.
+- `no_data`: the window has no `stats.jsonl` lines.
 
 The table shows one row per dimension set, summed across the window. `saved` is `original - emitted`, or `original - candidate` for `would_change` rows. `tokens_saved` uses the first token label. `-` means unknown. A `usage:` line under the totals shows the usage totals.
 
@@ -184,7 +184,7 @@ Rotation runs at service start and after each hour close. Lines are in time orde
 | `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens` | Sums over the request lines with known usage. |
 | `estimated_removed_tokens` | Sum over the request lines. `null` when one line has it `null`. |
 
-Estimated removed tokens are estimates from `deslag-estimate-v1`, never provider counts.
+`estimated_removed_tokens` comes from the `deslag-estimate-v1` estimator. The provider reports no such count.
 
 ## `deslag stats --json --session <id>`
 
@@ -212,7 +212,7 @@ Prints the requests of one session in the window, in file order. An invalid ID, 
 }
 ```
 
-This view is its own document shape with its own `schema_version`, currently `1`; it changes independently of `deslag stats --json`. `window` and `partial` have the same meaning as in `deslag stats --json`. Each request has the fields of its line, without `v` and `session`. `totals` holds the usage totals of this session only.
+This view shares `schema_version` with `deslag stats --json`, currently `1`. A breaking change to either shape increments it. `window` and `partial` have the same meaning as in `deslag stats --json`. Each request has the fields of its line, without `v` and `session`. `totals` holds the usage totals of this session only.
 
 ## Limitations
 

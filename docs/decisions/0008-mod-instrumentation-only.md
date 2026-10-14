@@ -27,4 +27,4 @@ A mod also cannot rewrite the outgoing request. `turn.step` pins the messages an
 - No change to the hook, the proxy, v0.1 release promises, default codecs or the frozen evaluation.
 - [docs/phases/phase-mod-1.md](../phases/phase-mod-1.md) keeps only the instrumentation steps and the proxy decision.
 - The spike record stays as the historical evidence record. Its commands for the codec bridge and the mod compression adapter no longer run on this revision.
-- The experimental mod in `plugins/claude-mod-experimental/` keeps only the `turn.step` usage observer. It is not in the marketplace.
+- The experimental mod in `plugins/claude-mod-experimental/` keeps only the `turn.step` usage observer. It is not in the marketplace. #90 moved the observer to `plugins/claude/hooks/usage.js` and removed `plugins/claude-mod-experimental/`.

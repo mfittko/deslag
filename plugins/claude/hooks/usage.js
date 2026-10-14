@@ -22,6 +22,11 @@ export function usageOf(result) {
   return Object.fromEntries(USAGE_FIELDS.map((f) => [f, u[f]]));
 }
 
+// deslag_telemetry::valid_id: 1 to 64 bytes of [A-Za-z0-9_-].
+const validId = (s) => typeof s === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(s);
+// The service's valid_model: 1 to 64 bytes of printable ASCII without '"' and '\'.
+const validModel = (s) => typeof s === 'string' && /^[ -~]{1,64}$/.test(s) && !/["\\]/.test(s);
+
 // Same order as deslag_telemetry::state_dir; empty or relative values are ignored.
 async function socketPath($) {
   const abs = (v) => (typeof v === 'string' && v.startsWith('/') ? v : undefined);
@@ -46,13 +51,21 @@ async function send($, e, result) {
     const carried = dropped;
     dropped = 0;
     try {
+      const session = await $.session.id();
+      const model = result?.usage?.model ?? e.model;
+      // The service rejects a record that fails these rules after the bridge
+      // answered 204, so the record and its carried drops would go uncounted.
+      if (!validId(session) || !validId(e.turnId) || !validModel(model)) {
+        dropped += carried + 1;
+        return;
+      }
       const socket = await socketPath($);
       const body = JSON.stringify({
         kind: 'usage',
-        session: await $.session.id(),
+        session,
         turn: e.turnId,
         index: result?.index ?? e.index,
-        model: result?.usage?.model ?? e.model,
+        model,
         usage: usageOf(result),
         dropped: carried,
       });

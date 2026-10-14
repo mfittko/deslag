@@ -18,7 +18,8 @@ pub const USAGE: &str = "usage: deslag stats [--json [--session <id>]] [--since 
 const SCHEMA_VERSION: u64 = 1;
 
 /// Runs `deslag stats <args>` and returns the process exit code: 2 when
-/// `stats.jsonl` exists but cannot be read or when stdout cannot be written.
+/// `stats.jsonl` or `requests.jsonl` exists but cannot be read, or when stdout
+/// cannot be written.
 pub fn command(args: &[&str]) -> ExitCode {
     let Some((as_json, since_arg, session)) = parse_args(args) else {
         eprintln!("{USAGE}");
