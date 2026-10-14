@@ -184,10 +184,13 @@ These facts come from `claude plugin test plugins/claude` and `claude plugin val
 - `hooks/hooks.json` may hold `"modules"` next to `"hooks"`. Validation passes and lists the module's `turn.step` hook.
 - The observer passes every chunk and the final result through unchanged, with the module on and off.
 - A `$.http.fetch` started after the `turn.step` generator returned still runs. Its `socketPath` option reaches a Unix stream socket.
-- The mod API declarations (written by Claude Code 2.1.277) type the `turn.step` result's `usage` as `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens` and `model`, or `null`. The live capture below confirms or refutes this.
+- The mod API declarations (written by Claude Code 2.1.277) type the `turn.step` result's `usage` as `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens` and `model`, or `null`. Run U1 below confirms the four token fields and `model` live.
 
 ### Live capture
 
 | Run | Client | Command | Model | Observed `usage` | total_cost_usd |
 | --- | --- | --- | --- | --- | --- |
-<!-- live usage capture row: filled after the live run -->
+| U1 | 2.1.299 | `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 DESLAG_USAGE_STATS=1 claude -p "Run the Bash command: cat data.json ..." --model haiku --allowedTools Bash` with a copy of `plugins/claude` whose hook runs `deslag hook claude --minify-json`, owner `hook`, `deslag local start` | claude-haiku-5-5 | Two steps of one turn, each with all four token fields and `model` `claude-haiku-5-5`: step 0 `input_tokens` 2, `cache_read_input_tokens` 11,447, `cache_creation_input_tokens` 6,426, `output_tokens` 79; step 1 `input_tokens` 2, `cache_read_input_tokens` 17,873, `cache_creation_input_tokens` 2,303, `output_tokens` 3. `deslag stats --json --session <id>` listed both requests, no drops. The one hook report (a 4,105-byte pretty JSON file) went to step 1 with 723 estimated tokens removed | 0.0020804 |
+
+Status: live verified for the usage fields, the HTTP bridge and the per-request attribution. The `null` usage of a step without a response was not produced live; it stays documented and is covered by tests. The run used a throwaway project directory, `--setting-sources project,local`, `--strict-mcp-config`, `--plugin-dir`, `--no-session-persistence`, `--max-budget-usd 0.30`, `--output-format json` and a throwaway `DESLAG_STATE_DIR`. No global settings were edited.
+
