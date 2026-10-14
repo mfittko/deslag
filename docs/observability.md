@@ -139,7 +139,29 @@ Drop behavior:
 - A record is dropped and counted locally, without a send, when its session id or turn id is not 1 to 64 bytes of `[A-Za-z0-9_-]`, its model is not 1 to 64 bytes of printable ASCII without `"` and `\`, or its index is not a non-negative safe integer. The same holds when no absolute state directory resolves.
 - The next delivered record carries the count in `dropped`.
 
-The service accepts one HTTP connection at a time. It reads at most 2048 bytes and must receive the whole request within 500 ms of the accept. It requires `POST /usage` with a `Content-Length` of at most 512 bytes and a body that starts with `{`, and forwards the body as one datagram to `local.sock`. It answers `204` when the datagram was sent, `503` when it was not, and `400` for any other request, and always closes the connection. An invalid record counts as a service drop, like an invalid report.
+The service accepts one HTTP connection at a time. It reads at most 2048 bytes and must receive the whole request within 500 ms of the accept. It requires `POST /usage` with a `Content-Length` of at most 512 bytes and a body that starts with `{`, and forwards the body as one datagram to `local.sock`. It answers `204` when the datagram was sent and `503` when it was not. It also answers `GET /session/<id>`; see [Session read](#session-read). It answers `400` for any other request and always closes the connection. An invalid record counts as a service drop, like an invalid report.
+
+### Savings widget
+
+`DESLAG_SAVINGS_WIDGET=1` turns on a status line. It needs the usage module, so `DESLAG_USAGE_STATS=1` must be set too:
+
+```sh
+CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 DESLAG_USAGE_STATS=1 DESLAG_SAVINGS_WIDGET=1 claude
+```
+
+After a usage record is delivered, the module starts one background `GET /session/<id>` for the session. The stream never waits for it. On success it sets the status line to the last request's `estimated_removed_tokens` and its provider input tokens (`input_tokens + cache_read_input_tokens + cache_creation_input_tokens`), and the session's `totals.estimated_removed_tokens`:
+
+```text
+deslag: ~120 tokens removed (estimate) of 5,432 input tokens · session ~1,200 removed (estimate)
+```
+
+The removed counts come from the `deslag-estimate-v1` estimator and carry the `(estimate)` label. The input count is provider-reported usage. A `null` count shows as `unknown`, never as 0. The line shows no money figures.
+
+The module clears the line when the send fails, the read fails, the answer is not `2xx`, the body is not a session document with at least one request, or the read takes longer than 1 s. At most 2 reads are unsettled at a time. The host fetch has no abort, so a hung read holds its slot until it settles, and the line does not refresh while both slots are held. Without `DESLAG_SAVINGS_WIDGET=1`, or with the usage module off, the module reads nothing and sets no status line.
+
+### Session read
+
+`GET /session/<id>` on `local-http.sock` asks the service to write its open hour, then answers `200` with `Content-Type: application/json` and the [`deslag stats --json --session <id>`](#deslag-stats---json---session-id) document of the default `24h` window. An invalid ID gets `400`. A state file that exists but cannot be read gets `500`. Each read parses `requests.jsonl`, and the bridge serves one connection at a time, so a slow read delays the usage sends behind it.
 
 ## Per-request lines
 
