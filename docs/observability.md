@@ -192,7 +192,7 @@ Prints the requests of one session in the window, in file order. An invalid ID, 
 
 ```json
 {
-  "partial": { "reasons": ["service_not_running"], "value": true },
+  "partial": { "reasons": ["service_not_running", "drops"], "value": true },
   "requests": [
     {
       "compression_reports": 2,
