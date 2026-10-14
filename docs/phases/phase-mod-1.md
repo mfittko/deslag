@@ -43,7 +43,7 @@ Session boundaries for owner changes. The owner file is per state directory, so 
 ### Pending checks
 
 - `turn.step` usage in a live session (E18). The observer has no export channel yet, so this needs the step-4 bridge or a probe.
-- Q4: ordering against the classic PostToolUse hook in one session, and whether `classic.PostToolUse` lets a mod observe hook outcomes.
+- Ordering against the classic PostToolUse hook in one session, and whether `classic.PostToolUse` lets a mod observe hook outcomes.
 - Model switch, reload, upgrade and disable inside a running session; whether a timed-out child is killed.
 - Linux x86_64, headless SDK and Desktop surfaces.
 - Memory, allocations and parallel tool calls in the bridge benchmark, and behavior under telemetry failure.
