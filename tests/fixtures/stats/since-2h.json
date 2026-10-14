@@ -1,0 +1,70 @@
+{
+  "buckets": [
+    {
+      "adapter": "hook",
+      "candidate_bytes": 600,
+      "count": 2,
+      "dropped": 1,
+      "emitted_bytes": 600,
+      "hour": 1799992800,
+      "original_bytes": 1000,
+      "outcome": "changed",
+      "reason": null,
+      "tokens": {
+        "estimate:deslag-estimate-v1": {
+          "candidate": 150,
+          "emitted": 150,
+          "original": 250
+        }
+      },
+      "tool": "bash",
+      "transform": "json-minify"
+    },
+    {
+      "adapter": "proxy",
+      "candidate_bytes": 300,
+      "count": 1,
+      "dropped": 0,
+      "emitted_bytes": 500,
+      "hour": 1799992800,
+      "original_bytes": 500,
+      "outcome": "would_change",
+      "reason": null,
+      "tokens": {},
+      "tool": "bash",
+      "transform": "json-minify"
+    },
+    {
+      "adapter": "hook",
+      "candidate_bytes": null,
+      "count": 3,
+      "dropped": 0,
+      "emitted_bytes": 30,
+      "hour": 1799996400,
+      "original_bytes": 30,
+      "outcome": "skipped",
+      "reason": "below_min_bytes",
+      "tokens": {},
+      "tool": "bash",
+      "transform": "json-minify"
+    }
+  ],
+  "partial": {
+    "reasons": [
+      "service_not_running",
+      "drops"
+    ],
+    "value": true
+  },
+  "schema_version": 1,
+  "totals": {
+    "dropped": 3,
+    "emitted_reduction_bytes": 400,
+    "reports": 6,
+    "would_change_reduction_bytes": 200
+  },
+  "window": {
+    "since": 1799992800,
+    "until": 1800000600
+  }
+}

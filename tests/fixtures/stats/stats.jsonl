@@ -1,0 +1,9 @@
+{"v":1,"hour":1799892000,"adapter":"hook","transform":"json-minify","outcome":"changed","reason":null,"tool":"bash","count":5,"original_bytes":5000,"candidate_bytes":1000,"emitted_bytes":1000,"tokens":{},"dropped":0}
+{"v":1,"hour":1799892000,"adapter":null,"transform":null,"outcome":null,"reason":null,"tool":null,"count":0,"original_bytes":0,"candidate_bytes":null,"emitted_bytes":0,"tokens":{},"dropped":0}
+{"v":1,"hour":1799992800,"adapter":null,"transform":null,"outcome":null,"reason":null,"tool":null,"count":0,"original_bytes":0,"candidate_bytes":null,"emitted_bytes":0,"tokens":{},"dropped":0}
+{"v":1,"hour":1799992800,"adapter":"hook","transform":"json-minify","outcome":"changed","reason":null,"tool":"bash","count":1,"original_bytes":600,"candidate_bytes":360,"emitted_bytes":360,"tokens":{"estimate:deslag-estimate-v1":{"original":150,"candidate":90,"emitted":90}},"dropped":0}
+{"v":1,"hour":1799992800,"adapter":"proxy","transform":"json-minify","outcome":"would_change","reason":null,"tool":"bash","count":1,"original_bytes":500,"candidate_bytes":300,"emitted_bytes":500,"tokens":{},"dropped":0}
+not json
+{"v":1,"hour":1799992800,"adapter":"hook","transform":"json-minify","outcome":"changed","reason":null,"tool":"bash","count":1,"original_bytes":400,"candidate_bytes":240,"emitted_bytes":240,"tokens":{"estimate:deslag-estimate-v1":{"original":100,"candidate":60,"emitted":60}},"dropped":1}
+{"v":1,"hour":1799996400,"adapter":null,"transform":null,"outcome":null,"reason":null,"tool":null,"count":0,"original_bytes":0,"candidate_bytes":null,"emitted_bytes":0,"tokens":{},"dropped":2}
+{"v":1,"hour":1799996400,"adapter":"hook","transform":"json-minify","outcome":"skipped","reason":"below_min_bytes","tool":"bash","count":3,"original_bytes":30,"candidate_bytes":null,"emitted_bytes":30,"tokens":{},"dropped":0}
