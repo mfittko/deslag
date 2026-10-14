@@ -6,9 +6,10 @@
 //! approved for change. Every other block and field, including `thinking` and
 //! its `signature`, `redacted_thinking`, `cache_control`, `is_error` and
 //! unknown types and fields, stays byte-identical. An ineligible new result is
-//! recorded as `unchanged`. The eligibility rule decides new results; pinned
-//! decisions from earlier sessions replay as recorded. Local reports carry the
-//! tool category of the result.
+//! recorded as `unchanged`. The eligibility rule decides new results; results
+//! already pinned in a session manifest, including those recorded under an
+//! earlier policy version, replay as recorded. Local reports carry the tool
+//! category of the result.
 //!
 //! The request is never re-serialized. Each rewritten string lexeme is located
 //! by its byte span in the original body and spliced; all other bytes are
@@ -462,12 +463,16 @@ fn tool_results(body: &[u8]) -> Option<(&str, Vec<ToolResult<'_>>)> {
             })
     };
     // An id used by tool uses of different categories is `Other`: fail closed.
+    // A missing, non-string or escaped name is `Other` as well.
     let mut tools: HashMap<&str, local::ToolCategory> = HashMap::new();
     for (id, name) in blocks("assistant")
         .filter(|(_, b)| b.str("type") == Some("tool_use"))
-        .filter_map(|(_, b)| Some((b.str("id")?, b.str("name")?)))
+        .filter_map(|(_, b)| Some((b.str("id")?, b.str("name"))))
     {
-        let tool = local::ToolCategory::from_tool_name(name);
+        let tool = name.map_or(
+            local::ToolCategory::Other,
+            local::ToolCategory::from_tool_name,
+        );
         tools
             .entry(id)
             .and_modify(|t| {
@@ -743,6 +748,41 @@ mod tests {
             let store = fresh(name);
             let out = rewrite(body.as_bytes(), &store, "s", &generous(), minify, None);
             assert!(matches!(out, Ok(None)), "{name}");
+            let _ = std::fs::remove_dir_all(&store.dir);
+        }
+    }
+
+    #[test]
+    fn tool_use_names_decide_eligibility() {
+        let bash = r#"{"type":"tool_use","id":"t","name":"Bash","input":{}}"#;
+        let body = |uses: &str| {
+            format!(
+                r#"{{"messages":[{{"role":"assistant","content":[{uses}]}},{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"t","content":"[ 1 ]"}}]}}]}}"#
+            )
+        };
+        let second = |rest: &str| {
+            body(&format!(
+                r#"{bash},{{"type":"tool_use","id":"t"{rest},"input":{{}}}}"#
+            ))
+        };
+        let cases = [
+            ("bash", body(bash), true),
+            (
+                "mcp",
+                body(r#"{"type":"tool_use","id":"t","name":"mcp__server__tool","input":{}}"#),
+                true,
+            ),
+            ("bash-bash", body(&format!("{bash},{bash}")), true),
+            // A second use with a conflicting or unreadable name fails closed.
+            ("bash-escaped", second(r#","name":"Read""#), false),
+            ("bash-no-name", second(""), false),
+            ("bash-number", second(r#","name":5"#), false),
+            ("bash-read", second(r#","name":"Read""#), false),
+        ];
+        for (name, body, minified) in cases {
+            let store = fresh(&format!("names-{name}"));
+            let out = rewrite(body.as_bytes(), &store, "s", &generous(), minify, None);
+            assert_eq!(out.unwrap().is_some(), minified, "{name}");
             let _ = std::fs::remove_dir_all(&store.dir);
         }
     }

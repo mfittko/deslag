@@ -8,7 +8,8 @@ use std::{
 };
 
 use bytes::Bytes;
-use deslag_proxy::{Upstream, serve};
+use deslag_core::BoundedExecutor;
+use deslag_proxy::{Limits, Upstream, serve, serve_with};
 use http_body_util::{BodyExt, Full, channel::Channel, combinators::BoxBody};
 use hyper::{
     HeaderMap, Request, Response, body::Incoming, server::conn::http1, service::service_fn,
@@ -301,7 +302,12 @@ async fn streams_sse_with_mutation_enabled() {
     let upstream = Upstream::parse(&format!("http://{upstream}"))
         .unwrap()
         .with_json_minification(store);
-    tokio::spawn(serve(listener, upstream));
+    // A budget no debug build on a slow runner can miss, as in minify_json.rs.
+    let limits = Limits {
+        executor: BoundedExecutor::new(4, Duration::from_secs(60)).unwrap(),
+        ..Limits::default()
+    };
+    tokio::spawn(serve_with(listener, upstream, limits));
 
     let body = r#"{"model":"m","stream":true,"messages":[
 {"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Bash","input":{}}]},
