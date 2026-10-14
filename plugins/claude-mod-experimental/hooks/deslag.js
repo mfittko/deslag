@@ -59,9 +59,11 @@ export function parseResponse(result, want) {
   if (response?.schema_version !== 1 || response.complete !== true) return null;
   if (response.policy_version !== POLICY_VERSION) return null;
   if (!Array.isArray(response.items) || response.items.length !== want.length) return null;
+  // One pass to index by slot keeps validation linear in the item count.
+  const bySlot = new Map(response.items.map((it) => [it?.slot, it]));
   const items = [];
   for (const s of want) {
-    const item = response.items.find((it) => it?.slot === s.slot);
+    const item = bySlot.get(s.slot);
     if (!item) return null;
     if (item.outcome === 'changed') {
       if (typeof item.replacement !== 'string') return null;
@@ -157,7 +159,13 @@ function failed(item) {
 
 // Counts a replacement as changed only when the stored row holds it.
 export function record(stats, want, items, stored, mode, applied) {
-  for (const s of want) stats.bytes.original += utf8.encode(s.text).length;
+  // Original and stored bytes are counted for every row, so the totals never
+  // imply a reduction for a row that stayed unchanged.
+  for (const s of want) {
+    stats.bytes.original += utf8.encode(s.text).length;
+    const kept = storedText(stored?.message, s);
+    if (typeof kept === 'string') stats.bytes.stored += utf8.encode(kept).length;
+  }
   if (items === null) {
     stats.slots.bridge_error += want.length;
     return;
@@ -169,7 +177,6 @@ export function record(stats, want, items, stored, mode, applied) {
   for (const [k, s] of want.entries()) {
     const item = items[k];
     const kept = storedText(stored?.message, s);
-    if (typeof kept === 'string') stats.bytes.stored += utf8.encode(kept).length;
     if (item.outcome === 'changed' && applied) {
       stats.bytes.candidate += item.replacement_utf8_bytes;
       stats.slots[kept === item.replacement ? 'changed' : 'overridden']++;

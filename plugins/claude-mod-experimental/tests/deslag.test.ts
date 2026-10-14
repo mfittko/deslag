@@ -193,6 +193,16 @@ describe('pure helpers', () => {
     expect(stats.bytes).toEqual({ original: 12, candidate: 4, stored: 10 });
   });
 
+  test('a bridge error or failed slot still counts the stored bytes', () => {
+    const want = [{ slot: 0, block: 0, inner: null, text: '{ }' }];
+    const row = { message: { content: [{ content: '{ }' }] } };
+    const stats = newStats();
+    record(stats, want, null, row, 'safe', false);
+    record(stats, want, [{ slot: 0, outcome: 'failed' }], row, 'safe', false);
+    expect(stats.slots).toMatchObject({ bridge_error: 1, failed: 1 });
+    expect(stats.bytes).toEqual({ original: 6, candidate: 0, stored: 6 });
+  });
+
   test('a step without usage is unknown, never zero', () => {
     const stats = newStats();
     recordUsage(stats, { usage: null });
@@ -206,6 +216,13 @@ describe('pure helpers', () => {
     const want = [{ slot: 0 }];
     expect(parseResponse({ exitCode: 0, stdout: 'null' }, want)).toBeNull();
     expect(parseResponse({ exitCode: 0, stdout: envelope([{ slot: 0, outcome: 'bogus' }]) }, want)).toBeNull();
+  });
+
+  test('parseResponse matches items by slot and rejects duplicate slots', () => {
+    const want = [{ slot: 0 }, { slot: 1 }];
+    const skip = (slot: number) => ({ slot, outcome: 'skipped' });
+    expect(parseResponse({ exitCode: 0, stdout: envelope([skip(1), skip(0)]) }, want)).toEqual([skip(0), skip(1)]);
+    expect(parseResponse({ exitCode: 0, stdout: envelope([skip(0), skip(0)]) }, want)).toBeNull();
   });
 });
 
