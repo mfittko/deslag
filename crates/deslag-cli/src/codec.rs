@@ -7,6 +7,7 @@
 //! so the caller keeps the original content. Texts cross as JSON strings, so
 //! the numbers inside a payload are never parsed or rounded.
 
+use std::collections::HashSet;
 use std::io::Read;
 use std::path::Path;
 
@@ -60,16 +61,21 @@ pub fn run(
     if !matches!(request["tool_category"].as_str(), Some("bash" | "mcp")) {
         return Err("tool_category must be bash or mcp".into());
     }
+    // The caller's policy label is echoed so it can reject a mismatched reply.
+    let policy = request["policy_version"]
+        .as_str()
+        .ok_or("policy_version must be a string")?;
     let items = request["items"]
         .as_array()
         .ok_or("items must be an array")?;
     let mut slots = Vec::with_capacity(items.len());
+    let mut seen = HashSet::with_capacity(items.len());
     for item in items {
         let slot = item["slot"]
             .as_u64()
             .ok_or("slot must be an unsigned integer")?;
         let text = item["text"].as_str().ok_or("text must be a string")?;
-        if slots.iter().any(|(s, _)| *s == slot) {
+        if !seen.insert(slot) {
             return Err(format!("duplicate slot {slot}"));
         }
         slots.push((slot, text));
@@ -81,8 +87,6 @@ pub fn run(
         .into_iter()
         .map(|(slot, text)| item(slot, text, mode, owner_gate, exec, job))
         .collect();
-    // The caller's policy label is echoed so it can reject a mismatched reply.
-    let policy = request["policy_version"].clone();
     Ok(
         json!({"schema_version": 1, "policy_version": policy, "complete": true, "items": out})
             .to_string(),
@@ -120,7 +124,6 @@ fn item(
         (Some(candidate), Mode::Safe) => ("changed", Some(candidate)),
         (Some(_), _) => {
             // The job runs the safe context; observe emits the original.
-            report["mode"] = "observe".into();
             report["outcome"] = "would_change".into();
             report["emitted_bytes"] = report["original_bytes"].clone();
             report["emitted_tokens"] = report["original_tokens"].clone();
@@ -134,6 +137,9 @@ fn item(
             None,
         ),
     };
+    if mode == Mode::Observe && report.is_object() {
+        report["mode"] = "observe".into();
+    }
     json!({
         "slot": slot,
         "outcome": outcome,
@@ -198,13 +204,16 @@ mod tests {
 
     #[test]
     fn observe_reports_would_change_without_a_replacement() {
-        let out = call(&request("observe", &[PRETTY]), false).unwrap();
+        let out = call(&request("observe", &[PRETTY, "plain text"]), false).unwrap();
         let item = &out["items"][0];
         assert_eq!(item["outcome"], "would_change");
         assert_eq!(item["replacement"], Value::Null);
         assert_eq!(item["report"]["outcome"], "would_change");
         assert_eq!(item["report"]["mode"], "observe");
         assert_eq!(item["report"]["emitted_bytes"], PRETTY.len());
+        let skipped = &out["items"][1];
+        assert_eq!(skipped["outcome"], "skipped");
+        assert_eq!(skipped["report"]["mode"], "observe");
     }
 
     #[test]
@@ -222,6 +231,10 @@ mod tests {
             let line = run(input.as_bytes(), 1 << 20, gate, &generous(), minify).unwrap();
             let out: Value = serde_json::from_str(&line).unwrap();
             assert_ne!(out["items"][0]["outcome"], "changed", "{line}");
+            if mode == "off" {
+                assert_eq!(out["items"][0]["outcome"], "skipped", "{line}");
+                assert_eq!(out["items"][0]["reason"], "mode_off", "{line}");
+            }
         }
     }
 
@@ -245,10 +258,20 @@ mod tests {
 
     #[test]
     fn malformed_requests_fail_without_output() {
-        let base = json!({"schema_version": 1, "mode": "safe", "tool_category": "bash",
-                          "items": [{"slot": 0, "text": PRETTY}]});
-        let mut cases = vec!["not json".to_string()];
+        let base = json!({"schema_version": 1, "policy_version": "p", "mode": "safe",
+                          "tool_category": "bash", "items": [{"slot": 0, "text": PRETTY}]});
+        assert!(call(&base.to_string(), true).is_ok());
+        let mut missing_policy = base.clone();
+        missing_policy
+            .as_object_mut()
+            .unwrap()
+            .remove("policy_version");
+        let mut cases = vec!["not json".to_string(), missing_policy.to_string()];
         for (key, bad) in [
+            ("policy_version", Value::Null),
+            ("policy_version", json!(1)),
+            ("policy_version", json!({})),
+            ("policy_version", json!([])),
             ("schema_version", json!(2)),
             ("mode", json!("aggressive")),
             ("tool_category", json!("read")),
@@ -259,6 +282,10 @@ mod tests {
                 "items",
                 json!([{"slot": 0, "text": "a"}, {"slot": 0, "text": "b"}]),
             ),
+            (
+                "items",
+                json!([{"slot": 7, "text": "a"}, {"slot": 1, "text": "b"}, {"slot": 7, "text": "c"}]),
+            ),
         ] {
             let mut req = base.clone();
             req[key] = bad;
@@ -267,6 +294,25 @@ mod tests {
         for case in cases {
             assert!(call(&case, true).is_err(), "{case}");
         }
+    }
+
+    #[test]
+    fn accepted_envelopes_echo_policy_and_keep_slot_order() {
+        let mut req = json!({"schema_version": 1, "policy_version": "", "mode": "safe",
+                             "tool_category": "bash", "items": []});
+        let out = call(&req.to_string(), true).unwrap();
+        assert_eq!(out["policy_version"], "");
+        assert_eq!(out["items"], json!([]));
+        req["items"] =
+            json!([{"slot": 9, "text": "a"}, {"slot": 0, "text": "b"}, {"slot": 4, "text": "c"}]);
+        let out = call(&req.to_string(), true).unwrap();
+        let slots: Vec<&Value> = out["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|i| &i["slot"])
+            .collect();
+        assert_eq!(slots, [&json!(9), &json!(0), &json!(4)]);
     }
 
     #[test]

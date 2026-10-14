@@ -25,7 +25,7 @@ Remaining limits of the mod: at this boundary Bash `stdout` and `stderr` arrive 
 ## Consequences
 
 - No change to v0.1 release promises, default codecs or the frozen evaluation.
-- The staged plan in the spike record defines the follow-up PRs: remaining live verification, `Owner::Mod`, mod instrumentation feeding the #21 local service, then opt-in mod compression.
+- The staged plan in the phase plan, [docs/phases/phase-mod-1.md](../phases/phase-mod-1.md), defines the follow-up PRs: remaining live verification, `Owner::Mod`, mod instrumentation feeding the #21 local service, then opt-in mod compression.
 - A mod does not keep original outputs off disk. Documentation must not present it as redaction.
 - `$.process.run` is CLI only. Surfaces without it get no mod compression and fall back to the hook or pass through.
 - The bridge must validate a complete envelope, because `$.process.run` truncates stdout without an error.

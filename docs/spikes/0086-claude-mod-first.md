@@ -46,7 +46,7 @@ Declared before the benchmark ran. They follow [PLAN §13.2](../PLAN.md#132-prop
 | Codec bridge, whole process, payload up to 64 KiB | p95 within 2 ms of the hook's p95 on the same payload, and p95 at most 25 ms ([PLAN §13.2](../PLAN.md#132-proposed-initial-budgets) warm hook) |
 | Codec bridge, 1 MiB payload | Completes with a complete envelope; p95 at most 100 ms |
 | Payload above the 16 MiB cap | Exit nonzero, no stdout, original kept; p95 at most 250 ms |
-| Client `$.process.run` overhead over the native call | p95 at most 10 ms (pending live) |
+| Client `$.process.run` overhead over the native call | p95 at most 10 ms (measured live in E21) |
 | Instrumentation in the hot path | No awaited I/O; counters only ([PLAN §12.2](../PLAN.md#122-hot-path-contract)) |
 
 ## Findings
@@ -148,10 +148,7 @@ Live gate outcome:
 
 ### Still pending
 
-- `turn.step` usage in a live session (E18). The observer has no export channel yet, so this needs the step-4 bridge or a probe.
-- Q4: ordering against the classic PostToolUse hook in one session, and whether `classic.PostToolUse` lets a mod observe hook outcomes.
-- Model switch, reload, upgrade and disable inside a running session; whether a timed-out child is killed.
-- Linux x86_64, headless SDK and Desktop surfaces.
+The remaining checks are tracked in the Pending checks list of the phase plan, [docs/phases/phase-mod-1.md](../phases/phase-mod-1.md#pending-checks).
 
 ## Recommendation
 
@@ -164,16 +161,7 @@ Reasons:
 - The mod still trails the hook on three points: Bash rows with stderr pass through (E9), the stderr-only JSON gap (comparison table), and originals stay on disk (E15). `$.process.run` is CLI only (E17), and Mods need `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` while they are early access.
 - The usage observer can give deslag provider-reported usage without a proxy (E6, E18); the data itself still needs a live capture.
 
-Staged plan. Each step is one small PR with its own tests; none deletes the proxy or changes a release promise.
-
-| Step | Change | Depends on | Acceptance | Rollback |
-| --- | --- | --- | --- | --- |
-| 1 | This spike: codec bridge, experimental mod, benchmark, live checks Q1 to Q3, ADR 0007 | none | Tests and live runs above; ADR accepted | Revert the PR; nothing ships |
-| 2 | Remaining live verification (see Still pending) under an operator-authorized cap; record the mod row in [`docs/compatibility.md`](../compatibility.md) | 1, budget authorization | Usage capture, classic-hook ordering and in-session lifecycle recorded with versions, commands and costs | Docs only |
-| 3 | `Owner::Mod` in `deslag_proxy::session` and the owner writer in the #20 launcher/doctor work; the hook conflict scan reports an active mod | 1 | Owner file round trip; hook and proxy stand down under `mod` (tests) | Owner back to `hook` |
-| 4 | Usage observer and compression counters in `plugins/claude` as an opt-in mod module, feeding the #21 local service over a bounded bridge | 2 (usage capture), #21 | Works with compression off; drops are counted; no awaited I/O in the hot path | Disable the mod module; the hook is unaffected |
-| 5 | Mod compression as an opt-in alternative to the hook, binary path from the verified install, one owner selected through the owner file | 3 | #22 and #23 gates extended to the mod adapter | Owner `hook`, disable the mod module |
-| 6 | Decide the Claude default (hook or mod) and whether the proxy requirement leaves the Claude MVP | 5, a paired evaluation run | Owner decision recorded in a new ADR | Keep the hook default |
+Staged plan. Step 1 is this spike: codec bridge, experimental mod, benchmark, live checks Q1 to Q3 and ADR 0007. Steps 2 to 6 graduated into the phase plan, [docs/phases/phase-mod-1.md](../phases/phase-mod-1.md). That file is the only copy of the staged plan and its step gates.
 
 Issue impact (proposals, not edits to those issues):
 

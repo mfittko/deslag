@@ -5,9 +5,10 @@ import { describe, expect, mock, test } from 'claude-code/testing';
 import { newStats, parseResponse, record, recordUsage, slots } from '../hooks/deslag.js';
 
 const PRETTY_MCP = '[\n  {\n    "id": 1,\n    "name": "äöü"\n  }\n]';
-// Captured from `deslag codec --protocol 1` (release build of this branch).
+// Captured from `deslag codec --protocol 1` (release build of this branch,
+// safe mode, owner mod) for the request this file's first test sends.
 const REAL_RESPONSE =
-  '{"complete":true,"items":[{"outcome":"changed","reason":null,"replacement":"[{\\"id\\":1,\\"name\\":\\"äöü\\"}]","replacement_utf8_bytes":26,"report":{"candidate_bytes":26,"candidate_tokens":null,"compression_duration":14083,"emitted_bytes":26,"emitted_tokens":null,"format_version":null,"mode":"safe","original_bytes":45,"original_tokens":null,"outcome":"changed","policy_version":1,"schema_version":1,"skip_or_failure_reason":null,"transform_id":"json-minify","transform_version":1,"validation_outcome":"passed"},"slot":0},{"outcome":"skipped","reason":"unsupported_format","replacement":null,"replacement_utf8_bytes":null,"report":null,"slot":1}],"policy_version":"spike-1","schema_version":1}\n';
+  '{"complete":true,"items":[{"outcome":"changed","reason":null,"replacement":"[{\\"id\\":1,\\"name\\":\\"äöü\\"}]","replacement_utf8_bytes":26,"report":{"candidate_bytes":26,"candidate_tokens":null,"compression_duration":20958,"emitted_bytes":26,"emitted_tokens":null,"format_version":null,"mode":"safe","original_bytes":45,"original_tokens":null,"outcome":"changed","policy_version":1,"schema_version":1,"skip_or_failure_reason":null,"transform_id":"json-minify","transform_version":1,"validation_outcome":"passed"},"slot":0},{"outcome":"skipped","reason":"unsupported_format","replacement":null,"replacement_utf8_bytes":null,"report":{"candidate_bytes":null,"candidate_tokens":null,"compression_duration":125,"emitted_bytes":5,"emitted_tokens":null,"format_version":null,"mode":"safe","original_bytes":5,"original_tokens":null,"outcome":"skipped","policy_version":1,"schema_version":1,"skip_or_failure_reason":"unsupported_format","transform_id":"json-minify","transform_version":1,"validation_outcome":"not_run"},"slot":1}],"policy_version":"spike-1","schema_version":1}\n';
 
 const changed = (slot: number, replacement: string) => ({
   slot,
@@ -82,18 +83,22 @@ describe('session.append compression', () => {
     expect(JSON.parse(calls[0].init.stdin).mode).toBe('observe');
   });
 
-  test('off, a relative binary, Read, errors and non-tool rows never call the bridge', async ($, on) => {
-    const calls = bridge(on, () => ({ value: { exitCode: 0, stdout: envelope([changed(0, 'X')]), stderr: '' } }));
-    mock.env(on, { DESLAG_MOD_MODE: 'safe', DESLAG_MOD_BINARY: 'deslag' });
-    await $.session.append(bash('{ }'));
-    const read = { ...bash('{ }'), origin: { kind: 'tool', tool: 'Read' } };
-    const model = { ...bash('{ }'), origin: { kind: 'model', model: 'm' } };
-    for (const row of [read, model, bash('{ }', { is_error: true })]) {
+  const neverBridged: Array<[string, Record<string, string>, any]> = [
+    ['off mode', { DESLAG_MOD_MODE: 'off', DESLAG_MOD_BINARY: '/opt/deslag' }, bash('{ }')],
+    ['a relative binary', { DESLAG_MOD_MODE: 'safe', DESLAG_MOD_BINARY: 'deslag' }, bash('{ }')],
+    ['a Read row', { DESLAG_MOD_MODE: 'safe', DESLAG_MOD_BINARY: '/opt/deslag' }, { ...bash('{ }'), origin: { kind: 'tool', tool: 'Read' } }],
+    ['a model row', { DESLAG_MOD_MODE: 'safe', DESLAG_MOD_BINARY: '/opt/deslag' }, { ...bash('{ }'), origin: { kind: 'model', model: 'm' } }],
+    ['an is_error row', { DESLAG_MOD_MODE: 'safe', DESLAG_MOD_BINARY: '/opt/deslag' }, bash('{ }', { is_error: true })],
+  ];
+  for (const [name, env, row] of neverBridged) {
+    test(`${name} never calls the bridge`, async ($, on) => {
+      const calls = bridge(on, () => ({ value: { exitCode: 0, stdout: envelope([changed(0, 'X')]), stderr: '' } }));
+      mock.env(on, env);
       const stored = await $.session.append(row);
       expect(stored.message.content[0].content).toBe('{ }');
-    }
-    expect(calls).toHaveLength(0);
-  });
+      expect(calls).toHaveLength(0);
+    });
+  }
 
   const broken: Array<[string, (e: any) => unknown]> = [
     ['nonzero exit', () => ({ value: { exitCode: 65, stdout: '', stderr: 'bad' } })],
