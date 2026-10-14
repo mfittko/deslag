@@ -7,4 +7,5 @@
 
 ### Changed
 
+- The plugin's `hooks/hooks.json` holds `"modules"` next to `"hooks"`. This mixed file is validated only on Claude Code 2.1.299. A run on 2.1.296 is pending (#90)
 - `totals.dropped` in `deslag stats --json` also counts the drops carried by usage records (#90)

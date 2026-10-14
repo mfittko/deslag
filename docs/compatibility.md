@@ -12,6 +12,8 @@ This file records only observed behavior. Untested versions and platforms are un
 | Replacement field | `hookSpecificOutput.updatedToolOutput` |
 | Tested on | 2026-10-11 |
 
+The shipped `plugins/claude/hooks/hooks.json` holds `"modules"` next to `"hooks"` (#90). That mixed file was validated only on Claude Code 2.1.299 (see [Claude Code usage module](#claude-code-usage-module)). The 2.1.296 runs in this file used the plugin before it held `"modules"`. No run covers the mixed file on 2.1.296 to 2.1.298.
+
 ### Observed contract
 
 - The client sends one JSON object on stdin. Captured Bash, Read, MCP and subagent payloads are in `tests/fixtures/claude/` (paths and IDs replaced with placeholders).
@@ -102,6 +104,7 @@ The JSON output of run L2 was not saved, so its cost is not recorded. Its cap wa
 - MCP error results, resources, images and other non-text results.
 - Client behavior when the hook stops reading oversize input early (the adapter drains stdin, untested live).
 - Composition with other result-replacement hooks in a live client.
+- `claude plugin validate plugins/claude` and one hook run on Claude Code 2.1.296 with the mixed `hooks/hooks.json` (`"modules"` next to `"hooks"`).
 - `--continue` and proxy-mode resume and fork with a live client. Hook-mode resume and fork are recorded in [ADR 0006](decisions/0006-session-identity-and-replay.md).
 
 ## Plugin distribution
@@ -181,7 +184,7 @@ The usage module `plugins/claude/hooks/usage.js` observes `turn.step` and sends 
 
 These facts come from `claude plugin test plugins/claude` and `claude plugin validate plugins/claude` on Claude Code 2.1.299.
 
-- `hooks/hooks.json` may hold `"modules"` next to `"hooks"`. Validation passes and lists the module's `turn.step` hook.
+- `hooks/hooks.json` may hold `"modules"` next to `"hooks"`. Validation passes and lists the module's `turn.step` hook. This is the only recorded evidence for the mixed file. Clients 2.1.296 to 2.1.298 are untested with it.
 - The observer passes every chunk and the final result through unchanged, with the module on and off.
 - A `$.http.fetch` started after the `turn.step` generator returned still runs. Its `socketPath` option reaches a Unix stream socket.
 - The mod API declarations (written by Claude Code 2.1.277) type the `turn.step` result's `usage` as `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens` and `model`, or `null`. Run U1 below confirms the four token fields and `model` live.
