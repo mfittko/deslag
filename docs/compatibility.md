@@ -182,9 +182,10 @@ The usage module `plugins/claude/hooks/usage.js` observes `turn.step` and sends 
 
 ### Verified offline
 
-These facts come from `claude plugin test plugins/claude` and `claude plugin validate plugins/claude` on Claude Code 2.1.299. The mixed `hooks/hooks.json` was also checked on 2.1.296.
+These facts come from `claude plugin test plugins/claude` and `claude plugin validate plugins/claude` on Claude Code 2.1.296 and 2.1.299. Two bullets also cite live checks: the `ui.status` bullet points to the demo recorded run, and the mod API declarations bullet points to run U1 below.
 
-- `hooks/hooks.json` may hold `"modules"` next to `"hooks"`. Validation passes and lists the module's `turn.step` hook on 2.1.296 and 2.1.299. `claude plugin test plugins/claude` passes 16 of 16 on 2.1.296 and 2.1.299. Clients 2.1.297 and 2.1.298 are untested offline with it.
+- `hooks/hooks.json` may hold `"modules"` next to `"hooks"`. Validation passes and lists the module's `turn.step` hook on 2.1.296 and 2.1.299. `claude plugin test plugins/claude` passes 32 of 32 on 2.1.296 and 2.1.299. Clients 2.1.297 and 2.1.298 are untested offline with it.
+- The savings widget uses the host APIs `$.ui.status` and `$.clock.sleep`. The widget tests in `plugins/claude/tests/usage.test.ts` hook `ui.status` and `clock.sleep` and pass on 2.1.296 and 2.1.299. The [demo recorded run](demo.md#recorded-run) is the live check of `ui.status` on 2.1.299.
 - The observer passes every chunk and the final result through unchanged, with the module on and off.
 - A `$.http.fetch` started after the `turn.step` generator returned still runs. Its `socketPath` option reaches a Unix stream socket.
 - The mod API declarations (written by Claude Code 2.1.277) type the `turn.step` result's `usage` as `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens` and `model`, or `null`. Run U1 below confirms the four token fields and `model` live.

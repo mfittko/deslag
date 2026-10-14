@@ -97,6 +97,8 @@ For a local checkout, `claude --plugin-dir plugins/claude` loads the plugin. Its
 
 The plugin also holds an opt-in usage module. It sends the provider token usage of each model request to the `deslag local` service, and it never changes the model stream. Run `deslag local start`, then start Claude Code with `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 DESLAG_USAGE_STATS=1`. `deslag stats --json --session <id>` then lists each request with its usage and the estimated tokens that hook compression removed. See [Observability](docs/observability.md#usage-module).
 
+The usage module also holds an opt-in savings widget. Add `DESLAG_SAVINGS_WIDGET=1` to the variables above. After each model request, the status line then shows the tokens that hook compression removed from that request next to its provider-reported input tokens, plus the session total of the last 24 hours. The removed count is an estimate from a local estimator, and the widget labels it as one. The widget shows no money figures. When the service is not running or the module is off, it shows nothing. The [demo guide](docs/demo.md) enables hook compression and the widget in a throwaway session. Its [recorded run](docs/demo.md#recorded-run) shows non-zero savings.
+
 Benchmarks: `benchmarks/run.sh > docs/benchmarks/baseline.md` runs all runners in release mode and records machine and commit metadata. The committed [baseline](docs/benchmarks/baseline.md) is a measurement only; PLAN §13.2 budgets stay provisional.
 
 Work runs through [dev-loops](https://github.com/mfittko/dev-loops). Repository settings live in [`.devloops`](.devloops).

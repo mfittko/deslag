@@ -42,6 +42,9 @@ async function socketPath($) {
   return dir && `${dir}/local-http.sock`;
 }
 
+// Resolves to `{ session, socket }` when the record was delivered, `false`
+// when its delivery failed, `null` when it was dropped without a send, and
+// undefined when the module is off.
 async function send($, e, result) {
   // Decided before the first await: the cap applies when the step settles.
   const over = inFlight >= MAX_IN_FLIGHT;
@@ -50,7 +53,7 @@ async function send($, e, result) {
     if ((await $.env.get('DESLAG_USAGE_STATS')) !== '1') return;
     if (over) {
       dropped++;
-      return;
+      return null;
     }
     while (carrier) await carrier;
     // Swap, not read: concurrent sends never carry the same drops twice.
@@ -66,9 +69,13 @@ async function send($, e, result) {
       // answered 204, so the record and its carried drops would go uncounted.
       if (!validId(session) || !validId(e.turnId) || !validModel(model) || !validIndex(index)) {
         dropped += carried + 1;
-        return;
+        return null;
       }
       const socket = await socketPath($);
+      if (!socket) {
+        dropped += carried + 1;
+        return null;
+      }
       const body = JSON.stringify({
         kind: 'usage',
         session,
@@ -78,17 +85,18 @@ async function send($, e, result) {
         usage: usageOf(result),
         dropped: carried,
       });
-      const res = socket
-        ? await $.http.fetch('http://deslag/usage', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json', 'content-length': String(new TextEncoder().encode(body).length) },
-            body,
-            socketPath: socket,
-          })
-        : undefined;
-      if (!res?.ok) dropped += carried + 1;
+      const res = await $.http.fetch('http://deslag/usage', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-length': String(new TextEncoder().encode(body).length) },
+        body,
+        socketPath: socket,
+      });
+      if (res?.ok) return { session, socket };
+      dropped += carried + 1;
+      return false;
     } catch {
       dropped += carried + 1;
+      return false;
     } finally {
       if (settle) {
         carrier = null;
@@ -100,6 +108,60 @@ async function send($, e, result) {
   }
 }
 
+// Session reads not settled yet. A refresh over the cap is skipped.
+// ponytail: $.http.fetch has no timeout or abort, so a hung host fetch holds
+// its slot until it settles; at the cap the line stops refreshing. Abort the
+// fetch instead once the host offers it.
+const MAX_READS = 2;
+let reads = 0;
+const READ_TIMEOUT_MS = 1000;
+
+const count = (n) => (Number.isSafeInteger(n) ? n.toLocaleString('en-US') : 'unknown');
+const estimate = (n) => (Number.isSafeInteger(n) ? `~${count(n)}` : 'unknown');
+
+// The widget line for a `deslag stats --json --session <id>` document: the
+// last request's estimated removed tokens next to its provider input tokens,
+// and the session total. Throws on a document without requests.
+export function savingsLine(doc) {
+  const last = doc.requests.at(-1);
+  if (doc.schema_version !== 1 || !last) throw new Error('no request');
+  const u = last.usage;
+  const input = u && u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens;
+  return (
+    `deslag: ${estimate(last.estimated_removed_tokens)} tokens removed (estimate) of ${count(input)} input tokens` +
+    ` · session ${estimate(doc.totals?.estimated_removed_tokens)} removed (estimate)`
+  );
+}
+
+async function readLine($, { session, socket }) {
+  const res = await $.http.fetch(`http://deslag/session/${session}`, { socketPath: socket });
+  if (!res?.ok) throw new Error(`status ${res?.status}`);
+  return savingsLine(JSON.parse(res.text));
+}
+
+// Bumped by each refresh that sets the line; only the latest one writes it.
+let generation = 0;
+
+// Opt-in with DESLAG_SAVINGS_WIDGET=1. Shows the line after a delivered send,
+// and clears it on a failed delivery, a failed read or a read slower than
+// READ_TIMEOUT_MS. A record dropped without a send (send cap, invalid ids, no
+// state dir) leaves the line unchanged. A refresh over the read cap leaves it
+// unchanged too, but still ends every older read's claim on the line.
+async function refresh($, sent) {
+  if (sent == null || (await $.env.get('DESLAG_SAVINGS_WIDGET')) !== '1') return;
+  const mine = ++generation;
+  if (sent && reads >= MAX_READS) return;
+  let text;
+  if (sent) {
+    reads++;
+    const read = readLine($, sent).finally(() => reads--);
+    const timeout = $.clock.sleep(READ_TIMEOUT_MS).then(() => undefined);
+    text = await Promise.race([read, timeout]).catch(() => undefined);
+  }
+  // A newer refresh owns the line: this read's late text or timeout is ignored.
+  if (mine === generation) await $.ui.status(text);
+}
+
 async function* observeUsage($, e, next) {
   let result;
   try {
@@ -107,8 +169,11 @@ async function* observeUsage($, e, next) {
     result = yield* next(e);
     return result;
   } finally {
-    // Not awaited: usage never delays, replaces or retries the provider request.
-    send($, e, result).catch(() => {});
+    // Not awaited: usage and the widget never delay, replace or retry the
+    // provider request.
+    send($, e, result)
+      .then((sent) => refresh($, sent))
+      .catch(() => {});
   }
 }
 

@@ -750,6 +750,77 @@ fn usage_records_take_the_hook_reports_of_their_session() {
 }
 
 #[test]
+fn the_bridge_answers_a_session_read_with_the_stats_document() {
+    let dir = state_dir("session");
+    let _cleanup = RemoveOnDrop(dir.clone());
+    let service = run(&dir);
+    assert_eq!(post_usage(&dir, SESSION, 0), "HTTP/1.1 204 No Content");
+    // Bucket lines only: an hour change during the test makes `tick` append a
+    // service line (`count` 0), which the session read does not cause.
+    let bucket_lines = || -> Vec<String> {
+        fs::read_to_string(dir.join("stats.jsonl"))
+            .unwrap_or_default()
+            .lines()
+            .filter(|l| serde_json::from_str::<serde_json::Value>(l).unwrap()["count"] != 0)
+            .map(String::from)
+            .collect()
+    };
+    let stats_before = bucket_lines();
+    let mut stream = UnixStream::connect(dir.join("local-http.sock")).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    write!(
+        stream,
+        "GET /session/{SESSION} HTTP/1.1\r\nhost: deslag\r\n\r\n"
+    )
+    .unwrap();
+    let mut reply = String::new();
+    stream.read_to_string(&mut reply).unwrap();
+    let (head, body) = reply.split_once("\r\n\r\n").unwrap();
+    assert!(head.starts_with("HTTP/1.1 200 OK\r\n"), "{reply}");
+    assert!(head.contains("Content-Type: application/json"), "{head}");
+    assert!(
+        head.contains(&format!("Content-Length: {}", body.len())),
+        "{head}"
+    );
+    let doc: serde_json::Value = serde_json::from_str(body).unwrap();
+    assert_eq!(doc["schema_version"], 1);
+    assert_eq!(doc["session"], SESSION);
+    let listed = doc["requests"].as_array().unwrap();
+    assert_eq!(listed.len(), 1, "{doc}");
+    assert_eq!(listed[0]["usage"]["input_tokens"], 100);
+    assert_eq!(listed[0]["estimated_removed_tokens"], 0);
+    // The read writes the queued request but appends no bucket lines.
+    assert_eq!(bucket_lines(), stats_before);
+    // Running, so no `no_data`; the hours before this run have no service line.
+    assert_eq!(
+        doc["partial"]["reasons"],
+        serde_json::json!(["gaps"]),
+        "{doc}"
+    );
+    // Same document as the CLI, except the clock.
+    let cli = stdout(&deslag(
+        &dir,
+        &["stats", "--json", "--session", SESSION],
+        b"",
+    ));
+    let mut cli: serde_json::Value = serde_json::from_str(&cli).unwrap();
+    cli["window"] = doc["window"].clone();
+    assert_eq!(cli, doc);
+
+    for bad in ["a%20b", "a:b", &"x".repeat(65), ""] {
+        let request = format!("GET /session/{bad} HTTP/1.1\r\n\r\n");
+        assert_eq!(
+            http(&dir, request.as_bytes()),
+            "HTTP/1.1 400 Bad Request",
+            "{bad}"
+        );
+    }
+    service.stop();
+}
+
+#[test]
 fn usage_records_work_with_hook_compression_off() {
     // No owner file: the hook does not compress and sends no report.
     let dir = state_dir("usageoff");
@@ -779,6 +850,39 @@ fn the_bridge_answers_503_when_the_datagram_cannot_be_sent() {
     assert_eq!(
         post_usage(&dir, SESSION, 0),
         "HTTP/1.1 503 Service Unavailable"
+    );
+}
+
+#[test]
+fn an_unreadable_requests_file_answers_500_and_the_bridge_keeps_serving() {
+    let dir = state_dir("bridge500");
+    let _cleanup = RemoveOnDrop(dir.clone());
+    fs::create_dir_all(dir.join("requests.jsonl")).unwrap();
+    // Killed on drop: `stop` cannot write the queued record into a directory.
+    let _service = run(&dir);
+    let read = format!("GET /session/{SESSION} HTTP/1.1\r\n\r\n");
+    assert_eq!(
+        http(&dir, read.as_bytes()),
+        "HTTP/1.1 500 Internal Server Error"
+    );
+    assert_eq!(post_usage(&dir, SESSION, 0), "HTTP/1.1 204 No Content");
+}
+
+#[test]
+fn a_session_read_that_cannot_write_the_queued_requests_answers_500() {
+    let dir = state_dir("bridgewrite500");
+    let _cleanup = RemoveOnDrop(dir.clone());
+    // Killed on drop: `stop` cannot write the queued record either.
+    let _service = run(&dir);
+    // Readable, but read-only after the startup rotation set it to 0600.
+    let path = dir.join("requests.jsonl");
+    fs::write(&path, "").unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o400)).unwrap();
+    assert_eq!(post_usage(&dir, SESSION, 0), "HTTP/1.1 204 No Content");
+    let read = format!("GET /session/{SESSION} HTTP/1.1\r\n\r\n");
+    assert_eq!(
+        http(&dir, read.as_bytes()),
+        "HTTP/1.1 500 Internal Server Error"
     );
 }
 

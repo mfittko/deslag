@@ -41,7 +41,7 @@ Every bucket has these dimensions. Each value comes from a fixed allowlist. The 
 
 ## JSONL line format
 
-The service appends one line per bucket when an hour closes, and when `stop` or `stats` makes it write the open hour. Lines are additive: the same key can appear on several lines, and readers sum them. Keys are in alphabetical order.
+The service appends one line per bucket when an hour closes, and when `stop` or `stats` makes it write the open hour. A [session read](#session-read) writes the open hour as well, only when a bucket holds drops. Lines are additive: the same key can appear on several lines, and readers sum them. Keys are in alphabetical order.
 
 ```json
 {"adapter":"hook","candidate_bytes":600,"count":2,"dropped":1,"emitted_bytes":600,"hour":1799992800,"original_bytes":1000,"outcome":"changed","reason":null,"tokens":{"estimate:deslag-estimate-v1":{"candidate":150,"emitted":150,"original":250}},"tool":"bash","transform":"json-minify","v":1}
@@ -107,7 +107,7 @@ Partial reasons:
 - `service_not_running`: the service did not answer, or it failed to write its open hour. The current hour is missing. A running service writes its open hour before `stats` reads the file.
 - `drops`: a line in the window, in either store, has `dropped` above 0.
 - `gaps`: a closed hour in the window has no service line, so the service never ran in that hour. A killed service that restarts within the same hour loses its unwritten reports of that hour without a gap.
-- `no_data`: the window has no `stats.jsonl` lines.
+- `no_data`: the window has no `stats.jsonl` lines and the service is not running. A running service holds the open hour.
 
 The table shows one row per dimension set, summed across the window. `saved` is `original - emitted`, or `original - candidate` for `would_change` rows. `tokens_saved` uses the first token label. `-` means unknown. A `usage:` line under the totals shows the usage totals.
 
@@ -139,11 +139,35 @@ Drop behavior:
 - A record is dropped and counted locally, without a send, when its session id or turn id is not 1 to 64 bytes of `[A-Za-z0-9_-]`, its model is not 1 to 64 bytes of printable ASCII without `"` and `\`, or its index is not a non-negative safe integer. The same holds when no absolute state directory resolves.
 - The next delivered record carries the count in `dropped`.
 
-The service accepts one HTTP connection at a time. It reads at most 2048 bytes and must receive the whole request within 500 ms of the accept. It requires `POST /usage` with a `Content-Length` of at most 512 bytes and a body that starts with `{`, and forwards the body as one datagram to `local.sock`. It answers `204` when the datagram was sent, `503` when it was not, and `400` for any other request, and always closes the connection. An invalid record counts as a service drop, like an invalid report.
+The service accepts one HTTP connection at a time. It reads at most 2048 bytes and must receive the whole request within 500 ms of the accept. It requires `POST /usage` with a `Content-Length` of at most 512 bytes and a body that starts with `{`, and forwards the body as one datagram to `local.sock`. It answers `204` when the datagram was sent and `503` when it was not. It also answers `GET /session/<id>`; see [Session read](#session-read). It answers `400` for any other request and always closes the connection. An invalid record counts as a service drop, like an invalid report.
+
+### Savings widget
+
+`DESLAG_SAVINGS_WIDGET=1` turns on a status line. It needs the usage module, so `DESLAG_USAGE_STATS=1` must be set too:
+
+```sh
+CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 DESLAG_USAGE_STATS=1 DESLAG_SAVINGS_WIDGET=1 claude
+```
+
+After a usage record is delivered, the module starts one background `GET /session/<id>` for the session. The stream never waits for it. On success it sets the status line to the last request's `estimated_removed_tokens` and its provider input tokens (`input_tokens + cache_read_input_tokens + cache_creation_input_tokens`), and the session's `totals.estimated_removed_tokens` of the last 24 hours:
+
+```text
+deslag: ~120 tokens removed (estimate) of 5,432 input tokens · session ~1,200 removed (estimate)
+```
+
+The removed counts come from the `deslag-estimate-v1` estimator and carry the `(estimate)` label. The input count is provider-reported usage. A `null` count shows as `unknown`. A 0 in the line is a reported count of 0. The line shows no money figures.
+
+The module clears the line when the delivery of the usage record fails, the read fails, the answer is not `2xx`, the body is not a session document with at least one request, or the read takes longer than 1 s. A record dropped without a send (the send cap, an invalid ID, model or index, or no state directory) leaves the line unchanged. At most 2 reads are unsettled at a time. The host fetch has no abort, so a hung read holds its slot until it settles, and the line does not refresh while both slots are held. Only the latest refresh sets the line: an older read's late answer or timeout is ignored. Without `DESLAG_SAVINGS_WIDGET=1`, or with the usage module off, the module reads nothing and sets no status line.
+
+### Session read
+
+`GET /session/<id>` on `local-http.sock` asks the service to write its queued `requests.jsonl` lines (the `requests` control message), then answers `200` with `Content-Type: application/json` and the [`deslag stats --json --session <id>`](#deslag-stats---json---session-id) document of the default `24h` window. The service writes its buckets as well only when one holds drops, so `partial.reasons` stays complete and a read per model request appends no other `stats.jsonl` lines. An invalid ID gets `400`. A failed write of the queued lines, or a state file that exists but cannot be read, gets `500`. Each read parses the `requests.jsonl` lines of the window, read backward from the end of the file, and the bridge serves one connection at a time, so a slow read delays the usage sends behind it.
+
+Each read answers the full session document of the last 24 hours. A long session can make the answer outlast the bridge's 500 ms write timeout or the widget's 1 s read timeout, and the widget then clears its line. A view with only the totals and the last request would remove this ceiling.
 
 ## Per-request lines
 
-Each valid usage record becomes one line of `requests.jsonl`. The service writes the lines with the buckets: at each hour close, `stop` and `stats`. Keys are in alphabetical order.
+Each valid usage record becomes one line of `requests.jsonl`. The service writes the lines with the buckets: at each hour close, `stop` and `stats`. Each [session read](#session-read) writes the request lines, and the buckets only when one holds drops. Keys are in alphabetical order.
 
 ```json
 {"compression_reports":2,"dropped":1,"estimated_removed_tokens":40,"index":1,"model":"claude-haiku","session":"sess-a","time":1799997000,"turn":"t1","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":110,"input_tokens":20,"output_tokens":3},"v":1}
