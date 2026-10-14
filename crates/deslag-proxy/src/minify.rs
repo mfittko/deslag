@@ -6,7 +6,9 @@
 //! approved for change. Every other block and field, including `thinking` and
 //! its `signature`, `redacted_thinking`, `cache_control`, `is_error` and
 //! unknown types and fields, stays byte-identical. An ineligible new result is
-//! recorded as `unchanged`. Local reports carry the tool category of the result.
+//! recorded as `unchanged`. The eligibility rule decides new results; pinned
+//! decisions from earlier sessions replay as recorded. Local reports carry the
+//! tool category of the result.
 //!
 //! The request is never re-serialized. Each rewritten string lexeme is located
 //! by its byte span in the original body and spliced; all other bytes are
@@ -367,15 +369,17 @@ fn rewrite(
             texts: r.targets.iter().filter_map(|t| parse(t)).collect(),
         })
         .collect();
-    let eligible: HashSet<&str> = results
+    // Fail closed: one ineligible result makes every result with its id
+    // ineligible, because they share one pinned decision.
+    let ineligible: HashSet<&str> = results
         .iter()
-        .filter(|r| r.tool != local::ToolCategory::Other && !r.is_error)
+        .filter(|r| r.tool == local::ToolCategory::Other || r.is_error)
         .map(|r| r.id)
         .collect();
     // `decide` runs only for a new result. Only an eligible result whose text
     // json-minify changes is encoded.
     let encode = store.replay(scope, model, &candidates, |c| {
-        eligible.contains(c.id) && changes(&c.texts, exec, job)
+        !ineligible.contains(c.id) && changes(&c.texts, exec, job)
     })?;
     let targets = results
         .iter()
@@ -457,11 +461,22 @@ fn tool_results(body: &[u8]) -> Option<(&str, Vec<ToolResult<'_>>)> {
                     .map(move |b| (i, b))
             })
     };
-    let tools: HashMap<&str, local::ToolCategory> = blocks("assistant")
+    // An id used by tool uses of different categories is `Other`: fail closed.
+    let mut tools: HashMap<&str, local::ToolCategory> = HashMap::new();
+    for (id, name) in blocks("assistant")
         .filter(|(_, b)| b.str("type") == Some("tool_use"))
         .filter_map(|(_, b)| Some((b.str("id")?, b.str("name")?)))
-        .map(|(id, name)| (id, local::ToolCategory::from_tool_name(name)))
-        .collect();
+    {
+        let tool = local::ToolCategory::from_tool_name(name);
+        tools
+            .entry(id)
+            .and_modify(|t| {
+                if *t != tool {
+                    *t = local::ToolCategory::Other;
+                }
+            })
+            .or_insert(tool);
+    }
     let mut results = Vec::new();
     for (i, block) in blocks("user") {
         let (Some("tool_result"), Some(id)) = (block.str("type"), block.str("tool_use_id")) else {
@@ -712,6 +727,24 @@ mod tests {
         );
         assert_eq!(String::from_utf8(out.unwrap().unwrap()).unwrap(), expected);
         let _ = std::fs::remove_dir_all(&store.dir);
+    }
+
+    #[test]
+    fn duplicate_ids_fail_closed() {
+        // An error result shares its id with an earlier non-error result.
+        let error_dup = r#"{"messages":[
+{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Bash","input":{}}]},
+{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"[ 1 ]"},{"type":"tool_result","tool_use_id":"t","content":"[ 1 ]","is_error":true}]}]}"#;
+        // Two tool uses with one id and different categories, Bash last.
+        let tool_dup = r#"{"messages":[
+{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Read","input":{}},{"type":"tool_use","id":"t","name":"Bash","input":{}}]},
+{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"[ 1 ]"}]}]}"#;
+        for (name, body) in [("dup-error", error_dup), ("dup-tool", tool_dup)] {
+            let store = fresh(name);
+            let out = rewrite(body.as_bytes(), &store, "s", &generous(), minify, None);
+            assert!(matches!(out, Ok(None)), "{name}");
+            let _ = std::fs::remove_dir_all(&store.dir);
+        }
     }
 
     #[test]

@@ -47,7 +47,7 @@ pub const RETENTION: Duration = Duration::from_secs(30 * 24 * 60 * 60);
 /// ponytail: a replay without a commit refreshes the mtime at most this often.
 const REFRESH: Duration = Duration::from_secs(24 * 60 * 60);
 const VERSION: u64 = 1;
-const POLICY_VERSION: u64 = 1;
+const POLICY_VERSION: u64 = 2;
 /// Pinned to deslag-core, so a core version bump retires old decisions.
 const TRANSFORM: &str = JSON_MINIFY_ID;
 const TRANSFORM_VERSION: u64 = JSON_MINIFY_VERSION as u64;

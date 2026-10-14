@@ -262,7 +262,8 @@ async fn ineligible_requests_are_byte_identical() {
 
 /// `{BASH}` marks the approved fields of eligible Bash and MCP results. Thinking
 /// with its signature, redacted thinking, unknown blocks and fields, cache
-/// controls, error results and other tools' results stay byte-identical.
+/// controls, error results and other tools' results stay byte-identical. Only
+/// a boolean `true` marks an error result.
 const PROTECTED: &str = r#"{
   "model": "m", "future_root": { "k" : [ 1 ] },
   "messages": [
@@ -273,6 +274,8 @@ const PROTECTED: &str = r#"{
       { "type": "future_block", "text": {PRETTY} },
       { "type": "tool_use", "id": "b", "name": "Bash", "input": { }, "future_field": 1 },
       { "type": "tool_use", "id": "e", "name": "Bash", "input": { } },
+      { "type": "tool_use", "id": "bf", "name": "Bash", "input": { } },
+      { "type": "tool_use", "id": "bs", "name": "Bash", "input": { } },
       { "type": "tool_use", "id": "m", "name": "mcp__srv__get", "input": { } },
       { "type": "tool_use", "id": "me", "name": "mcp__srv__get", "input": { } },
       { "type": "tool_use", "id": "r", "name": "Read", "input": { } },
@@ -281,6 +284,8 @@ const PROTECTED: &str = r#"{
     { "role": "user", "content": [
       { "type": "tool_result", "tool_use_id": "b", "content": {BASH}, "future_field": {PRETTY} },
       { "type": "tool_result", "tool_use_id": "e", "content": {PRETTY}, "is_error": true },
+      { "type": "tool_result", "tool_use_id": "bf", "content": {BASH}, "is_error": false },
+      { "type": "tool_result", "tool_use_id": "bs", "content": {BASH}, "is_error": "true" },
       { "type": "tool_result", "tool_use_id": "m", "content": [
         { "type": "text", "text": {BASH}, "cache_control": { "type": "ephemeral" } },
         { "type": "future_item", "text": {PRETTY} },
