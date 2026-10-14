@@ -75,7 +75,7 @@ const REASONS: &[&str] = &[
     "invalid_candidate",
 ];
 /// Allowed (method, tokenizer) pairs: the estimate tokenizer never labels exact counts.
-/// The only stored label is `estimate:deslag-estimate-v1`; `exact` is reserved
+/// The only stored label is `estimate:<EstimateCounter::TOKENIZER>`; `exact` is reserved
 /// for a future tokenizer.
 const TOKEN_LABELS: &[(&str, &str)] = &[("estimate", EstimateCounter::TOKENIZER)];
 /// Held by the running service: a second `run` fails instead of stealing the socket.
@@ -545,9 +545,6 @@ pub(crate) const USAGE_FIELDS: [&str; 4] = [
     "cache_creation_input_tokens",
 ];
 
-/// The token label whose `original - emitted` is the estimated removal.
-const ESTIMATE_LABEL: &str = "estimate:deslag-estimate-v1";
-
 /// One `requests.jsonl` line, schema `"v":1`: the provider usage of one model
 /// request and the compression reports of its session since the previous
 /// request. `usage` is `None` when the provider reported none or only part.
@@ -889,7 +886,11 @@ impl Service {
         let p = self.sessions.entry(session).or_default();
         p.reports = p.reports.saturating_add(1);
         p.seen = now;
-        match bucket.tokens.get(ESTIMATE_LABEL) {
+        // The estimate label's `original - emitted` is the estimated removal.
+        match bucket
+            .tokens
+            .get(&format!("estimate:{}", EstimateCounter::TOKENIZER))
+        {
             Some(t) => {
                 p.removed = p
                     .removed
