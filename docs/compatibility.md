@@ -134,7 +134,7 @@ These facts were read from the Claude Code 2.1.296 client binary.
 - Without a binary, the hook exits 0 and the tool output is unchanged.
 - `claude plugin marketplace add`, `claude plugin install` and `claude plugin uninstall` work against a local checkout. `claude plugin uninstall` removes the data directory.
 
-The hook wrapper `plugins/claude/hooks/deslag-hook.sh` runs `$CLAUDE_PLUGIN_DATA/bin/<plugin version>/deslag hook claude`. When that file is missing, the wrapper exits 0 without output. Only `/deslag:install` downloads anything. `tests/plugin/test.sh` covers the install, checksum, hook and uninstall paths with `file://` fixtures.
+The hook wrapper `plugins/claude/hooks/deslag-hook.sh` runs `$CLAUDE_PLUGIN_DATA/bin/<plugin version>/deslag hook claude`. It adds `--minify-json` only while the first line of `<state dir>/compression` is `on`, which `/deslag:compression on` writes; the default is off. See [JSON minification](#json-minification-opt-in). When the binary is missing, the wrapper exits 0 without output. Only `/deslag:install` downloads anything. `tests/plugin/test.sh` covers the install, checksum, hook and uninstall paths with `file://` fixtures.
 
 ### Live runs
 
@@ -184,10 +184,10 @@ The usage module `plugins/claude/hooks/usage.js` observes `turn.step` and sends 
 
 ### Verified offline
 
-These facts come from `claude plugin test plugins/claude` and `claude plugin validate plugins/claude` on Claude Code 2.1.296 and 2.1.299. Two bullets also cite live checks: the `ui.status` bullet points to the demo recorded run, and the mod API declarations bullet points to run U1 below.
+These facts come from `claude plugin test plugins/claude` and `claude plugin validate plugins/claude` on Claude Code 2.1.296, 2.1.299 and 2.1.302. Two bullets also cite live checks: the `ui.status` bullet points to the demo recorded run, and the mod API declarations bullet points to run U1 below.
 
 - `hooks/hooks.json` may hold `"modules"` next to `"hooks"`. Validation passes and lists the module's `turn.step` hook on 2.1.296 and 2.1.299. `claude plugin test plugins/claude` passed 32 of 32 on 2.1.296 and 2.1.299 with the suite before the compression toggle. The current suite passes 45 of 45 on 2.1.302. Clients 2.1.297 and 2.1.298 are untested offline with it.
-- The savings widget uses the host APIs `$.ui.status` and `$.clock.sleep`. The widget tests in `plugins/claude/tests/usage.test.ts` hook `ui.status` and `clock.sleep` and pass on 2.1.296 and 2.1.299. It also reads the compression toggle and the owner with `$.fs.read`; the tests hook `fs.read` and pass on 2.1.302. The [demo recorded run](demo.md#recorded-run) is the live check of `ui.status` on 2.1.299.
+- The savings widget uses the host APIs `$.ui.status` and `$.clock.sleep`. The widget tests in `plugins/claude/tests/usage.test.ts` hook `ui.status` and `clock.sleep`. The widget tests before the compression toggle passed on 2.1.296 and 2.1.299. The widget also reads the compression toggle and the owner with `$.fs.read`. The current widget tests also hook `fs.read` and pass on 2.1.302. The [demo recorded run](demo.md#recorded-run) is the live check of `ui.status` on 2.1.299.
 - The observer passes every chunk and the final result through unchanged, with the module on and off.
 - A `$.http.fetch` started after the `turn.step` generator returned still runs. Its `socketPath` option reaches a Unix stream socket.
 - The mod API declarations (written by Claude Code 2.1.277) type the `turn.step` result's `usage` as `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens` and `model`, or `null`. Run U1 below confirms the four token fields and `model` live.
