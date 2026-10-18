@@ -163,6 +163,10 @@ fn invalid_configs_are_rejected_with_the_key() {
             "telemetry.content_capture is not configurable in this version",
         ),
         (
+            "[telemetry]\nlocal_reports = false\n",
+            "telemetry.local_reports is not configurable in this version",
+        ),
+        (
             "[telemetry]\notlp_enabled = true\n",
             "telemetry.otlp_enabled is not configurable in this version",
         ),
@@ -274,6 +278,19 @@ fn invalid_configs_are_rejected_with_the_key() {
             "[proxy]\nupstream = \"https://LOCALHOST.:8789\"\n",
             "proxy.upstream: points at the listener",
         ),
+        // RFC 6761 reserves every `*.localhost` name for loopback.
+        (
+            "[proxy]\nupstream = \"https://api.localhost:8789\"\n",
+            "proxy.upstream: points at the listener",
+        ),
+        (
+            "[proxy]\nupstream = \"https://API.LocalHost:8789\"\n",
+            "proxy.upstream: points at the listener",
+        ),
+        (
+            "[proxy]\nupstream = \"https://a.b.localhost.:8789\"\n",
+            "proxy.upstream: points at the listener",
+        ),
         // getaddrinfo resolves inet_aton numeric forms, so they are refused.
         (
             "[proxy]\nupstream = \"https://127.1:8789\"\n",
@@ -383,6 +400,10 @@ fn the_documented_defaults_and_a_loopback_http_upstream_are_valid() {
     // A trailing slash, a path, and a name with a numeric first label are valid.
     let token_path = "config_version = 1\n[proxy]\nupstream = \"https://gw.example/token/\"\n";
     let numeric_label = "config_version = 1\n[proxy]\nupstream = \"https://123.example.com\"\n";
+    // `localhost` on another port, and a name that only contains `localhost`, are valid.
+    let localhost_port = "config_version = 1\n[proxy]\nlisten = \"127.0.0.1:8789\"\nupstream = \"https://localhost:9999\"\n";
+    let not_localhost =
+        "config_version = 1\n[proxy]\nupstream = \"https://notlocalhost.example:8789\"\n";
     for body in [
         full,
         V1,
@@ -392,6 +413,8 @@ fn the_documented_defaults_and_a_loopback_http_upstream_are_valid() {
         ipv6_port,
         token_path,
         numeric_label,
+        localhost_port,
+        not_localhost,
     ] {
         let output = sandbox.config(body).run(&["doctor"]);
         let stdout = text(&output.stdout);

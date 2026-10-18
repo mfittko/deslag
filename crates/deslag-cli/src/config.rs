@@ -52,6 +52,7 @@ const FIXED: &[&str] = &[
     "mode",
     "transforms.json_minify",
     "telemetry.content_capture",
+    "telemetry.local_reports",
     "telemetry.otlp_enabled",
 ];
 /// Transforms this version can run. Enabling any other transform is an error,
@@ -250,9 +251,12 @@ pub fn check_upstream(listen: SocketAddr, url: &str) -> Result<Upstream, String>
     if ip.is_none() && numeric {
         return Err("upstream host must be a canonical IP address or a name".to_owned());
     }
+    // RFC 6761 reserves `localhost` and every `*.localhost` name for loopback.
     // A connect to the unspecified address, or to an IPv4-mapped loopback,
     // reaches a loopback listener too.
-    let loopback = host.eq_ignore_ascii_case("localhost")
+    let lower = host.to_ascii_lowercase();
+    let loopback = lower == "localhost"
+        || lower.ends_with(".localhost")
         || ip.is_some_and(|ip| {
             let ip = ip.to_canonical();
             ip.is_loopback() || ip.is_unspecified()

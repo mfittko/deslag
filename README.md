@@ -66,8 +66,8 @@ The config file is `DESLAG_CONFIG`, else `$XDG_CONFIG_HOME/deslag/config.toml`, 
 
 - an unsupported or missing `config_version`, and an unknown key or section;
 - a value of the wrong type, `compression.min_candidate_bytes` above `compression.max_candidate_bytes`, `compression.min_estimated_savings_ratio` outside 0 to 1, a negative number, and zero for a count, size or time whose name does not start with `min_`;
-- a value that this version cannot honour: `mode` other than `observe`, `transforms.json_minify = false`, `telemetry.content_capture = true`, `telemetry.otlp_enabled = true`, and an enabled transform other than `json_minify`;
-- a `proxy.listen` that is not a loopback `IP:port`, and a `proxy.upstream` that does not parse as a URL, has no host, is not `https` (plain `http` only to a loopback host), has credentials, a query or a fragment, has an invalid or zero port such as `https://gw.example:0`, has a non-canonical numeric host such as `127.1`, or points at the listener.
+- a value that this version cannot honour: `mode` other than `observe`, `transforms.json_minify = false`, `telemetry.content_capture = true`, `telemetry.local_reports = false`, `telemetry.otlp_enabled = true`, and an enabled transform other than `json_minify`;
+- a `proxy.listen` that is not a loopback `IP:port`, and a `proxy.upstream` that does not parse as a URL, has no host, is not `https` (plain `http` only to a loopback host), has credentials, a query or a fragment, has an invalid or zero port such as `https://gw.example:0`, has a non-canonical numeric host such as `127.1`, or points at the listener (a loopback or unspecified address, `localhost` or a `*.localhost` name on the listener port).
 
 ```toml
 config_version = 1
