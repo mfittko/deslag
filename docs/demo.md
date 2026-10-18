@@ -112,7 +112,7 @@ At least one request in the output has a non-zero `estimated_removed_tokens`.
 rm -rf "$DESLAG_STATE_DIR" /tmp/deslag-demo-project
 ```
 
-To stop compression and keep the state directory, run `"$DESLAG_BIN" disable` instead of `rm -rf`. It writes `none` to the owner file and `off` to the compression toggle. Results already compressed in the current session stay compressed, so start a new Claude Code session for an unchanged history.
+To stop compression and keep the state directory, run `"$DESLAG_BIN" disable`. It writes `none` to the owner file and `off` to the compression toggle. Results already compressed in the current session stay compressed, so start a new Claude Code session for an unchanged history.
 
 ## Recorded run
 

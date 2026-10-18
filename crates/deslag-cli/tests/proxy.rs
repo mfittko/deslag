@@ -68,9 +68,15 @@ fn missing_flags_come_from_the_config_and_flags_win() {
     let dir = std::env::temp_dir().join(format!("deslag-cli-proxy-config-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let config = dir.join("config.toml");
+    // The config listener needs a fixed port; take a free one.
+    let free = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
     std::fs::write(
         &config,
-        "config_version = 1\n[proxy]\nlisten = \"127.0.0.1:0\"\nupstream = \"https://gw.example/token-secret/\"\n",
+        format!("config_version = 1\n[proxy]\nlisten = \"127.0.0.1:{free}\"\nupstream = \"https://gw.example/token-secret/\"\n"),
     )
     .unwrap();
     let mut cmd = deslag(&["proxy"]);

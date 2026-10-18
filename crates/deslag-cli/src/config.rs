@@ -193,6 +193,10 @@ fn validate(table: Table) -> Result<Config, String> {
         .and_then(Value::as_str)
         .unwrap_or_default();
     let listen = parse_listen(listen).map_err(|e| format!("proxy.listen {e}"))?;
+    // `deslag run` and `doctor` connect to this address; port 0 names no listener.
+    if listen.port() == 0 {
+        return Err("proxy.listen must name a fixed port".into());
+    }
     let upstream = get("proxy", "upstream").and_then(Value::as_str);
     if let Some(url) = upstream {
         check_upstream(listen, url).map_err(|e| format!("proxy.upstream: {e}"))?;

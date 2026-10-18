@@ -210,6 +210,15 @@ fn invalid_configs_are_rejected_with_the_key() {
             "[proxy]\nlisten = \"nope\"\n",
             "proxy.listen is not a socket address",
         ),
+        // `run` and `doctor` connect to the config listener, so it needs a fixed port.
+        (
+            "[proxy]\nlisten = \"127.0.0.1:0\"\n",
+            "proxy.listen must name a fixed port",
+        ),
+        (
+            "[proxy]\nlisten = \"[::1]:0\"\n",
+            "proxy.listen must name a fixed port",
+        ),
         (
             "[proxy]\nupstream = \"http://api.example.com\"\n",
             "proxy.upstream: plain http",
@@ -424,6 +433,14 @@ fn the_documented_defaults_and_a_loopback_http_upstream_are_valid() {
         assert!(stdout.contains("proxy listen: 127.0.0.1:8789"), "{stdout}");
         assert!(stdout.contains("proxy upstream: "), "{stdout}");
     }
+    // An IPv6 loopback listener on a fixed port is valid.
+    let output = sandbox
+        .config("config_version = 1\n[proxy]\nlisten = \"[::1]:8789\"\n")
+        .run(&["doctor"]);
+    let stdout = text(&output.stdout);
+    assert_eq!(output.status.code(), Some(0), "{stdout}");
+    assert!(stdout.contains("ok: config is valid"), "{stdout}");
+    assert!(stdout.contains("proxy listen: [::1]:8789"), "{stdout}");
     // Both spellings of the upstream key set the upstream.
     for body in [section, dotted] {
         let stdout = text(&sandbox.config(body).run(&["status"]).stdout);
