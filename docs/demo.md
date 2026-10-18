@@ -112,6 +112,8 @@ At least one request in the output has a non-zero `estimated_removed_tokens`.
 rm -rf "$DESLAG_STATE_DIR" /tmp/deslag-demo-project
 ```
 
+To stop compression and keep the state directory, run `"$DESLAG_BIN" disable`. It writes `none` to the owner file and `off` to the compression toggle. Results already compressed in the current session stay compressed, so start a new Claude Code session for an unchanged history.
+
 ## Recorded run
 
 This run used Claude Code 2.1.299 on macOS arm64 on 2026-10-14. It predates `/deslag:compression`: it enabled hook compression with a project hook in `.claude/settings.json` that ran `$DESLAG_BIN hook claude --minify-json`, with `hook` written to the owner file by hand, and its widget lines have no compression state. It followed steps 1 to 4 of that version and then ran one headless request with `claude -p --model haiku --max-budget-usd 0.30` and the step 5 variables, with `--allowedTools "Bash(cat items.json)"`. The request cost USD 0.0094. Headless mode draws no status line. A throwaway probe plugin hooked `ui.status` and logged each line the widget set. These are the two lines, one per model request:

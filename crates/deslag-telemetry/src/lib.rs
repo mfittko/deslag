@@ -91,7 +91,7 @@ pub fn ensure_state_dir() -> io::Result<PathBuf> {
 /// the effective uid of the process that created the pipe. No file is written
 /// anywhere, so a 0500 state dir or an unusable TMPDIR still passes.
 // ponytail: std has no getuid; the libc crate would replace this probe.
-fn current_uid() -> io::Result<u32> {
+pub fn current_uid() -> io::Result<u32> {
     let (reader, _writer) = io::pipe()?;
     let file = fs::File::from(std::os::fd::OwnedFd::from(reader));
     Ok(file.metadata()?.uid())

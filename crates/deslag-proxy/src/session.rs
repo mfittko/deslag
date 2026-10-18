@@ -352,7 +352,7 @@ fn create_dir(dir: &Path) -> io::Result<()> {
 /// temp name is `<stem>.<pid>.<n>.tmp` (the file name without its extension) with the first `n` that does not exist
 /// yet, so a leftover of a crashed process with the same pid, or a concurrent
 /// commit, is skipped and never touched.
-fn commit(path: &Path, bytes: &[u8]) -> io::Result<()> {
+pub fn commit(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let mut options = fs::OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
