@@ -28,7 +28,7 @@ const USAGE: &str = "usage: deslag hook claude [--minify-json]\n       \
                      deslag local stop|status\n       \
                      deslag stats [--json [--session <id>]] [--since <n>h|<n>d]";
 const PROXY_USAGE: &str = "usage: deslag proxy [--upstream <url>] [--listen <addr>] [--minify-json]\n\
-                           A missing flag takes its value from the config file.";
+                           A missing --upstream or --listen takes its value from the config file.";
 
 // Exit 2 from a Claude Code hook is blocking and feeds stderr to the model; usage errors avoid it.
 const EX_USAGE: u8 = 64;

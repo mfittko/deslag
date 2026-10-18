@@ -326,6 +326,40 @@ fn invalid_configs_are_rejected_with_the_key() {
 }
 
 #[test]
+fn an_unreadable_config_fails_closed() {
+    let sandbox = Sandbox::new("unreadable");
+    let path = sandbox.0.join("config.toml");
+    // Only a missing file falls back to the defaults; a directory or a
+    // non-UTF-8 file is a read error.
+    let _ = fs::remove_file(&path);
+    fs::create_dir(&path).unwrap();
+    let directory = (
+        sandbox.run(&["doctor"]),
+        sandbox.run(&["run", "--", "true"]),
+    );
+    fs::remove_dir(&path).unwrap();
+    fs::write(&path, b"config_version = 1\n# \xff\xfe\n").unwrap();
+    let non_utf8 = (
+        sandbox.run(&["doctor"]),
+        sandbox.run(&["run", "--", "true"]),
+    );
+    for (form, (doctor, run)) in [("directory", directory), ("non-UTF-8", non_utf8)] {
+        let stdout = text(&doctor.stdout);
+        assert_eq!(doctor.status.code(), Some(1), "{form}: {stdout}");
+        assert!(
+            stdout.contains("FAIL: config is invalid: cannot read config"),
+            "{form}: {stdout}"
+        );
+        assert_eq!(run.status.code(), Some(2), "{form}");
+        assert!(
+            text(&run.stderr).contains("cannot read config"),
+            "{form}: {}",
+            text(&run.stderr)
+        );
+    }
+}
+
+#[test]
 fn the_documented_defaults_and_a_loopback_http_upstream_are_valid() {
     let sandbox = Sandbox::new("valid");
     sandbox.owner("none", "off");
