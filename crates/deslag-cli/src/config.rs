@@ -266,7 +266,7 @@ pub fn check_upstream(listen: SocketAddr, url: &str) -> Result<Upstream, String>
             ip.is_loopback() || ip.is_unspecified()
         });
     if loopback && port == listen.port() {
-        return Err(format!("points at the listener {listen}"));
+        return Err(format!("upstream URL points at the listener {listen}"));
     }
     Ok(upstream)
 }

@@ -233,72 +233,72 @@ fn invalid_configs_are_rejected_with_the_key() {
         ),
         (
             "[proxy]\nupstream = \"http://127.0.0.1:8789\"\n",
-            "proxy.upstream: points at the listener",
+            "proxy.upstream: upstream URL points at the listener",
         ),
         (
             "[proxy]\nlisten = \"127.0.0.1:443\"\nupstream = \"https://localhost/v1\"\n",
-            "proxy.upstream: points at the listener",
+            "proxy.upstream: upstream URL points at the listener",
         ),
         // Scheme and host match case-insensitively.
         (
             "[proxy]\nlisten = \"127.0.0.1:443\"\nupstream = \"HTTPS://localhost\"\n",
-            "proxy.upstream: points at the listener",
+            "proxy.upstream: upstream URL points at the listener",
         ),
         (
             "[proxy]\nupstream = \"https://LOCALHOST:8789\"\n",
-            "proxy.upstream: points at the listener",
+            "proxy.upstream: upstream URL points at the listener",
         ),
         (
             "[proxy]\nupstream = \"http://localhost:8789\"\n",
-            "proxy.upstream: points at the listener",
+            "proxy.upstream: upstream URL points at the listener",
         ),
         // IPv6 brackets are stripped before the loopback check.
         (
             "[proxy]\nupstream = \"http://[::1]:8789\"\n",
-            "proxy.upstream: points at the listener",
+            "proxy.upstream: upstream URL points at the listener",
         ),
         (
             "[proxy]\nupstream = \"https://localhost:8789\"\n",
-            "proxy.upstream: points at the listener",
+            "proxy.upstream: upstream URL points at the listener",
         ),
         (
             "[proxy]\nupstream = \"https://127.0.0.1:8789\"\n",
-            "proxy.upstream: points at the listener",
+            "proxy.upstream: upstream URL points at the listener",
         ),
         // The unspecified address and an IPv4-mapped loopback reach the listener.
         (
             "[proxy]\nupstream = \"https://0.0.0.0:8789\"\n",
-            "proxy.upstream: points at the listener",
+            "proxy.upstream: upstream URL points at the listener",
         ),
         (
             "[proxy]\nupstream = \"https://[::]:8789\"\n",
-            "proxy.upstream: points at the listener",
+            "proxy.upstream: upstream URL points at the listener",
         ),
         (
             "[proxy]\nupstream = \"https://[::ffff:127.0.0.1]:8789\"\n",
-            "proxy.upstream: points at the listener",
+            "proxy.upstream: upstream URL points at the listener",
         ),
         // The resolver strips one trailing dot from a name.
         (
             "[proxy]\nupstream = \"https://localhost.:8789\"\n",
-            "proxy.upstream: points at the listener",
+            "proxy.upstream: upstream URL points at the listener",
         ),
         (
             "[proxy]\nupstream = \"https://LOCALHOST.:8789\"\n",
-            "proxy.upstream: points at the listener",
+            "proxy.upstream: upstream URL points at the listener",
         ),
         // RFC 6761 reserves every `*.localhost` name for loopback.
         (
             "[proxy]\nupstream = \"https://api.localhost:8789\"\n",
-            "proxy.upstream: points at the listener",
+            "proxy.upstream: upstream URL points at the listener",
         ),
         (
             "[proxy]\nupstream = \"https://API.LocalHost:8789\"\n",
-            "proxy.upstream: points at the listener",
+            "proxy.upstream: upstream URL points at the listener",
         ),
         (
             "[proxy]\nupstream = \"https://a.b.localhost.:8789\"\n",
-            "proxy.upstream: points at the listener",
+            "proxy.upstream: upstream URL points at the listener",
         ),
         // getaddrinfo resolves inet_aton numeric forms, so they are refused.
         (

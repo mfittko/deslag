@@ -158,6 +158,10 @@ fn rejected_arguments_exit_2_with_message() {
             "plain http upstream",
         ),
         (
+            vec!["proxy", "--upstream", "https://localhost:8789"],
+            "upstream URL points at the listener",
+        ),
+        (
             vec!["proxy", "--upstream", up, "--listen", "nope"],
             "--listen is not a socket address",
         ),
