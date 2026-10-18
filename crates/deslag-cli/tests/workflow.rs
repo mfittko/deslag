@@ -313,6 +313,10 @@ fn invalid_configs_are_rejected_with_the_key() {
             stdout.contains(&format!("FAIL: config is invalid: {expected}")),
             "{body}: {stdout}"
         );
+        // The defaults never pose as the active settings of an invalid file.
+        for line in ["transforms:", "proxy listen:", "proxy upstream:"] {
+            assert!(!stdout.contains(line), "{body}: {line} {stdout}");
+        }
         // `run` refuses an invalid config before it starts a child.
         let output = sandbox.run(&["run", "--", "true"]);
         assert_eq!(output.status.code(), Some(2), "{body}");
@@ -394,6 +398,8 @@ fn the_documented_defaults_and_a_loopback_http_upstream_are_valid() {
         assert_eq!(output.status.code(), Some(0), "{stdout}");
         assert!(stdout.contains("ok: config is valid"), "{stdout}");
         assert!(stdout.contains("transforms: json_minify"), "{stdout}");
+        assert!(stdout.contains("proxy listen: 127.0.0.1:8789"), "{stdout}");
+        assert!(stdout.contains("proxy upstream: "), "{stdout}");
     }
     // Both spellings of the upstream key set the upstream.
     for body in [section, dotted] {
@@ -501,7 +507,11 @@ fn status_states_hook_mode_proxy_mode_or_off() {
             "on",
             "hook mode (owner hook, /deslag:compression on)",
         ),
-        ("hook", "off", "off"),
+        (
+            "hook",
+            "off",
+            "off for the plugin hook (owner hook; a hook that runs deslag hook claude --minify-json still compresses)",
+        ),
         (
             "proxy",
             "off",
@@ -524,6 +534,15 @@ fn status_states_hook_mode_proxy_mode_or_off() {
         assert!(stdout.contains("local service: not running"), "{stdout}");
         assert!(stdout.contains("(valid)"), "{stdout}");
     }
+    // Owner hook with the toggle off is consistent, so doctor's owner check passes.
+    let stdout = text(&sandbox.owner("hook", "off").run(&["doctor"]).stdout);
+    assert!(
+        stdout.contains(
+            "ok: compression off for the plugin hook (owner hook; a hook that runs \
+             deslag hook claude --minify-json still compresses) matches owner hook"
+        ),
+        "{stdout}"
+    );
 }
 
 /// The toggle is on only when its first line is exactly `on`, the rule the

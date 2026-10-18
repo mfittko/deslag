@@ -108,14 +108,20 @@ impl Facts {
     }
 
     /// The owner decides which adapter compresses. The plugin hook passes
-    /// `--minify-json` only while the toggle is on.
+    /// `--minify-json` only while the toggle is on, but the hook gate compresses
+    /// for any hook that runs `deslag hook claude --minify-json` while the owner
+    /// is `hook`, so owner hook with the toggle off names that gate. Only owner
+    /// none is plain `off`.
     fn mode(&self) -> &'static str {
         match (self.owner, self.toggle_on) {
             (Owner::Proxy, _) => {
                 "proxy mode (owner proxy; compresses only through deslag proxy --minify-json)"
             }
             (Owner::Hook, true) => "hook mode (owner hook, /deslag:compression on)",
-            _ => "off",
+            (Owner::Hook, false) => {
+                "off for the plugin hook (owner hook; a hook that runs deslag hook claude --minify-json still compresses)"
+            }
+            (Owner::None, _) => "off",
         }
     }
 
