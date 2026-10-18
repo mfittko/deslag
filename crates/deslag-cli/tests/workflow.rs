@@ -265,6 +265,32 @@ fn invalid_configs_are_rejected_with_the_key() {
             "[proxy]\nupstream = \"https://[::ffff:127.0.0.1]:8789\"\n",
             "proxy.upstream: points at the listener",
         ),
+        // The resolver strips one trailing dot from a name.
+        (
+            "[proxy]\nupstream = \"https://localhost.:8789\"\n",
+            "proxy.upstream: points at the listener",
+        ),
+        (
+            "[proxy]\nupstream = \"https://LOCALHOST.:8789\"\n",
+            "proxy.upstream: points at the listener",
+        ),
+        // getaddrinfo resolves inet_aton numeric forms, so they are refused.
+        (
+            "[proxy]\nupstream = \"https://127.1:8789\"\n",
+            "proxy.upstream: upstream host must be a canonical IP address or a name",
+        ),
+        (
+            "[proxy]\nupstream = \"https://2130706433:8789\"\n",
+            "proxy.upstream: upstream host must be a canonical IP address or a name",
+        ),
+        (
+            "[proxy]\nupstream = \"https://0x7f.0.0.1:8789\"\n",
+            "proxy.upstream: upstream host must be a canonical IP address or a name",
+        ),
+        (
+            "[proxy]\nupstream = \"https://0:8789\"\n",
+            "proxy.upstream: upstream host must be a canonical IP address or a name",
+        ),
         ("[proxy]\nupstream = 1\n", "proxy.upstream must be a string"),
         // A quoted top-level key is not the [proxy] upstream.
         (
@@ -316,7 +342,19 @@ fn the_documented_defaults_and_a_loopback_http_upstream_are_valid() {
     // A loopback upstream on another port than the listener is valid.
     let other_port = "config_version = 1\n[proxy]\nlisten = \"127.0.0.1:8789\"\nupstream = \"https://127.0.0.1:9999\"\n";
     let ipv6_port = "config_version = 1\n[proxy]\nlisten = \"127.0.0.1:8789\"\nupstream = \"http://[::1]:9000\"\n";
-    for body in [full, V1, section, dotted, other_port, ipv6_port] {
+    // A trailing slash, a path, and a name with a numeric first label are valid.
+    let token_path = "config_version = 1\n[proxy]\nupstream = \"https://gw.example/token/\"\n";
+    let numeric_label = "config_version = 1\n[proxy]\nupstream = \"https://123.example.com\"\n";
+    for body in [
+        full,
+        V1,
+        section,
+        dotted,
+        other_port,
+        ipv6_port,
+        token_path,
+        numeric_label,
+    ] {
         let output = sandbox.config(body).run(&["doctor"]);
         let stdout = text(&output.stdout);
         assert_eq!(output.status.code(), Some(0), "{stdout}");
@@ -653,6 +691,16 @@ fn doctor_fails_on_a_bad_state_dir_owner_mismatch_or_dead_base_url() {
         stdout.contains("but no deslag proxy listens there"),
         "{stdout}"
     );
+    // A TCP connect proves a listener, not the deslag proxy.
+    let listener = TcpListener::bind(("127.0.0.1", port)).unwrap();
+    let stdout = text(&cmd.output().unwrap().stdout);
+    assert!(
+        stdout.contains(&format!(
+            "ANTHROPIC_BASE_URL points at 127.0.0.1:{port}, and a listener accepts connections there"
+        )),
+        "{stdout}"
+    );
+    drop(listener);
 
     // A missing state dir is the fresh-install state.
     fs::remove_dir_all(sandbox.state()).unwrap();

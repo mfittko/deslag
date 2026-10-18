@@ -268,7 +268,7 @@ fn check_base_url(listen: SocketAddr) -> Result<String, String> {
         )),
         Ok(url) if url.trim_end_matches('/') == proxy => match proxy_listens(listen) {
             true => Ok(format!(
-                "ANTHROPIC_BASE_URL routes to the deslag proxy on {listen}"
+                "ANTHROPIC_BASE_URL points at {listen}, and a listener accepts connections there"
             )),
             false => Err(format!(
                 "ANTHROPIC_BASE_URL points at {listen}, but no deslag proxy listens there"

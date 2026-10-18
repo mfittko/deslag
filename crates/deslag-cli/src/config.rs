@@ -236,10 +236,24 @@ pub fn check_upstream(listen: SocketAddr, url: &str) -> Result<Upstream, String>
         .host()
         .trim_start_matches('[')
         .trim_end_matches(']');
+    // The resolver treats `localhost.` as `localhost`.
+    let host = host.strip_suffix('.').unwrap_or(host);
+    let ip = host.parse::<IpAddr>().ok();
+    // getaddrinfo maps inet_aton forms such as `127.1`, `0x7f.0.0.1` and
+    // `2130706433` to an address. A DNS name never ends in a numeric label.
+    let last = host.rsplit('.').next().unwrap_or(host);
+    let hex = last
+        .strip_prefix("0x")
+        .or_else(|| last.strip_prefix("0X"))
+        .is_some_and(|h| h.bytes().all(|b| b.is_ascii_hexdigit()));
+    let numeric = !last.is_empty() && (last.bytes().all(|b| b.is_ascii_digit()) || hex);
+    if ip.is_none() && numeric {
+        return Err("upstream host must be a canonical IP address or a name".to_owned());
+    }
     // A connect to the unspecified address, or to an IPv4-mapped loopback,
     // reaches a loopback listener too.
     let loopback = host.eq_ignore_ascii_case("localhost")
-        || host.parse::<IpAddr>().is_ok_and(|ip| {
+        || ip.is_some_and(|ip| {
             let ip = ip.to_canonical();
             ip.is_loopback() || ip.is_unspecified()
         });
