@@ -462,9 +462,10 @@ fn tool_results(body: &[u8]) -> Option<(&str, Vec<ToolResult<'_>>)> {
                     .map(move |b| (i, b))
             })
     };
-    // An id used by tool uses of different categories is `Other`: fail closed.
-    // A missing, non-string or escaped name is `Other` as well.
-    let mut tools: HashMap<&str, local::ToolCategory> = HashMap::new();
+    // An id used by tool uses with different names is `Other`: fail closed.
+    // Names, not categories, are compared, since distinct MCP tools share one
+    // category. A missing, non-string or escaped name is `Other` as well.
+    let mut tools: HashMap<&str, (Option<&str>, local::ToolCategory)> = HashMap::new();
     for (id, name) in blocks("assistant")
         .filter(|(_, b)| b.str("type") == Some("tool_use"))
         .filter_map(|(_, b)| Some((b.str("id")?, b.str("name"))))
@@ -475,12 +476,12 @@ fn tool_results(body: &[u8]) -> Option<(&str, Vec<ToolResult<'_>>)> {
         );
         tools
             .entry(id)
-            .and_modify(|t| {
-                if *t != tool {
+            .and_modify(|(n, t)| {
+                if *n != name {
                     *t = local::ToolCategory::Other;
                 }
             })
-            .or_insert(tool);
+            .or_insert((name, tool));
     }
     let mut results = Vec::new();
     for (i, block) in blocks("user") {
@@ -505,7 +506,9 @@ fn tool_results(body: &[u8]) -> Option<(&str, Vec<ToolResult<'_>>)> {
             newest: i == last,
             content,
             targets,
-            tool: tools.get(id).copied().unwrap_or(local::ToolCategory::Other),
+            tool: tools
+                .get(id)
+                .map_or(local::ToolCategory::Other, |(_, t)| *t),
             is_error: block.get("is_error").and_then(parse) == Some(true),
         });
     }
@@ -784,6 +787,14 @@ mod tests {
             ("bash-no-name", second(""), false),
             ("bash-number", second(r#","name":5"#), false),
             ("bash-read", second(r#","name":"Read""#), false),
+            // Two MCP tools share a category, but their names conflict.
+            (
+                "mcp-mcp",
+                body(
+                    r#"{"type":"tool_use","id":"t","name":"mcp__a__read","input":{}},{"type":"tool_use","id":"t","name":"mcp__b__write","input":{}}"#,
+                ),
+                false,
+            ),
         ];
         for (name, body, minified) in cases {
             let store = fresh(&format!("names-{name}"));
