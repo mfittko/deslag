@@ -149,10 +149,10 @@ The service accepts one HTTP connection at a time. It reads at most 2048 bytes a
 CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 DESLAG_USAGE_STATS=1 DESLAG_SAVINGS_WIDGET=1 claude
 ```
 
-After a usage record is delivered, the module starts one background `GET /session/<id>` for the session. The stream never waits for it. On success it sets the status line to the last request's `estimated_removed_tokens` and its provider input tokens (`input_tokens + cache_read_input_tokens + cache_creation_input_tokens`), and the session's `totals.estimated_removed_tokens` of the last 24 hours:
+After a usage record is delivered, the module starts one background `GET /session/<id>` for the session. The stream never waits for it. On success it sets the status line to the last request's `estimated_removed_tokens` and its provider input tokens (`input_tokens + cache_read_input_tokens + cache_creation_input_tokens`), and the session's `totals.estimated_removed_tokens` of the last 24 hours. It ends with the hook compression state: `compression on` when the first line of `<state dir>/compression` is exactly `on` and the owner is `hook`, else `compression off`. The owner rule matches the binary (`read_owner` in `crates/deslag-proxy/src/session.rs`): the whole `<state dir>/owner` file with trailing whitespace stripped is exactly `hook`. The module reads both files with `$.fs.read` inside the same background read and its 1 s timeout; a failed file read is `off`:
 
 ```text
-deslag: ~120 tokens removed (estimate) of 5,432 input tokens · session ~1,200 removed (estimate)
+deslag: ~120 tokens removed (estimate) of 5,432 input tokens · session ~1,200 removed (estimate) · compression on
 ```
 
 The removed counts come from the `deslag-estimate-v1` estimator and carry the `(estimate)` label. The input count is provider-reported usage. A `null` count shows as `unknown`. A 0 in the line is a reported count of 0. The line shows no money figures.

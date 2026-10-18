@@ -23,6 +23,8 @@ function world(on: any, env: Record<string, string | undefined>) {
   const w = {
     env,
     reads,
+    files: {} as Record<string, string>,
+    paths: [] as string[],
     result: undefined as any,
     error: undefined as Error | undefined,
     session: 'sess-1' as string | undefined,
@@ -63,6 +65,13 @@ function world(on: any, env: Record<string, string | undefined>) {
     if (wake) wake(e.text);
     else statusQueued.push(e.text);
     return { value: undefined };
+  });
+  // A path missing from `files` rejects, like a missing file. Each entry of
+  // `paths` records the read mode, which the host sets to `text` by default.
+  on('fs.read', async (_$: unknown, e: any) => {
+    w.paths.push(`${e.as}:${e.path}`);
+    if (!(e.path in w.files)) throw new Error('ENOENT');
+    return { value: w.files[e.path] };
   });
   on('clock.sleep', async () => {
     await new Promise<void>((r) => sleeping.push(r));
@@ -319,9 +328,53 @@ describe('savings widget', () => {
     expect(read.url).toBe('http://deslag/session/sess-1');
     expect(read.init.socketPath).toBe('/state/local-http.sock');
     expect(await status).toBe(
-      'deslag: ~120 tokens removed (estimate) of 5,432 input tokens · session ~1,200 removed (estimate)',
+      'deslag: ~120 tokens removed (estimate) of 5,432 input tokens · session ~1,200 removed (estimate) · compression off',
     );
   });
+
+  // With owner `hook`, only a first line of exactly `on` is on.
+  for (const [text, state] of [
+    ['on\n', 'on'],
+    ['on', 'on'],
+    ['off\n', 'off'],
+    ['on \n', 'off'],
+    ['', 'off'],
+  ] as const) {
+    test(`compression file ${JSON.stringify(text)}: the line ends with compression ${state}`, OPTS, async ($, on) => {
+      const w = world(on, { ...WIDGET });
+      w.files['/state/compression'] = text;
+      w.files['/state/owner'] = 'hook\n';
+      w.reply = serve(() => json(DOC));
+      const status = w.status();
+      await step($, w, result(1));
+      expect(await status).toMatch(new RegExp(`removed \\(estimate\\) · compression ${state}$`));
+      expect(w.paths).toEqual(['text:/state/compression', 'text:/state/owner']);
+    });
+  }
+
+  // The hook compresses only as the owner, so the widget follows the owner too.
+  // The owner rule is session::read_owner: the whole file, trailing whitespace
+  // stripped, is exactly `hook`. A missing owner file (undefined) is none.
+  for (const [owner, state] of [
+    ['hook\n', 'on'],
+    ['hook', 'on'],
+    ['hook \n', 'on'],
+    ['hook\r\n', 'on'],
+    ['hook\nproxy\n', 'off'],
+    ['proxy\n', 'off'],
+    ['none\n', 'off'],
+    [undefined, 'off'],
+  ] as const) {
+    test(`compression on with owner ${JSON.stringify(owner)}: the line ends with compression ${state}`, OPTS, async ($, on) => {
+      const w = world(on, { ...WIDGET });
+      w.files['/state/compression'] = 'on\n';
+      if (owner !== undefined) w.files['/state/owner'] = owner;
+      w.reply = serve(() => json(DOC));
+      const status = w.status();
+      await step($, w, result(1));
+      expect(await status).toMatch(new RegExp(`removed \\(estimate\\) · compression ${state}$`));
+    });
+  }
 
   test('unknown estimates and usage show as unknown, never 0', OPTS, async ($, on) => {
     const w = world(on, { ...WIDGET });
@@ -334,7 +387,7 @@ describe('savings widget', () => {
     const status = w.status();
     await step($, w, result(0));
     expect(await status).toBe(
-      'deslag: unknown tokens removed (estimate) of unknown input tokens · session unknown removed (estimate)',
+      'deslag: unknown tokens removed (estimate) of unknown input tokens · session unknown removed (estimate) · compression off',
     );
   });
 

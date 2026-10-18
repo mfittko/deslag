@@ -23,4 +23,14 @@ while IFS= read -r line || [ -n "$line" ]; do
 done 2>/dev/null <"$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json"
 bin=$CLAUDE_PLUGIN_DATA/bin/$version/deslag
 if [ -z "$version" ] || [ ! -f "$bin" ] || [ ! -x "$bin" ]; then pass; fi
+# /deslag:compression on writes `on` to <state dir>/compression. Only a first
+# line of exactly `on` adds --minify-json; the default is off. The state dir
+# rule is deslag_telemetry::state_dir: empty and relative values are skipped.
+state=
+for dir in "${DESLAG_STATE_DIR:-}" "${XDG_STATE_HOME:+$XDG_STATE_HOME/deslag}" "${HOME:+$HOME/.local/state/deslag}"; do
+  case $dir in /*) state=$dir; break ;; esac
+done
+compression=
+[ -z "$state" ] || { IFS= read -r compression || :; } 2>/dev/null <"$state/compression"
+if [ "$compression" = on ]; then exec "$bin" hook claude --minify-json; fi
 exec "$bin" hook claude

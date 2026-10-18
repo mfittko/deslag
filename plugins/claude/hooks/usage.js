@@ -33,16 +33,16 @@ const validModel = (s) => typeof s === 'string' && /^[ -~]{1,64}$/.test(s) && !/
 const validIndex = (n) => Number.isSafeInteger(n) && n >= 0;
 
 // Same order as deslag_telemetry::state_dir; empty or relative values are ignored.
-async function socketPath($) {
+async function stateDir($) {
   const abs = (v) => (typeof v === 'string' && v.startsWith('/') ? v : undefined);
   const dir =
     abs(await $.env.get('DESLAG_STATE_DIR')) ??
     abs(await $.env.get('XDG_STATE_HOME'))?.concat('/deslag') ??
     abs(await $.env.get('HOME'))?.concat('/.local/state/deslag');
-  return dir && `${dir}/local-http.sock`;
+  return dir;
 }
 
-// Resolves to `{ session, socket }` when the record was delivered, `false`
+// Resolves to `{ session, dir }` when the record was delivered, `false`
 // when its delivery failed, `null` when it was dropped without a send, and
 // undefined when the module is off.
 async function send($, e, result) {
@@ -71,8 +71,8 @@ async function send($, e, result) {
         dropped += carried + 1;
         return null;
       }
-      const socket = await socketPath($);
-      if (!socket) {
+      const dir = await stateDir($);
+      if (!dir) {
         dropped += carried + 1;
         return null;
       }
@@ -89,9 +89,9 @@ async function send($, e, result) {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'content-length': String(new TextEncoder().encode(body).length) },
         body,
-        socketPath: socket,
+        socketPath: `${dir}/local-http.sock`,
       });
-      if (res?.ok) return { session, socket };
+      if (res?.ok) return { session, dir };
       dropped += carried + 1;
       return false;
     } catch {
@@ -121,7 +121,8 @@ const estimate = (n) => (Number.isSafeInteger(n) ? `~${count(n)}` : 'unknown');
 
 // The widget line for a `deslag stats --json --session <id>` document: the
 // last request's estimated removed tokens next to its provider input tokens,
-// and the session total. Throws on a document without requests.
+// and the session total. Throws on a document without requests. The widget
+// appends the compression state to this line.
 export function savingsLine(doc) {
   const last = doc.requests.at(-1);
   if (doc.schema_version !== 1 || !last) throw new Error('no request');
@@ -133,10 +134,24 @@ export function savingsLine(doc) {
   );
 }
 
-async function readLine($, { session, socket }) {
-  const res = await $.http.fetch(`http://deslag/session/${session}`, { socketPath: socket });
+// The hook's effective state: compression is on only when the first line of
+// `<state dir>/compression` is exactly `on` and the owner is `hook`. The owner
+// follows session::read_owner: the whole `<state dir>/owner` file with trailing
+// whitespace stripped is exactly `hook`. A failed read is off.
+const readText = ($, path) =>
+  Promise.resolve()
+    .then(() => $.fs.read(path))
+    .then(String);
+const compressionState = ($, dir) =>
+  Promise.all([readText($, `${dir}/compression`), readText($, `${dir}/owner`)])
+    .then(([toggle, owner]) => (toggle.split('\n')[0] === 'on' && owner.trimEnd() === 'hook' ? 'on' : 'off'))
+    .catch(() => 'off');
+
+async function readLine($, { session, dir }) {
+  const state = compressionState($, dir);
+  const res = await $.http.fetch(`http://deslag/session/${session}`, { socketPath: `${dir}/local-http.sock` });
   if (!res?.ok) throw new Error(`status ${res?.status}`);
-  return savingsLine(JSON.parse(res.text));
+  return `${savingsLine(JSON.parse(res.text))} · compression ${await state}`;
 }
 
 // Bumped by each refresh that sets the line; only the latest one writes it.
