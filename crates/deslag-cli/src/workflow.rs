@@ -2,7 +2,7 @@
 //!
 //! Output never contains a credential: an environment value whose name holds
 //! KEY, TOKEN or SECRET prints as `set (redacted)`, and a printed URL keeps
-//! only its scheme and host.
+//! `scheme://host[:port]` and prints a path or query as `/[redacted]`.
 
 use std::net::{SocketAddr, TcpStream};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -140,7 +140,7 @@ impl Facts {
                 }
             );
             println!("proxy listen: {}", config.listen);
-            // Display keeps scheme and host and redacts any base path.
+            // Display keeps `scheme://host[:port]` and prints a base path as `/[redacted]`.
             let upstream = config
                 .upstream
                 .as_deref()

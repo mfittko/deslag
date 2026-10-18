@@ -6,6 +6,7 @@ use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+use std::sync::{Mutex, MutexGuard};
 
 /// A temp dir with `home/`, `state/` and `config.toml`. Removed on drop.
 struct Sandbox(PathBuf);
@@ -88,6 +89,14 @@ fn snapshot(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
 }
 
 const V1: &str = "config_version = 1\n";
+
+/// Serializes the tests that bind `127.0.0.1:0`. A dead-port test drops its
+/// listener and expects the port to stay free; a parallel bind could reuse it.
+static PORTS: Mutex<()> = Mutex::new(());
+
+fn ports() -> MutexGuard<'static, ()> {
+    PORTS.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 #[test]
 fn invalid_configs_are_rejected_with_the_key() {
@@ -211,7 +220,27 @@ fn invalid_configs_are_rejected_with_the_key() {
             "[proxy]\nlisten = \"127.0.0.1:443\"\nupstream = \"https://localhost/v1\"\n",
             "proxy.upstream: points at the listener",
         ),
+        // Scheme and host match case-insensitively.
+        (
+            "[proxy]\nlisten = \"127.0.0.1:443\"\nupstream = \"HTTPS://localhost\"\n",
+            "proxy.upstream: points at the listener",
+        ),
+        (
+            "[proxy]\nupstream = \"https://LOCALHOST:8789\"\n",
+            "proxy.upstream: points at the listener",
+        ),
+        (
+            "[proxy]\nupstream = \"http://localhost:8789\"\n",
+            "proxy.upstream: points at the listener",
+        ),
         ("[proxy]\nupstream = 1\n", "proxy.upstream must be a string"),
+        // A quoted top-level key is not the [proxy] upstream.
+        (
+            "\"proxy.upstream\" = \"https://api.anthropic.com\"\n",
+            "unknown config key: proxy.upstream",
+        ),
+        // Control characters in an echoed key are escaped.
+        ("\"\\u001b[2J\" = 1\n", "unknown config key: \\u{1b}[2J"),
     ] {
         let body = if body.starts_with("config_version") || body.is_empty() {
             body.to_string()
@@ -220,6 +249,7 @@ fn invalid_configs_are_rejected_with_the_key() {
         };
         let output = sandbox.config(&body).run(&["doctor"]);
         let stdout = text(&output.stdout);
+        assert!(!stdout.contains('\u{1b}'), "{body}: raw control character");
         assert_eq!(output.status.code(), Some(1), "{body}: {stdout}");
         assert!(
             stdout.contains(&format!("FAIL: config is invalid: {expected}")),
@@ -249,12 +279,22 @@ fn the_documented_defaults_and_a_loopback_http_upstream_are_valid() {
         [proxy]\nlisten = \"127.0.0.1:8789\"\nupstream = \"http://127.0.0.1:9000\"\ninspection_buffer_bytes = 16777216\n\
         [telemetry]\ncontent_capture = false\nlocal_reports = true\notlp_enabled = false\nqueue_capacity = 4096\n\
         export_timeout_ms = 2000\nshutdown_timeout_ms = 2000\n";
-    for body in [full, V1] {
+    let section = "config_version = 1\n[proxy]\nupstream = \"https://api.anthropic.com\"\n";
+    let dotted = "config_version = 1\nproxy.upstream = \"https://api.anthropic.com\"\n";
+    for body in [full, V1, section, dotted] {
         let output = sandbox.config(body).run(&["doctor"]);
         let stdout = text(&output.stdout);
         assert_eq!(output.status.code(), Some(0), "{stdout}");
         assert!(stdout.contains("ok: config is valid"), "{stdout}");
         assert!(stdout.contains("transforms: json_minify"), "{stdout}");
+    }
+    // Both spellings of the upstream key set the upstream.
+    for body in [section, dotted] {
+        let stdout = text(&sandbox.config(body).run(&["status"]).stdout);
+        assert!(
+            stdout.contains("proxy upstream: https://api.anthropic.com\n"),
+            "{stdout}"
+        );
     }
     // A missing file means the defaults.
     fs::remove_file(sandbox.0.join("config.toml")).unwrap();
@@ -265,6 +305,7 @@ fn the_documented_defaults_and_a_loopback_http_upstream_are_valid() {
 
 #[test]
 fn run_sets_the_base_url_only_for_the_child_and_edits_no_settings() {
+    let _ports = ports();
     let sandbox = Sandbox::new("run");
     let proxy = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = proxy.local_addr().unwrap();
@@ -321,6 +362,7 @@ fn run_sets_the_base_url_only_for_the_child_and_edits_no_settings() {
 
 #[test]
 fn run_without_a_listening_proxy_fails_with_guidance() {
+    let _ports = ports();
     let sandbox = Sandbox::new("run-down");
     let port = TcpListener::bind("127.0.0.1:0")
         .unwrap()
@@ -373,6 +415,40 @@ fn status_states_hook_mode_proxy_mode_or_off() {
         );
         assert!(stdout.contains("local service: not running"), "{stdout}");
         assert!(stdout.contains("(valid)"), "{stdout}");
+    }
+}
+
+#[test]
+fn config_path_falls_back_to_xdg_then_home_and_skips_empty_or_relative_values() {
+    let sandbox = Sandbox::new("path");
+    let xdg = sandbox.0.join("xdg");
+    let home = sandbox.0.join("home");
+    for (deslag_config, xdg_config_home, expected) in [
+        (None, Some(xdg.as_os_str()), xdg.join("deslag/config.toml")),
+        (
+            Some("relative.toml"),
+            Some(xdg.as_os_str()),
+            xdg.join("deslag/config.toml"),
+        ),
+        (
+            Some(""),
+            Some(std::ffi::OsStr::new("")),
+            home.join(".config/deslag/config.toml"),
+        ),
+    ] {
+        let mut cmd = sandbox.command(&["status"]);
+        cmd.env_remove("DESLAG_CONFIG");
+        if let Some(value) = deslag_config {
+            cmd.env("DESLAG_CONFIG", value);
+        }
+        if let Some(value) = xdg_config_home {
+            cmd.env("XDG_CONFIG_HOME", value);
+        }
+        let stdout = text(&cmd.output().unwrap().stdout);
+        assert!(
+            stdout.contains(&format!("config: {} (", expected.display())),
+            "{deslag_config:?} {xdg_config_home:?}: {stdout}"
+        );
     }
 }
 
@@ -469,12 +545,15 @@ fn doctor_redacts_credentials_and_states_the_mode() {
 
 #[test]
 fn doctor_fails_on_a_bad_state_dir_owner_mismatch_or_dead_base_url() {
+    let _ports = ports();
     let sandbox = Sandbox::new("checks");
     sandbox.config(V1).owner("hook", "on");
     assert_eq!(sandbox.run(&["doctor"]).status.code(), Some(0));
 
     fs::set_permissions(sandbox.state(), fs::Permissions::from_mode(0o755)).unwrap();
-    let stdout = text(&sandbox.run(&["doctor"]).stdout);
+    let output = sandbox.run(&["doctor"]);
+    let stdout = text(&output.stdout);
+    assert_eq!(output.status.code(), Some(1), "{stdout}");
     assert!(stdout.contains("has mode 0755; expected 0700"), "{stdout}");
 
     sandbox.owner("proxy", "on");

@@ -118,7 +118,9 @@ fn defaults() -> Table {
 fn merge(base: &mut Table, user: Table, prefix: &str) -> Result<(), String> {
     for (key, value) in user {
         let name = format!("{prefix}{key}");
-        if name == "proxy.upstream" {
+        // Match the section and key, not the joined name: a quoted top-level
+        // key "proxy.upstream" is unknown.
+        if prefix == "proxy." && key == "upstream" {
             if !value.is_str() {
                 return Err(format!("{name} must be a string"));
             }
@@ -139,7 +141,8 @@ fn merge(base: &mut Table, user: Table, prefix: &str) -> Result<(), String> {
                 return Err(format!("{name} must be of type {}", old.type_str()));
             }
             (None, _) => {
-                let name: String = name.chars().take(64).collect();
+                // A quoted key can hold control characters: escape them.
+                let name: String = name.escape_debug().take(64).collect();
                 return Err(format!("unknown config key: {name}"));
             }
         }
@@ -213,15 +216,26 @@ pub fn check_upstream(listen: SocketAddr, url: &str) -> Result<Upstream, String>
     let upstream = Upstream::parse(url)?;
     // ponytail: any loopback host on the listen port counts as the listener;
     // a second loopback service on the same port is not supported.
-    let (scheme, rest) = url.split_once("://").unwrap_or_default();
-    let authority = rest.split('/').next().unwrap_or_default();
-    let (host, port) = match authority.rsplit_once(':') {
-        Some((host, port)) if !port.ends_with(']') => (host, port.parse().ok()),
-        _ => (authority, Some(if scheme == "https" { 443 } else { 80 })),
+    // `Upstream::parse` accepted `url`, so it parses and has an authority.
+    let uri: http::Uri = url
+        .parse()
+        .map_err(|e| format!("invalid upstream URL: {e}"))?;
+    let Some(authority) = uri.authority() else {
+        return Ok(upstream);
     };
-    let host = host.trim_start_matches('[').trim_end_matches(']');
-    let loopback = host == "localhost" || host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback());
-    if loopback && port == Some(listen.port()) {
+    let default_port = if uri.scheme_str() == Some("https") {
+        443
+    } else {
+        80
+    };
+    let port = authority.port_u16().unwrap_or(default_port);
+    let host = authority
+        .host()
+        .trim_start_matches('[')
+        .trim_end_matches(']');
+    let loopback = host.eq_ignore_ascii_case("localhost")
+        || host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback());
+    if loopback && port == listen.port() {
         return Err(format!("points at the listener {listen}"));
     }
     Ok(upstream)
