@@ -33,16 +33,16 @@ const validModel = (s) => typeof s === 'string' && /^[ -~]{1,64}$/.test(s) && !/
 const validIndex = (n) => Number.isSafeInteger(n) && n >= 0;
 
 // Same order as deslag_telemetry::state_dir; empty or relative values are ignored.
-async function socketPath($) {
+async function stateDir($) {
   const abs = (v) => (typeof v === 'string' && v.startsWith('/') ? v : undefined);
   const dir =
     abs(await $.env.get('DESLAG_STATE_DIR')) ??
     abs(await $.env.get('XDG_STATE_HOME'))?.concat('/deslag') ??
     abs(await $.env.get('HOME'))?.concat('/.local/state/deslag');
-  return dir && `${dir}/local-http.sock`;
+  return dir;
 }
 
-// Resolves to `{ session, socket }` when the record was delivered, `false`
+// Resolves to `{ session, dir }` when the record was delivered, `false`
 // when its delivery failed, `null` when it was dropped without a send, and
 // undefined when the module is off.
 async function send($, e, result) {
@@ -71,8 +71,8 @@ async function send($, e, result) {
         dropped += carried + 1;
         return null;
       }
-      const socket = await socketPath($);
-      if (!socket) {
+      const dir = await stateDir($);
+      if (!dir) {
         dropped += carried + 1;
         return null;
       }
@@ -89,9 +89,9 @@ async function send($, e, result) {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'content-length': String(new TextEncoder().encode(body).length) },
         body,
-        socketPath: socket,
+        socketPath: `${dir}/local-http.sock`,
       });
-      if (res?.ok) return { session, socket };
+      if (res?.ok) return { session, dir };
       dropped += carried + 1;
       return false;
     } catch {
@@ -134,17 +134,21 @@ export function savingsLine(doc) {
   );
 }
 
-// The hook's toggle: compression is on only when the first line of
-// `<state dir>/compression` is exactly `on`. A failed read is off.
-const compressionState = ($, socket) =>
+// The hook's effective state: compression is on only when the first line of
+// `<state dir>/compression` is exactly `on` and the first line of
+// `<state dir>/owner` is exactly `hook`. A failed read is off.
+const firstLine = ($, path) =>
   Promise.resolve()
-    .then(() => $.fs.read(socket.replace(/local-http\.sock$/, 'compression')))
-    .then((text) => (String(text).split('\n')[0] === 'on' ? 'on' : 'off'))
+    .then(() => $.fs.read(path))
+    .then((text) => String(text).split('\n')[0]);
+const compressionState = ($, dir) =>
+  Promise.all([firstLine($, `${dir}/compression`), firstLine($, `${dir}/owner`)])
+    .then(([toggle, owner]) => (toggle === 'on' && owner === 'hook' ? 'on' : 'off'))
     .catch(() => 'off');
 
-async function readLine($, { session, socket }) {
-  const state = compressionState($, socket);
-  const res = await $.http.fetch(`http://deslag/session/${session}`, { socketPath: socket });
+async function readLine($, { session, dir }) {
+  const state = compressionState($, dir);
+  const res = await $.http.fetch(`http://deslag/session/${session}`, { socketPath: `${dir}/local-http.sock` });
   if (!res?.ok) throw new Error(`status ${res?.status}`);
   return `${savingsLine(JSON.parse(res.text))} · compression ${await state}`;
 }

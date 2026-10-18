@@ -4,7 +4,7 @@ This guide runs hook compression in a throwaway Claude Code session and shows th
 
 ## Requirements
 
-- A checkout of this repository and a Rust toolchain.
+- A checkout of this repository, a Rust toolchain and `jq`.
 - Claude Code with mod modules (`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`).
 
 ## 1. Build the binary
@@ -62,14 +62,22 @@ CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 DESLAG_USAGE_STATS=1 DESLAG_SAVINGS_WIDGET=1
 - `DESLAG_USAGE_STATS=1` sends the provider usage of each model request to the service.
 - `DESLAG_SAVINGS_WIDGET=1` shows the savings line after each model request.
 
-Install the binary and turn hook compression on in Claude Code:
+The hook runs the binary in the plugin data directory, so copy the checkout build there. Do this in a second shell with the step 1 variables. Set `DESLAG_DATA` to the data dir that the [README local checkout paragraph](../README.md#development) describes; list `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/data/` to find the plugin id.
+
+```sh
+version=$(jq -r .version "$DESLAG_PLUGIN/.claude-plugin/plugin.json")
+mkdir -p "$DESLAG_DATA/bin/$version"
+cp "$DESLAG_BIN" "$DESLAG_DATA/bin/$version/deslag"
+touch "$DESLAG_DATA/.deslag-data"
+```
+
+The `.deslag-data` marker lets `/deslag:uninstall` remove the copied binary. Then turn hook compression on in Claude Code:
 
 ```text
-/deslag:install
 /deslag:compression on
 ```
 
-`/deslag:install` installs the release binary for the plugin version into the plugin data directory. `/deslag:compression on` writes `on` to `$DESLAG_STATE_DIR/compression` and `hook` to `$DESLAG_STATE_DIR/owner`, so the plugin hook runs `deslag hook claude --minify-json` and owns compression. Hook compression is off until you run it.
+`/deslag:compression on` writes `on` to `$DESLAG_STATE_DIR/compression` and `hook` to `$DESLAG_STATE_DIR/owner`, so the plugin hook runs `deslag hook claude --minify-json` and owns compression. Hook compression is off until you run it.
 
 Ask Claude:
 
@@ -83,7 +91,7 @@ The model request that reads the tool result takes the hook's report. After that
 deslag: ~1,234 tokens removed (estimate) of 5,678 input tokens · session ~1,234 removed (estimate) · compression on
 ```
 
-`compression on` or `compression off` is the toggle state of `/deslag:compression`. `unknown` means that a count was not available. A 0 is a reported count of 0. When the service is not running, the widget shows no line.
+`compression on` means that the `/deslag:compression` toggle is on and the owner is `hook`, else the line shows `compression off`. `unknown` means that a count was not available. A 0 is a reported count of 0. When the service is not running, the widget shows no line.
 
 ## 6. Check the stats
 

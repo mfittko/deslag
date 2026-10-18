@@ -34,6 +34,7 @@ first_line() { head -n 1 -- "$1" 2>/dev/null || true; }
 
 # put <name> <value>: atomically replace <state dir>/<name> with a 0600 file.
 put() {
+  [ ! -d "$dir/$1" ] || die "not a file: $dir/$1"
   tmp=$(mktemp "$dir/.$1.XXXXXX")
   printf '%s\n' "$2" >"$tmp"
   chmod 600 "$tmp"
@@ -71,7 +72,7 @@ on() {
   put owner hook
   echo "Turned hook compression on. It applies to new tool results."
   if [ "$previous" = proxy ]; then
-    echo "The owner changed from proxy to hook. Start a fresh Claude Code session so that one adapter owns the whole session."
+    echo "The owner changed from proxy to hook. The current session now has two adapters: the proxy replays its pinned results and the hook compresses new ones. Start a new Claude Code session."
   fi
 }
 

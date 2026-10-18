@@ -249,6 +249,9 @@ expect_eq "compression on keeps the state files private" "700:600:600" \
 expect_eq "compression on leaves no temp file" "" "$(find "$st" -mindepth 1 -name ".*")"
 expect_eq "hook with compression on runs with --minify-json" "fake-deslag hook claude --minify-json" \
   "$(run_hook_env "$data" DESLAG_STATE_DIR="$st" </dev/null)"
+expect_eq "hook with compression on passes stdin to the binary" \
+  "$(printf 'fake-deslag hook claude --minify-json\n{"tool_name":"Bash"}')" \
+  "$(echo '{"tool_name":"Bash"}' | run_hook_env "$data" DESLAG_STATE_DIR="$st")"
 out=$(run_compression DESLAG_STATE_DIR="$st" -- status "$data")
 expect_match "compression status reports on and owner hook" "compression: on.*owner: hook" "$(tr '\n' ' ' <<<"$out")"
 expect_match "compression status with a data dir reports the binary" "installed at" "$out"
@@ -258,7 +261,7 @@ expect_match "an empty subcommand is status" "compression: on" "$(run_compressio
 
 echo proxy >"$st/owner"
 expect_match "compression on but owner proxy is noted" "owner is proxy" "$(run_compression DESLAG_STATE_DIR="$st" -- status)"
-expect_match "compression on from owner proxy gives fresh-session guidance" "fresh Claude Code session" \
+expect_match "compression on from owner proxy reports two adapters and a new session" "two adapters.*Start a new Claude Code session" \
   "$(run_compression DESLAG_STATE_DIR="$st" -- on)"
 expect_eq "compression on replaces owner proxy with hook" hook "$(cat "$st/owner")"
 
@@ -289,6 +292,10 @@ expect_fail "compression without a state dir fails" "no state directory" run_com
 : >"$tmp/state-file"
 expect_fail "compression on refuses a state dir that is a file" "not a directory" \
   run_compression DESLAG_STATE_DIR="$tmp/state-file" -- on
+mkdir -p "$tmp/state-dirfile/compression"
+expect_fail "compression on refuses a state file that is a directory" "not a file" \
+  run_compression DESLAG_STATE_DIR="$tmp/state-dirfile" -- on
+expect_eq "compression on leaves the directory and no temp file" "compression" "$(ls -A "$tmp/state-dirfile")"
 expect_fail "compression rejects an unknown subcommand" "usage" run_compression DESLAG_STATE_DIR="$st" -- frobnicate
 
 hooks_json=$root/hooks/hooks.json

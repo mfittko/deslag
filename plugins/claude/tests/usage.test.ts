@@ -66,9 +66,10 @@ function world(on: any, env: Record<string, string | undefined>) {
     else statusQueued.push(e.text);
     return { value: undefined };
   });
-  // A path missing from `files` rejects, like a missing file.
+  // A path missing from `files` rejects, like a missing file. Each entry of
+  // `paths` records the read mode, which the host sets to `text` by default.
   on('fs.read', async (_$: unknown, e: any) => {
-    w.paths.push(e.path);
+    w.paths.push(`${e.as}:${e.path}`);
     if (!(e.path in w.files)) throw new Error('ENOENT');
     return { value: w.files[e.path] };
   });
@@ -331,7 +332,7 @@ describe('savings widget', () => {
     );
   });
 
-  // Only a first line of exactly `on` is on.
+  // With owner `hook`, only a first line of exactly `on` is on.
   for (const [text, state] of [
     ['on\n', 'on'],
     ['on', 'on'],
@@ -342,11 +343,25 @@ describe('savings widget', () => {
     test(`compression file ${JSON.stringify(text)}: the line ends with compression ${state}`, OPTS, async ($, on) => {
       const w = world(on, { ...WIDGET });
       w.files['/state/compression'] = text;
+      w.files['/state/owner'] = 'hook\n';
       w.reply = serve(() => json(DOC));
       const status = w.status();
       await step($, w, result(1));
       expect(await status).toMatch(new RegExp(`removed \\(estimate\\) · compression ${state}$`));
-      expect(w.paths).toEqual(['/state/compression']);
+      expect(w.paths).toEqual(['text:/state/compression', 'text:/state/owner']);
+    });
+  }
+
+  // The hook compresses only as the owner, so the widget follows the owner too.
+  for (const owner of ['proxy\n', 'none\n', undefined]) {
+    test(`compression on with owner ${JSON.stringify(owner)}: the line ends with compression off`, OPTS, async ($, on) => {
+      const w = world(on, { ...WIDGET });
+      w.files['/state/compression'] = 'on\n';
+      if (owner !== undefined) w.files['/state/owner'] = owner;
+      w.reply = serve(() => json(DOC));
+      const status = w.status();
+      await step($, w, result(1));
+      expect(await status).toMatch(/removed \(estimate\) · compression off$/);
     });
   }
 
