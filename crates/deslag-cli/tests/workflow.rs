@@ -131,7 +131,58 @@ fn invalid_configs_are_rejected_with_the_key() {
             "[transforms]\njson_table = true\n",
             "transforms.json_table is not implemented",
         ),
-        ("mode = \"fast\"\n", "mode must be one of"),
+        (
+            "mode = \"off\"\n",
+            "mode is not configurable in this version",
+        ),
+        (
+            "mode = \"fast\"\n",
+            "mode is not configurable in this version",
+        ),
+        (
+            "[transforms]\njson_minify = false\n",
+            "transforms.json_minify is not configurable in this version",
+        ),
+        (
+            "[telemetry]\ncontent_capture = true\n",
+            "telemetry.content_capture is not configurable in this version",
+        ),
+        (
+            "[telemetry]\notlp_enabled = true\n",
+            "telemetry.otlp_enabled is not configurable in this version",
+        ),
+        (
+            "compression = { foo = 1 }\n",
+            "unknown config key: compression.foo",
+        ),
+        (
+            "[compression.sub]\nfoo = 1\n",
+            "unknown config key: compression.sub",
+        ),
+        (
+            "[compression]\nmax_parallel_jobs = [4]\n",
+            "compression.max_parallel_jobs must be of type integer",
+        ),
+        (
+            "[compression]\nmax_parallel_jobs = 4.0\n",
+            "compression.max_parallel_jobs must be of type integer",
+        ),
+        (
+            "[compression]\nmin_estimated_savings_ratio = nan\n",
+            "compression.min_estimated_savings_ratio must be within 0..=1",
+        ),
+        (
+            "[compression]\nmin_estimated_savings_ratio = inf\n",
+            "compression.min_estimated_savings_ratio must be within 0..=1",
+        ),
+        (
+            "[compression]\nmin_estimated_savings_ratio = 0\n",
+            "compression.min_estimated_savings_ratio must be of type float",
+        ),
+        (
+            "[proxy]\nlisten = \"127.0.0.1:1\"\nlisten = \"127.0.0.1:2\"\n",
+            "config line 4: duplicate key",
+        ),
         (
             "[proxy]\nlisten = \"0.0.0.0:8789\"\n",
             "proxy.listen must be a loopback address",
@@ -179,6 +230,11 @@ fn invalid_configs_are_rejected_with_the_key() {
         assert_eq!(output.status.code(), Some(2), "{body}");
         assert!(text(&output.stderr).contains(expected), "{body}");
     }
+    // The echoed unknown key is cut to 64 characters.
+    let body = format!("{V1}{} = 1\n", "k".repeat(100));
+    let stdout = text(&sandbox.config(&body).run(&["doctor"]).stdout);
+    let expected = format!("unknown config key: {}\n", "k".repeat(64));
+    assert!(stdout.contains(&expected), "{stdout}");
 }
 
 #[test]
@@ -232,14 +288,35 @@ fn run_sets_the_base_url_only_for_the_child_and_edits_no_settings() {
         let output = sandbox.run(args);
         assert_eq!(output.status.code(), Some(3), "{}", text(&output.stderr));
         assert_eq!(text(&output.stdout), format!("http://{addr}"));
+        assert_eq!(text(&output.stderr), "");
+    }
+    // A different parent value gets a redacted notice; the proxy's own value does not.
+    let child = ["run", "--", "sh", "-c", "printf %s \"$ANTHROPIC_BASE_URL\""];
+    for (parent, notice) in [
+        (
+            "https://other.example/v1?key=querysecret7Hq2".to_string(),
+            "deslag: ANTHROPIC_BASE_URL was https://other.example/[redacted]; the child now goes \
+             through the proxy",
+        ),
+        (format!("http://{addr}/"), ""),
+    ] {
+        let mut cmd = sandbox.command(&child);
+        let output = cmd.env("ANTHROPIC_BASE_URL", &parent).output().unwrap();
+        let stderr = text(&output.stderr);
+        assert_eq!(text(&output.stdout), format!("http://{addr}"));
+        assert!(!stderr.contains("querysecret7Hq2"), "{stderr}");
+        assert_eq!(stderr.is_empty(), notice.is_empty(), "{stderr}");
+        assert!(stderr.starts_with(notice), "{stderr}");
     }
     let output = sandbox.run(&["run", "--", "/nonexistent/deslag-child"]);
-    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(output.status.code(), Some(127));
     assert!(text(&output.stderr).contains("cannot run /nonexistent/deslag-child"));
+    let not_executable = sandbox.0.join("config.toml");
+    let output = sandbox.run(&["run", "--", not_executable.to_str().unwrap()]);
+    assert_eq!(output.status.code(), Some(126));
     // No settings file, state file or config file was created or changed.
     assert_eq!(snapshot(&sandbox.0), before);
     assert!(!sandbox.0.join("home/.claude").exists());
-    assert!(std::env::var_os("ANTHROPIC_BASE_URL").is_none_or(|v| v != *format!("http://{addr}")));
 }
 
 #[test]
@@ -269,9 +346,17 @@ fn status_states_hook_mode_proxy_mode_or_off() {
     let sandbox = Sandbox::new("status");
     sandbox.config(V1);
     for (owner, compression, mode) in [
-        ("hook", "on", "hook mode"),
+        (
+            "hook",
+            "on",
+            "hook mode (owner hook, /deslag:compression on)",
+        ),
         ("hook", "off", "off"),
-        ("proxy", "off", "proxy mode"),
+        (
+            "proxy",
+            "off",
+            "proxy mode (owner proxy; compresses only through deslag proxy --minify-json)",
+        ),
         ("none", "on", "off"),
         ("none", "off", "off"),
     ] {
@@ -297,45 +382,65 @@ const SECRETS: &[&str] = &[
     "ghp_Q4xL9mT2vR7nK8wP1yH6jF3bD5cA0sEzZ",
     "urlpassword9F3k",
     "querysecret7Hq2",
+    // The parts before `/` and `?` that a split on those characters printed.
+    "user:pw7Hq2",
+    "u:se4Kx",
 ];
 
 #[test]
 fn doctor_redacts_credentials_and_states_the_mode() {
     let sandbox = Sandbox::new("redact");
     sandbox.config(V1).owner("hook", "on");
-    let mut cmd = sandbox.command(&["doctor"]);
-    cmd.env("ANTHROPIC_API_KEY", SECRETS[0])
-        .env("ANTHROPIC_AUTH_TOKEN", SECRETS[1])
-        .env("MY_SERVICE_SECRET", SECRETS[2])
-        .env(
-            "ANTHROPIC_BASE_URL",
+    for (base_url, shown) in [
+        (
             format!(
                 "https://user:{}@gw.example/v1?key={}",
                 SECRETS[3], SECRETS[4]
             ),
-        );
-    let output = cmd.output().unwrap();
-    let (stdout, stderr) = (text(&output.stdout), text(&output.stderr));
-    for secret in SECRETS {
+            "set (redacted)",
+        ),
+        (
+            "https://user:pw7Hq2/ss@gw.example/v1".to_string(),
+            "set (redacted)",
+        ),
+        (
+            "https://u:se4Kx?cret@gw.example".to_string(),
+            "set (redacted)",
+        ),
+        (
+            format!("https://gw.example:8443/v1?key={}", SECRETS[4]),
+            "https://gw.example:8443/[redacted]",
+        ),
+        ("https://gw.example".to_string(), "https://gw.example\n"),
+    ] {
+        let mut cmd = sandbox.command(&["doctor"]);
+        cmd.env("ANTHROPIC_API_KEY", SECRETS[0])
+            .env("ANTHROPIC_AUTH_TOKEN", SECRETS[1])
+            .env("MY_SERVICE_SECRET", SECRETS[2])
+            .env("ANTHROPIC_BASE_URL", &base_url);
+        let output = cmd.output().unwrap();
+        let (stdout, stderr) = (text(&output.stdout), text(&output.stderr));
+        for secret in SECRETS {
+            assert!(
+                !stdout.contains(secret) && !stderr.contains(secret),
+                "{secret} leaked:\n{stdout}{stderr}"
+            );
+        }
         assert!(
-            !stdout.contains(secret) && !stderr.contains(secret),
-            "{secret} leaked:\n{stdout}{stderr}"
+            stdout.contains("ANTHROPIC_API_KEY: set (redacted)"),
+            "{stdout}"
         );
+        assert!(
+            stdout.contains("ANTHROPIC_AUTH_TOKEN: set (redacted)"),
+            "{stdout}"
+        );
+        assert!(
+            stdout.contains(&format!("ANTHROPIC_BASE_URL: {shown}")),
+            "{stdout}"
+        );
+        assert!(stdout.contains("compression: hook mode"), "{stdout}");
+        assert_eq!(output.status.code(), Some(0), "{stdout}");
     }
-    assert!(
-        stdout.contains("ANTHROPIC_API_KEY: set (redacted)"),
-        "{stdout}"
-    );
-    assert!(
-        stdout.contains("ANTHROPIC_AUTH_TOKEN: set (redacted)"),
-        "{stdout}"
-    );
-    assert!(
-        stdout.contains("ANTHROPIC_BASE_URL: https://gw.example/[redacted]"),
-        "{stdout}"
-    );
-    assert!(stdout.contains("compression: hook mode"), "{stdout}");
-    assert_eq!(output.status.code(), Some(0), "{stdout}");
 
     // A config with a credential in the upstream, or in a line that does not parse.
     for body in [
@@ -375,9 +480,19 @@ fn doctor_fails_on_a_bad_state_dir_owner_mismatch_or_dead_base_url() {
     sandbox.owner("proxy", "on");
     let output = sandbox.run(&["doctor"]);
     let stdout = text(&output.stdout);
-    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(output.status.code(), Some(0), "{stdout}");
     assert!(
-        stdout.contains("FAIL: compression is on but the owner is proxy"),
+        stdout.contains("warn: compression is on but the owner is proxy")
+            && stdout.contains("run /deslag:compression off between sessions"),
+        "{stdout}"
+    );
+
+    sandbox.owner("none", "on");
+    let output = sandbox.run(&["doctor"]);
+    let stdout = text(&output.stdout);
+    assert_eq!(output.status.code(), Some(1), "{stdout}");
+    assert!(
+        stdout.contains("FAIL: compression is on but the owner is none"),
         "{stdout}"
     );
 
@@ -399,9 +514,21 @@ fn doctor_fails_on_a_bad_state_dir_owner_mismatch_or_dead_base_url() {
         "{stdout}"
     );
 
+    // A missing state dir is the fresh-install state.
     fs::remove_dir_all(sandbox.state()).unwrap();
-    let stdout = text(&sandbox.run(&["doctor"]).stdout);
-    assert!(stdout.contains("FAIL: state dir"), "{stdout}");
+    let output = sandbox.run(&["doctor"]);
+    let stdout = text(&output.stdout);
+    assert_eq!(output.status.code(), Some(0), "{stdout}");
+    assert!(
+        stdout.contains("not created yet (compression off)"),
+        "{stdout}"
+    );
+    // A file in place of the state dir fails.
+    fs::write(sandbox.state(), "").unwrap();
+    let output = sandbox.run(&["doctor"]);
+    let stdout = text(&output.stdout);
+    assert_eq!(output.status.code(), Some(1), "{stdout}");
+    assert!(stdout.contains("is not a directory"), "{stdout}");
 }
 
 #[test]

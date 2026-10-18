@@ -37,6 +37,7 @@ dependencies = [
  "deslag-core",
  "deslag-proxy",
  "deslag-telemetry",
+ "http",
  "serde_json",
  "tokio",
  "toml",

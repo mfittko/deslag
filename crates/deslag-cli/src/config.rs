@@ -46,7 +46,14 @@ export_timeout_ms = 2000
 shutdown_timeout_ms = 2000
 "#;
 
-const MODES: &[&str] = &["off", "observe", "safe"];
+/// Keys whose only accepted value is the default: another value would claim a
+/// behaviour this version does not have.
+const FIXED: &[&str] = &[
+    "mode",
+    "transforms.json_minify",
+    "telemetry.content_capture",
+    "telemetry.otlp_enabled",
+];
 /// Transforms this version can run. Enabling any other transform is an error,
 /// so the config never claims a transform that does not run.
 const IMPLEMENTED_TRANSFORMS: &[&str] = &["json_minify"];
@@ -122,11 +129,19 @@ fn merge(base: &mut Table, user: Table, prefix: &str) -> Result<(), String> {
             (Some(Value::Table(section)), Value::Table(user)) => {
                 merge(section, user, &format!("{name}."))?
             }
+            (Some(old), value) if FIXED.contains(&name.as_str()) && *old != value => {
+                return Err(format!(
+                    "{name} is not configurable in this version; remove it or set the default"
+                ));
+            }
             (Some(old), value) if old.same_type(&value) => *old = value,
             (Some(old), _) => {
                 return Err(format!("{name} must be of type {}", old.type_str()));
             }
-            (None, _) => return Err(format!("unknown config key: {name}")),
+            (None, _) => {
+                let name: String = name.chars().take(64).collect();
+                return Err(format!("unknown config key: {name}"));
+            }
         }
     }
     Ok(())
@@ -135,13 +150,6 @@ fn merge(base: &mut Table, user: Table, prefix: &str) -> Result<(), String> {
 fn validate(table: Table) -> Result<Config, String> {
     let get = |section: &str, key: &str| table.get(section).and_then(|s| s.get(key));
     let int = |section: &str, key: &str| get(section, key).and_then(Value::as_integer);
-    let mode = table
-        .get("mode")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
-    if !MODES.contains(&mode) {
-        return Err(format!("mode must be one of {}", MODES.join(", ")));
-    }
     // A `min_` threshold may be zero. Every other count, size or time must be positive.
     for (section, value) in &table {
         for (key, value) in value.as_table().into_iter().flatten() {

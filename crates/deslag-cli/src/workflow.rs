@@ -45,13 +45,28 @@ pub fn run(args: &[&str]) -> ExitCode {
              and make the proxy the owner"
         ));
     }
+    let proxy = format!("http://{listen}");
+    if let Ok(old) = std::env::var("ANTHROPIC_BASE_URL")
+        && old.trim_end_matches('/') != proxy
+    {
+        eprintln!(
+            "deslag: ANTHROPIC_BASE_URL was {}; the child now goes through the proxy on {listen} to the configured upstream",
+            redact_url(&old)
+        );
+    }
     // exec replaces this process, so the child gets the terminal's signals
     // directly and its exit status is the status of `deslag run`.
     let error = Command::new(program)
         .args(rest)
-        .env("ANTHROPIC_BASE_URL", format!("http://{listen}"))
+        .env("ANTHROPIC_BASE_URL", proxy)
         .exec();
-    fail(format!("cannot run {program}: {error}"))
+    eprintln!("deslag: cannot run {program}: {error}");
+    // The shell's codes: 127 for a missing command, 126 for one that cannot run.
+    ExitCode::from(if error.kind() == std::io::ErrorKind::NotFound {
+        127
+    } else {
+        126
+    })
 }
 
 fn proxy_listens(addr: SocketAddr) -> bool {
@@ -92,8 +107,10 @@ impl Facts {
     /// `--minify-json` only while the toggle is on.
     fn mode(&self) -> &'static str {
         match (self.owner, self.toggle_on) {
-            (Owner::Proxy, _) => "proxy mode",
-            (Owner::Hook, true) => "hook mode",
+            (Owner::Proxy, _) => {
+                "proxy mode (owner proxy; compresses only through deslag proxy --minify-json)"
+            }
+            (Owner::Hook, true) => "hook mode (owner hook, /deslag:compression on)",
             _ => "off",
         }
     }
@@ -179,19 +196,26 @@ pub fn doctor() -> ExitCode {
         Ok(_) => Ok("config is valid".into()),
         Err(e) => Err(format!("config is invalid: {e}")),
     });
-    check(if facts.toggle_on && facts.owner != Owner::Hook {
-        Err(format!(
-            "compression is on but the owner is {}, so the hook does not compress; \
-             run /deslag:compression on, or `deslag disable`",
-            owner_name(facts.owner)
-        ))
+    // The proxy ignores the toggle, so `on` with owner proxy only warns. With
+    // owner none nothing compresses although the toggle asks for it: a failure.
+    if facts.toggle_on && facts.owner == Owner::Proxy {
+        println!(
+            "warn: compression is on but the owner is proxy, so the hook does not compress; \
+             run /deslag:compression off between sessions"
+        );
+    } else if facts.toggle_on && facts.owner == Owner::None {
+        check(Err(
+            "compression is on but the owner is none, so the hook does not compress; \
+             run /deslag:compression on, or `deslag disable`"
+                .into(),
+        ));
     } else {
-        Ok(format!(
+        check(Ok(format!(
             "compression {} matches owner {}",
             facts.mode(),
             owner_name(facts.owner)
-        ))
-    });
+        )));
+    }
     if let Ok(config) = &facts.config {
         check(check_base_url(config.listen));
     }
@@ -205,9 +229,14 @@ pub fn doctor() -> ExitCode {
 fn check_state_dir(dir: Option<&PathBuf>) -> Result<String, String> {
     let dir = dir.ok_or("no state directory: set DESLAG_STATE_DIR, XDG_STATE_HOME or HOME")?;
     let shown = dir.display();
-    let meta = std::fs::metadata(dir).map_err(|e| {
-        format!("state dir {shown}: {e}; /deslag:compression on or `deslag local start` creates it")
-    })?;
+    let meta = match std::fs::metadata(dir) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(format!(
+                "state dir {shown} not created yet (compression off)"
+            ));
+        }
+        result => result.map_err(|e| format!("state dir {shown}: {e}"))?,
+    };
     if !meta.is_dir() {
         return Err(format!("state dir {shown} is not a directory"));
     }
@@ -242,7 +271,7 @@ fn check_base_url(listen: SocketAddr) -> Result<String, String> {
             )),
         },
         Ok(url) => Ok(format!(
-            "ANTHROPIC_BASE_URL is {}, which bypasses the deslag proxy on {listen}",
+            "ANTHROPIC_BASE_URL is {}, which differs from the configured listener {proxy}",
             redact_url(&url)
         )),
     }
@@ -259,19 +288,20 @@ fn shown(name: &str) -> String {
     }
 }
 
-/// Keeps scheme and host. Userinfo, query and fragment are dropped, and a
-/// path, which can embed a credential, prints as `/[redacted]`.
+/// Keeps `scheme://host[:port]`. A path or query, which can embed a
+/// credential, prints as `/[redacted]`. A value with `@` (userinfo) or one
+/// that does not parse as an absolute URI prints as `set (redacted)`.
 fn redact_url(url: &str) -> String {
-    let url = url.split(['?', '#']).next().unwrap_or_default();
-    let Some((scheme, rest)) = url.split_once("://") else {
-        return "set (not a URL, redacted)".into();
+    let uri = match url.parse::<http::Uri>() {
+        Ok(uri) if !url.contains('@') => uri,
+        _ => return "set (redacted)".into(),
     };
-    let (authority, path) = rest.split_once('/').unwrap_or((rest, ""));
-    let host = authority
-        .rsplit_once('@')
-        .map_or(authority, |(_, host)| host);
-    let path = if path.is_empty() { "" } else { "/[redacted]" };
-    format!("{scheme}://{host}{path}")
+    let (Some(scheme), Some(authority)) = (uri.scheme_str(), uri.authority()) else {
+        return "set (redacted)".into();
+    };
+    let path = uri.path_and_query().map_or("/", |p| p.as_str());
+    let path = if path == "/" { "" } else { "/[redacted]" };
+    format!("{scheme}://{authority}{path}")
 }
 
 /// Sets the owner to `none` and the hook compression toggle to `off`.
