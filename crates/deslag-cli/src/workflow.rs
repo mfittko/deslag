@@ -1,7 +1,7 @@
 //! `deslag run`, `status`, `doctor` and `disable`.
 //!
 //! Output never contains a credential: an environment value whose name holds
-//! KEY, TOKEN or SECRET prints as `set (redacted)`. A URL with userinfo, or a
+//! KEY, TOKEN or SECRET prints as `set (redacted)`. A value that contains `@`, or a
 //! value that does not parse as an absolute URL, prints as `set (redacted)`.
 //! Any other printed URL keeps `scheme://host[:port]` and prints a path or
 //! query as `/[redacted]`.
@@ -307,8 +307,8 @@ fn shown(name: &str) -> String {
 }
 
 /// Keeps `scheme://host[:port]`. A path or query, which can embed a
-/// credential, prints as `/[redacted]`. A value with `@` (userinfo) or one
-/// that does not parse as an absolute URI prints as `set (redacted)`.
+/// credential, prints as `/[redacted]`. A value that contains `@`, or one
+/// that does not parse as an absolute URI, prints as `set (redacted)`.
 fn redact_url(url: &str) -> String {
     let uri = match url.parse::<http::Uri>() {
         Ok(uri) if !url.contains('@') => uri,
