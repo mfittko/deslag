@@ -1,8 +1,10 @@
 //! `deslag run`, `status`, `doctor` and `disable`.
 //!
 //! Output never contains a credential: an environment value whose name holds
-//! KEY, TOKEN or SECRET prints as `set (redacted)`, and a printed URL keeps
-//! `scheme://host[:port]` and prints a path or query as `/[redacted]`.
+//! KEY, TOKEN or SECRET prints as `set (redacted)`. A URL with userinfo, or a
+//! value that does not parse as an absolute URL, prints as `set (redacted)`.
+//! Any other printed URL keeps `scheme://host[:port]` and prints a path or
+//! query as `/[redacted]`.
 
 use std::net::{SocketAddr, TcpStream};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -50,7 +52,7 @@ pub fn run(args: &[&str]) -> ExitCode {
         && old.trim_end_matches('/') != proxy
     {
         eprintln!(
-            "deslag: ANTHROPIC_BASE_URL was {}; the child now goes through the proxy on {listen} to the configured upstream",
+            "deslag: ANTHROPIC_BASE_URL was {}; the child now goes through the proxy on {listen}",
             redact_url(&old)
         );
     }
@@ -91,7 +93,9 @@ impl Facts {
             let toggle = std::fs::read_to_string(dir.join("compression")).unwrap_or_default();
             (
                 session::read_owner(dir),
-                toggle.lines().next() == Some("on"),
+                // Same rule as deslag-hook.sh: the first line is exactly `on`, so a
+                // trailing `\r` reads as off.
+                toggle.split('\n').next() == Some("on"),
             )
         });
         Facts {

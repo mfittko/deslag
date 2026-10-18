@@ -233,6 +233,11 @@ fn invalid_configs_are_rejected_with_the_key() {
             "[proxy]\nupstream = \"http://localhost:8789\"\n",
             "proxy.upstream: points at the listener",
         ),
+        // IPv6 brackets are stripped before the loopback check.
+        (
+            "[proxy]\nupstream = \"http://[::1]:8789\"\n",
+            "proxy.upstream: points at the listener",
+        ),
         ("[proxy]\nupstream = 1\n", "proxy.upstream must be a string"),
         // A quoted top-level key is not the [proxy] upstream.
         (
@@ -348,6 +353,7 @@ fn run_sets_the_base_url_only_for_the_child_and_edits_no_settings() {
         assert!(!stderr.contains("querysecret7Hq2"), "{stderr}");
         assert_eq!(stderr.is_empty(), notice.is_empty(), "{stderr}");
         assert!(stderr.starts_with(notice), "{stderr}");
+        assert!(!stderr.contains("configured upstream"), "{stderr}");
     }
     let output = sandbox.run(&["run", "--", "/nonexistent/deslag-child"]);
     assert_eq!(output.status.code(), Some(127));
@@ -415,6 +421,31 @@ fn status_states_hook_mode_proxy_mode_or_off() {
         );
         assert!(stdout.contains("local service: not running"), "{stdout}");
         assert!(stdout.contains("(valid)"), "{stdout}");
+    }
+}
+
+/// The toggle is on only when its first line is exactly `on`, the rule the
+/// plugin hook applies with `IFS= read -r`.
+#[test]
+fn status_reads_the_toggle_like_the_hook() {
+    let sandbox = Sandbox::new("toggle");
+    sandbox.config(V1);
+    for (toggle, on) in [
+        ("on", true),
+        ("on\n", true),
+        ("on\r\n", false),
+        ("on\r", false),
+        ("ON", false),
+        ("off", false),
+    ] {
+        sandbox.owner("hook", "off");
+        fs::write(sandbox.state().join("compression"), toggle).unwrap();
+        let stdout = text(&sandbox.run(&["status"]).stdout);
+        assert_eq!(
+            stdout.contains("compression: hook mode"),
+            on,
+            "{toggle:?}: {stdout}"
+        );
     }
 }
 
