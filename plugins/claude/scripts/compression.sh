@@ -32,6 +32,16 @@ trap '[ -z "$tmp" ] || command rm -f "$tmp"' EXIT
 # first_line <file>: the first line, or empty when the file is missing.
 first_line() { head -n 1 -- "$1" 2>/dev/null || true; }
 
+# read_owner: the owner as session::read_owner reads it. The whole
+# <state dir>/owner file with trailing whitespace (CR included) stripped must be
+# exactly `hook` or `proxy`; anything else, a missing file included, is none.
+read_owner() {
+  local text
+  text=$(cat -- "$dir/owner" 2>/dev/null || true)
+  text=${text%"${text##*[![:space:]]}"}
+  case $text in hook | proxy) echo "$text" ;; *) echo none ;; esac
+}
+
 # put <name> <value>: atomically replace <state dir>/<name> with a 0600 file.
 put() {
   [ ! -d "$dir/$1" ] || die "not a file: $dir/$1"
@@ -54,8 +64,7 @@ status() {
   local state owner
   state=$(first_line "$dir/compression")
   [ "$state" = on ] || state=off
-  owner=$(first_line "$dir/owner")
-  case $owner in hook | proxy) ;; *) owner=none ;; esac
+  owner=$(read_owner)
   echo "deslag compression: $state (state dir: $dir)"
   echo "owner: $owner"
   if [ "$state" = on ] && [ "$owner" != hook ]; then
@@ -67,7 +76,7 @@ status() {
 on() {
   local previous
   ensure_dir
-  previous=$(first_line "$dir/owner")
+  previous=$(read_owner)
   put compression on
   put owner hook
   echo "Turned hook compression on. It applies to new tool results."

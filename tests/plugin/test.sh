@@ -264,6 +264,19 @@ expect_match "compression on but owner proxy is noted" "owner is proxy" "$(run_c
 expect_match "compression on from owner proxy reports two adapters and a new session" "two adapters.*Start a new Claude Code session" \
   "$(run_compression DESLAG_STATE_DIR="$st" -- on)"
 expect_eq "compression on replaces owner proxy with hook" hook "$(cat "$st/owner")"
+# The owner rule is session::read_owner: the whole file, trailing whitespace stripped.
+for owner in 'hook\n' 'hook' 'hook \n' 'hook\r\n'; do
+  printf %b "$owner" >"$st/owner"
+  expect_match "compression status reads owner $owner as hook" "owner: hook" "$(run_compression DESLAG_STATE_DIR="$st" -- status)"
+done
+for owner in 'hook\nproxy\n' 'none\n'; do
+  printf %b "$owner" >"$st/owner"
+  expect_match "compression status reads owner $owner as none" "owner: none.*hook does not compress" \
+    "$(run_compression DESLAG_STATE_DIR="$st" -- status | tr '\n' ' ')"
+done
+printf 'proxy \r\n' >"$st/owner"
+expect_match "compression on from owner 'proxy \\r\\n' reports two adapters" "two adapters" \
+  "$(run_compression DESLAG_STATE_DIR="$st" -- on)"
 
 expect_ok "compression off succeeds" run_compression DESLAG_STATE_DIR="$st" -- off
 expect_eq "compression off writes off and keeps the owner" "off:hook" "$(cat "$st/compression"):$(cat "$st/owner")"

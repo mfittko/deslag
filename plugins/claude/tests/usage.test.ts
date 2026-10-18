@@ -353,15 +353,26 @@ describe('savings widget', () => {
   }
 
   // The hook compresses only as the owner, so the widget follows the owner too.
-  for (const owner of ['proxy\n', 'none\n', undefined]) {
-    test(`compression on with owner ${JSON.stringify(owner)}: the line ends with compression off`, OPTS, async ($, on) => {
+  // The owner rule is session::read_owner: the whole file, trailing whitespace
+  // stripped, is exactly `hook`. A missing owner file (undefined) is none.
+  for (const [owner, state] of [
+    ['hook\n', 'on'],
+    ['hook', 'on'],
+    ['hook \n', 'on'],
+    ['hook\r\n', 'on'],
+    ['hook\nproxy\n', 'off'],
+    ['proxy\n', 'off'],
+    ['none\n', 'off'],
+    [undefined, 'off'],
+  ] as const) {
+    test(`compression on with owner ${JSON.stringify(owner)}: the line ends with compression ${state}`, OPTS, async ($, on) => {
       const w = world(on, { ...WIDGET });
       w.files['/state/compression'] = 'on\n';
       if (owner !== undefined) w.files['/state/owner'] = owner;
       w.reply = serve(() => json(DOC));
       const status = w.status();
       await step($, w, result(1));
-      expect(await status).toMatch(/removed \(estimate\) · compression off$/);
+      expect(await status).toMatch(new RegExp(`removed \\(estimate\\) · compression ${state}$`));
     });
   }
 

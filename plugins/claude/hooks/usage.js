@@ -135,15 +135,16 @@ export function savingsLine(doc) {
 }
 
 // The hook's effective state: compression is on only when the first line of
-// `<state dir>/compression` is exactly `on` and the first line of
-// `<state dir>/owner` is exactly `hook`. A failed read is off.
-const firstLine = ($, path) =>
+// `<state dir>/compression` is exactly `on` and the owner is `hook`. The owner
+// follows session::read_owner: the whole `<state dir>/owner` file with trailing
+// whitespace stripped is exactly `hook`. A failed read is off.
+const readText = ($, path) =>
   Promise.resolve()
     .then(() => $.fs.read(path))
-    .then((text) => String(text).split('\n')[0]);
+    .then(String);
 const compressionState = ($, dir) =>
-  Promise.all([firstLine($, `${dir}/compression`), firstLine($, `${dir}/owner`)])
-    .then(([toggle, owner]) => (toggle === 'on' && owner === 'hook' ? 'on' : 'off'))
+  Promise.all([readText($, `${dir}/compression`), readText($, `${dir}/owner`)])
+    .then(([toggle, owner]) => (toggle.split('\n')[0] === 'on' && owner.trimEnd() === 'hook' ? 'on' : 'off'))
     .catch(() => 'off');
 
 async function readLine($, { session, dir }) {
