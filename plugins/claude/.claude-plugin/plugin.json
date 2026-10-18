@@ -1,6 +1,6 @@
 {
   "name": "deslag",
-  "version": "0.1.0-alpha.3",
+  "version": "0.1.0-alpha.4",
   "description": "PostToolUse hook adapter for deslag (compression stays off until /deslag:compression on), an opt-in usage module and an opt-in savings widget. Run /deslag:install to install the matching deslag binary.",
   "author": {
     "name": "mfittko"
