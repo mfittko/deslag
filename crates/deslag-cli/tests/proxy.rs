@@ -1,7 +1,7 @@
 use std::io::{BufRead, BufReader};
 use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};
-use std::sync::mpsc;
+use std::sync::{Mutex, MutexGuard, mpsc};
 use std::thread;
 use std::time::Duration;
 
@@ -16,6 +16,15 @@ fn deslag(args: &[&str]) -> Command {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     cmd
+}
+
+/// Serializes the tests that bind or spawn a proxy on an ephemeral loopback
+/// port. The config test frees a port and expects to rebind it; a parallel
+/// `:0` bind could take it first.
+static PORTS: Mutex<()> = Mutex::new(());
+
+fn ports() -> MutexGuard<'static, ()> {
+    PORTS.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 /// Kills and reaps the proxy on drop, so a failing assertion never orphans it.
@@ -60,11 +69,13 @@ fn assert_start(mut cmd: Command, host: &str) {
 
 #[test]
 fn valid_start_reports_bound_address_and_redacted_upstream() {
+    let _ports = ports();
     assert_valid_start(&["--listen", "127.0.0.1:0"], "127.0.0.1");
 }
 
 #[test]
 fn missing_flags_come_from_the_config_and_flags_win() {
+    let _ports = ports();
     let dir = std::env::temp_dir().join(format!("deslag-cli-proxy-config-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let config = dir.join("config.toml");
@@ -105,11 +116,13 @@ fn missing_flags_come_from_the_config_and_flags_win() {
 
 #[test]
 fn valid_start_with_minify_json() {
+    let _ports = ports();
     assert_valid_start(&["--minify-json", "--listen", "127.0.0.1:0"], "127.0.0.1");
 }
 
 #[test]
 fn valid_start_on_ipv6_loopback() {
+    let _ports = ports();
     // Hosts without an IPv6 loopback (Docker's default) cannot bind [::1].
     if std::net::TcpListener::bind("[::1]:0").is_err() {
         eprintln!("skipped: no IPv6 loopback on this host");

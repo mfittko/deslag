@@ -6,6 +6,7 @@
 //! Any other printed URL keeps `scheme://host[:port]` and prints a path or
 //! query as `/[redacted]`.
 
+use std::env::VarError;
 use std::net::{SocketAddr, TcpStream};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::os::unix::process::CommandExt;
@@ -48,12 +49,15 @@ pub fn run(args: &[&str]) -> ExitCode {
         ));
     }
     let proxy = format!("http://{listen}");
-    if let Ok(old) = std::env::var("ANTHROPIC_BASE_URL")
-        && old.trim_end_matches('/') != proxy
-    {
+    let old = match std::env::var("ANTHROPIC_BASE_URL") {
+        Ok(old) if old.trim_end_matches('/') == proxy => None,
+        Ok(old) => Some(redact_url(&old)),
+        Err(VarError::NotUnicode(_)) => Some("set (redacted)".into()),
+        Err(VarError::NotPresent) => None,
+    };
+    if let Some(old) = old {
         eprintln!(
-            "deslag: ANTHROPIC_BASE_URL was {}; the child now goes through the proxy on {listen}",
-            redact_url(&old)
+            "deslag: ANTHROPIC_BASE_URL was {old}; the child now goes through the proxy on {listen}"
         );
     }
     // exec replaces this process, so the child gets the terminal's signals
@@ -269,9 +273,12 @@ fn check_state_dir(dir: Option<&PathBuf>) -> Result<String, String> {
 fn check_base_url(listen: SocketAddr) -> Result<String, String> {
     let proxy = format!("http://{listen}");
     match std::env::var("ANTHROPIC_BASE_URL") {
-        Err(_) => Ok(format!(
+        Err(VarError::NotPresent) => Ok(format!(
             "ANTHROPIC_BASE_URL is unset here; `deslag run` sets it to {proxy} for its child only"
         )),
+        Err(VarError::NotUnicode(_)) => {
+            Err("ANTHROPIC_BASE_URL is set to a value that is not valid UTF-8".into())
+        }
         Ok(url) if url.trim_end_matches('/') == proxy => match proxy_listens(listen) {
             true => Ok(format!(
                 "ANTHROPIC_BASE_URL points at {listen}, and a listener accepts connections there"
@@ -290,7 +297,8 @@ fn check_base_url(listen: SocketAddr) -> Result<String, String> {
 /// An environment value safe to print.
 fn shown(name: &str) -> String {
     match std::env::var(name) {
-        Err(_) => "unset".into(),
+        Err(VarError::NotPresent) => "unset".into(),
+        Err(VarError::NotUnicode(_)) => "set (redacted)".into(),
         Ok(_) if ["KEY", "TOKEN", "SECRET"].iter().any(|s| name.contains(s)) => {
             "set (redacted)".into()
         }

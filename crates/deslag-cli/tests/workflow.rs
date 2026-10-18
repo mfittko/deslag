@@ -736,6 +736,50 @@ fn doctor_redacts_credentials_and_states_the_mode() {
 }
 
 #[test]
+fn doctor_reports_unset_set_and_non_utf8_values() {
+    use std::os::unix::ffi::OsStrExt;
+    let sandbox = Sandbox::new("nonutf8");
+    sandbox.config(V1).owner("hook", "on");
+    let bad = std::ffi::OsStr::from_bytes(b"\xff");
+
+    // Unset, a key and a URL with a path.
+    let mut cmd = sandbox.command(&["doctor"]);
+    cmd.env("ANTHROPIC_API_KEY", "not-a-real-key")
+        .env("ANTHROPIC_BASE_URL", "https://gw.example/x");
+    let stdout = text(&cmd.output().unwrap().stdout);
+    assert!(stdout.contains("ANTHROPIC_AUTH_TOKEN: unset"), "{stdout}");
+    assert!(
+        stdout.contains("ANTHROPIC_API_KEY: set (redacted)"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("ANTHROPIC_BASE_URL: https://gw.example/[redacted]"),
+        "{stdout}"
+    );
+
+    // A set value that is not UTF-8 is set, never unset.
+    let mut cmd = sandbox.command(&["doctor"]);
+    cmd.env("ANTHROPIC_AUTH_TOKEN", bad)
+        .env("ANTHROPIC_BASE_URL", bad);
+    let output = cmd.output().unwrap();
+    let stdout = text(&output.stdout);
+    assert!(
+        stdout.contains("ANTHROPIC_AUTH_TOKEN: set (redacted)"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("ANTHROPIC_BASE_URL: set (redacted)"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("ANTHROPIC_BASE_URL is unset"), "{stdout}");
+    assert!(
+        stdout.contains("FAIL: ANTHROPIC_BASE_URL is set to a value that is not valid UTF-8"),
+        "{stdout}"
+    );
+    assert_ne!(output.status.code(), Some(0), "{stdout}");
+}
+
+#[test]
 fn doctor_fails_on_a_bad_state_dir_owner_mismatch_or_dead_base_url() {
     let _ports = ports();
     let sandbox = Sandbox::new("checks");
