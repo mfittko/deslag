@@ -115,6 +115,9 @@ pub enum Reason {
     /// saves fewer tokens than the context thresholds require.
     InsufficientGain,
     InvalidCandidate,
+    /// Set by the hook adapter: another `PostToolUse` hook may replace the same
+    /// output, so the changed result is not emitted.
+    HookConflict,
 }
 
 impl Reason {
@@ -130,6 +133,7 @@ impl Reason {
             Reason::EscapedKey => "escaped_key",
             Reason::InsufficientGain => "insufficient_gain",
             Reason::InvalidCandidate => "invalid_candidate",
+            Reason::HookConflict => "hook_conflict",
         }
     }
 }

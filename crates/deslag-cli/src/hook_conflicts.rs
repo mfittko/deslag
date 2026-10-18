@@ -37,8 +37,15 @@ fn is_own_command(command: &str) -> bool {
 
 /// Returns a diagnostic naming the first settings or plugin hooks file with a
 /// `PostToolUse` hook, other than deslag's own, whose matcher may match `tool`.
-/// Missing, unreadable and malformed files never report a conflict.
-pub fn find(tool: &str, config_dir: Option<&Path>, project_dir: Option<&Path>) -> Option<String> {
+/// Missing, unreadable and malformed files never report a conflict. The hooks
+/// file of a plugin listed in `<state_dir>/ignore-hooks` is not scanned.
+pub fn find(
+    tool: &str,
+    config_dir: Option<&Path>,
+    project_dir: Option<&Path>,
+    state_dir: Option<&Path>,
+) -> Option<String> {
+    let ignored = state_dir.map(ignored_plugins).unwrap_or_default();
     let mut paths = Vec::new();
     if let Some(dir) = config_dir {
         paths.push(dir.join("settings.json"));
@@ -60,6 +67,7 @@ pub fn find(tool: &str, config_dir: Option<&Path>, project_dir: Option<&Path>) -
             .flatten()
             .filter(|(_, on)| on.as_bool() == Some(true))
             .map(|(key, _)| key.clone())
+            .filter(|key| !ignored.contains(key))
             .collect();
         for key in enabled {
             let installs = installed["plugins"][&key].as_array().into_iter().flatten();
@@ -80,10 +88,28 @@ pub fn find(tool: &str, config_dir: Option<&Path>, project_dir: Option<&Path>) -
     ))
 }
 
-/// Reads a regular file of at most `MAX_SETTINGS_BYTES` as JSON. The path is
-/// checked before opening so a FIFO or device never blocks the hook, and the open
-/// file is checked again in case the path changed in between.
+/// Plugin keys in `<state_dir>/ignore-hooks`, one per line. Blank lines and `#`
+/// comments are skipped. A missing or unreadable file is an empty list.
+fn ignored_plugins(state_dir: &Path) -> Vec<String> {
+    let Some(buf) = read_bounded(&state_dir.join("ignore-hooks")) else {
+        return Vec::new();
+    };
+    String::from_utf8_lossy(&buf)
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(str::to_owned)
+        .collect()
+}
+
 fn read_json(path: &Path) -> Option<Value> {
+    serde_json::from_slice(&read_bounded(path)?).ok()
+}
+
+/// Reads a regular file of at most `MAX_SETTINGS_BYTES`. The path is checked
+/// before opening so a FIFO or device never blocks the hook, and the open file
+/// is checked again in case the path changed in between.
+fn read_bounded(path: &Path) -> Option<Vec<u8>> {
     if !std::fs::metadata(path).ok()?.is_file() {
         return None;
     }
@@ -95,10 +121,7 @@ fn read_json(path: &Path) -> Option<Value> {
     file.take(MAX_SETTINGS_BYTES + 1)
         .read_to_end(&mut buf)
         .ok()?;
-    if buf.len() as u64 > MAX_SETTINGS_BYTES {
-        return None;
-    }
-    serde_json::from_slice(&buf).ok()
+    (buf.len() as u64 <= MAX_SETTINGS_BYTES).then_some(buf)
 }
 
 /// A matcher group counts when its matcher may match `tool` and it holds any
@@ -156,7 +179,7 @@ mod tests {
     fn user_settings(name: &str, matcher: &str, command: &str) -> Option<String> {
         let dir = temp_dir(name);
         write(&dir.join("settings.json"), &hooks(matcher, command));
-        find("Bash", Some(&dir), None)
+        find("Bash", Some(&dir), None, None)
     }
 
     #[test]
@@ -186,7 +209,7 @@ mod tests {
             {"hooks": [{"type": "command", "command": "jq ."}]}
         ]}});
         write(&dir.join("settings.json"), &settings);
-        assert!(find("Bash", Some(&dir), None).is_some());
+        assert!(find("Bash", Some(&dir), None, None).is_some());
     }
 
     #[test]
@@ -216,7 +239,7 @@ mod tests {
             {"matcher": "Bash", "hooks": [{"type": "command", "command": "jq ."}]}
         ]}});
         write(&dir.join("settings.json"), &settings);
-        assert_eq!(find("Bash", Some(&dir), None), None);
+        assert_eq!(find("Bash", Some(&dir), None, None), None);
     }
 
     #[test]
@@ -225,7 +248,7 @@ mod tests {
             let project = temp_dir(&format!("project-{file}"));
             let path = project.join(".claude").join(file);
             write(&path, &hooks("Bash", "jq ."));
-            let message = find("Bash", None, Some(&project)).unwrap();
+            let message = find("Bash", None, Some(&project), None).unwrap();
             assert!(message.contains(&path.display().to_string()), "{message}");
         }
     }
@@ -252,19 +275,57 @@ mod tests {
     #[test]
     fn enabled_plugin_hooks_are_reported() {
         let dir = plugin_setup("plugin-on", "other@market", true, "jq .");
-        let message = find("Bash", Some(&dir), None).unwrap();
+        let message = find("Bash", Some(&dir), None, None).unwrap();
         assert!(message.contains("hooks.json"), "{message}");
     }
 
     #[test]
     fn disabled_and_own_plugins_are_ignored() {
         let dir = plugin_setup("plugin-off", "other@market", false, "jq .");
-        assert_eq!(find("Bash", Some(&dir), None), None);
+        assert_eq!(find("Bash", Some(&dir), None, None), None);
         let dir = plugin_setup("plugin-own", "deslag@deslag", true, PLUGIN_WRAPPER);
-        assert_eq!(find("Bash", Some(&dir), None), None);
+        assert_eq!(find("Bash", Some(&dir), None, None), None);
         // The plugin key alone does not mark a hook as deslag's own.
         let dir = plugin_setup("plugin-named", "deslag@deslag", true, "jq .");
-        assert!(find("Bash", Some(&dir), None).is_some());
+        assert!(find("Bash", Some(&dir), None, None).is_some());
+    }
+
+    #[test]
+    fn listed_plugins_are_skipped() {
+        let dir = plugin_setup("ignore-listed", "other@market", true, "jq .");
+        fs::write(
+            dir.join("ignore-hooks"),
+            "# observers\n\n  other@market  \n",
+        )
+        .unwrap();
+        assert_eq!(find("Bash", Some(&dir), None, Some(&dir)), None);
+        fs::write(dir.join("ignore-hooks"), "else@market\n").unwrap();
+        assert!(find("Bash", Some(&dir), None, Some(&dir)).is_some());
+    }
+
+    #[test]
+    fn settings_hooks_are_never_skipped() {
+        let dir = plugin_setup("ignore-settings", "other@market", true, "jq .");
+        let mut settings = hooks("Bash", "jq .");
+        settings["enabledPlugins"] = serde_json::json!({"other@market": true});
+        write(&dir.join("settings.json"), &settings);
+        fs::write(dir.join("ignore-hooks"), "other@market\n").unwrap();
+        let message = find("Bash", Some(&dir), None, Some(&dir)).unwrap();
+        assert!(message.contains("settings.json"), "{message}");
+    }
+
+    #[test]
+    fn missing_empty_and_unreadable_ignore_lists_change_nothing() {
+        let dir = plugin_setup("ignore-none", "other@market", true, "jq .");
+        assert!(find("Bash", Some(&dir), None, Some(&dir)).is_some());
+        for text in ["", "# only a comment\n\n"] {
+            fs::write(dir.join("ignore-hooks"), text).unwrap();
+            assert!(find("Bash", Some(&dir), None, Some(&dir)).is_some());
+        }
+        fs::remove_file(dir.join("ignore-hooks")).unwrap();
+        fs::create_dir(dir.join("ignore-hooks")).unwrap();
+        assert!(ignored_plugins(&dir).is_empty());
+        assert!(find("Bash", Some(&dir), None, Some(&dir)).is_some());
     }
 
     #[test]
@@ -277,27 +338,27 @@ mod tests {
             settings.clone() + &" ".repeat(padding),
         )
         .unwrap();
-        assert!(find("Bash", Some(&dir), None).is_some());
+        assert!(find("Bash", Some(&dir), None, None).is_some());
         fs::write(
             dir.join("settings.json"),
             settings + &" ".repeat(padding + 1),
         )
         .unwrap();
-        assert_eq!(find("Bash", Some(&dir), None), None);
+        assert_eq!(find("Bash", Some(&dir), None, None), None);
 
         let dir = temp_dir("directory");
         fs::create_dir_all(dir.join("settings.json")).unwrap();
         assert_eq!(read_json(&dir.join("settings.json")), None);
-        assert_eq!(find("Bash", Some(&dir), None), None);
+        assert_eq!(find("Bash", Some(&dir), None, None), None);
     }
 
     #[test]
     fn missing_and_malformed_files_are_ignored() {
         let dir = temp_dir("malformed");
-        assert_eq!(find("Bash", Some(&dir), Some(&dir)), None);
+        assert_eq!(find("Bash", Some(&dir), Some(&dir), None), None);
         fs::write(dir.join("settings.json"), "{not json").unwrap();
         fs::create_dir_all(dir.join(".claude")).unwrap();
         fs::write(dir.join(".claude/settings.json"), r#"{"hooks":[1]}"#).unwrap();
-        assert_eq!(find("Bash", Some(&dir), Some(&dir)), None);
+        assert_eq!(find("Bash", Some(&dir), Some(&dir), None), None);
     }
 }

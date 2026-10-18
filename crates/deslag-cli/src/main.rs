@@ -204,28 +204,50 @@ fn claude_hook(
         report::ToolCategory::Other => Ok(None),
     }
     .map_err(|rejected| format!("compression {}; tool output unchanged", rejected.as_str()))?;
+    let output = updated.and_then(|updated| replacement(&event, updated));
+    // The conflict check runs before reporting, so a blocked result is never counted as changed.
+    let conflict = output.as_ref().and_then(|_| {
+        // An empty variable counts as unset, so the lookup falls through to the next source.
+        let env = |key: &str| env(key).filter(|value| !value.is_empty());
+        let config_dir = env("CLAUDE_CONFIG_DIR")
+            .map(PathBuf::from)
+            .or_else(|| env("HOME").map(|home| PathBuf::from(home).join(".claude")));
+        let project_dir = env("CLAUDE_PROJECT_DIR")
+            .map(PathBuf::from)
+            .or_else(|| event["cwd"].as_str().map(PathBuf::from));
+        hook_conflicts::find(
+            tool_name,
+            config_dir.as_deref(),
+            project_dir.as_deref(),
+            session::state_dir().as_deref(),
+        )
+    });
     if let Some(socket) = &socket {
         let session = event["session_id"].as_str().filter(|s| report::valid_id(s));
         // ponytail: a hook process exits after one result, so a failed send is lost uncounted.
-        for compressed in reports.into_inner() {
+        for mut compressed in reports.into_inner() {
+            if conflict.is_some() {
+                block(&mut compressed);
+            }
             report::send_report(socket, &compressed, report::Adapter::Hook, tool, session);
         }
     }
-    let Some(output) = updated.and_then(|updated| replacement(&event, updated)) else {
-        return Ok(None);
-    };
-    // An empty variable counts as unset, so the lookup falls through to the next source.
-    let env = |key: &str| env(key).filter(|value| !value.is_empty());
-    let config_dir = env("CLAUDE_CONFIG_DIR")
-        .map(PathBuf::from)
-        .or_else(|| env("HOME").map(|home| PathBuf::from(home).join(".claude")));
-    let project_dir = env("CLAUDE_PROJECT_DIR")
-        .map(PathBuf::from)
-        .or_else(|| event["cwd"].as_str().map(PathBuf::from));
-    match hook_conflicts::find(tool_name, config_dir.as_deref(), project_dir.as_deref()) {
+    match conflict {
         Some(conflict) => Err(conflict),
-        None => Ok(Some(output)),
+        None => Ok(output),
     }
+}
+
+/// Records a `changed` result that a hook conflict kept from the model as
+/// `skipped`, with the original size emitted. The candidate fields stay as built.
+fn block(compressed: &mut CompressionReport) {
+    if compressed.outcome != deslag_core::Outcome::Changed {
+        return;
+    }
+    compressed.outcome = deslag_core::Outcome::Skipped;
+    compressed.reason = Some(deslag_core::Reason::HookConflict);
+    compressed.emitted_bytes = compressed.original_bytes;
+    compressed.emitted_tokens = compressed.original_tokens;
 }
 
 /// One finished job: the changed text, if any, and the compression report.
@@ -379,6 +401,44 @@ mod tests {
 
     const PRETTY: &str = "{\n  \"a\": [\n    1,\n    2\n  ]\n}";
     const COMPACT: &str = r#"{"a":[1,2]}"#;
+
+    #[test]
+    fn block_relabels_only_changed_reports() {
+        let big = format!("{{\n  \"a\": \"{}\"\n}}", "x".repeat(4096));
+        let (_, mut changed) = minify(&big);
+        assert_eq!(changed.outcome, deslag_core::Outcome::Changed);
+        let candidate = (changed.candidate_bytes, changed.candidate_tokens);
+        block(&mut changed);
+        assert_eq!(changed.outcome, deslag_core::Outcome::Skipped);
+        assert_eq!(changed.reason, Some(deslag_core::Reason::HookConflict));
+        assert_eq!(changed.emitted_bytes, changed.original_bytes);
+        assert_eq!(changed.emitted_tokens, changed.original_tokens);
+        assert_eq!(
+            (changed.candidate_bytes, changed.candidate_tokens),
+            candidate
+        );
+
+        let ctx = deslag_core::CompressionContext {
+            limits: deslag_core::Limits {
+                min_candidate_bytes: usize::MAX,
+                ..FIRST_SLICE_JSON_MINIFY_CONTEXT.limits
+            },
+            ..FIRST_SLICE_JSON_MINIFY_CONTEXT
+        };
+        let mut small = deslag_core::compress(PRETTY, &ctx).report;
+        assert_eq!(small.outcome, deslag_core::Outcome::Skipped);
+        assert_eq!(small.reason, Some(deslag_core::Reason::BelowMinBytes));
+        let before = small.clone();
+        block(&mut small);
+        assert_eq!(small, before);
+
+        let mut failed = before;
+        failed.outcome = deslag_core::Outcome::Failed;
+        failed.reason = Some(deslag_core::Reason::InvalidCandidate);
+        let before = failed.clone();
+        block(&mut failed);
+        assert_eq!(failed, before);
+    }
 
     #[test]
     fn valid_bash_replacement_is_accepted() {

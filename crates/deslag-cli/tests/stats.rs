@@ -255,6 +255,41 @@ fn a_running_service_flushes_the_current_hour() {
 }
 
 #[test]
+fn a_result_blocked_by_a_hook_conflict_counts_as_skipped() {
+    let dir = state_dir("conflict", None);
+    let _guard = StopOnDrop(dir.clone());
+    write_owner(&dir, Owner::Hook).unwrap();
+    fs::create_dir_all(dir.join(".claude")).unwrap();
+    fs::write(
+        dir.join(".claude/settings.json"),
+        r#"{"hooks":{"PostToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"jq ."}]}]}}"#,
+    )
+    .unwrap();
+    assert!(stdout(&deslag(&dir, None, &["local", "start"])).contains("started"));
+    let hook = format!(
+        "{}/../../tests/fixtures/claude/posttooluse-bash-json.json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let output = Command::new(env!("CARGO_BIN_EXE_deslag"))
+        .args(["hook", "claude", "--minify-json"])
+        .env("DESLAG_STATE_DIR", &dir)
+        .env("CLAUDE_CONFIG_DIR", &dir)
+        .env("CLAUDE_PROJECT_DIR", &dir)
+        .env("HOME", &dir)
+        .stdin(fs::File::open(hook).unwrap())
+        .output()
+        .unwrap();
+    assert!(output.stdout.is_empty(), "{output:?}");
+
+    let output = deslag(&dir, None, &["stats", "--json", "--since", "1h"]);
+    let stats: Value = serde_json::from_str(&stdout(&output)).unwrap();
+    assert_eq!(stats["totals"]["reports"], 1, "{stats}");
+    assert_eq!(stats["buckets"][0]["outcome"], "skipped", "{stats}");
+    assert_eq!(stats["buckets"][0]["reason"], "hook_conflict", "{stats}");
+    assert_eq!(stats["totals"]["emitted_reduction_bytes"], 0, "{stats}");
+}
+
+#[test]
 fn an_unreadable_stats_file_exits_2_and_a_missing_one_exits_0() {
     let dir = state_dir("unreadable", None);
     fs::create_dir_all(&dir).unwrap();
