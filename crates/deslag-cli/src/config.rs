@@ -131,7 +131,10 @@ fn merge(base: &mut Table, user: Table, prefix: &str) -> Result<(), String> {
             (Some(Value::Table(section)), Value::Table(user)) => {
                 merge(section, user, &format!("{name}."))?
             }
-            (Some(old), value) if FIXED.contains(&name.as_str()) && *old != value => {
+            // A wrong-typed fixed key falls through to the type error below.
+            (Some(old), value)
+                if FIXED.contains(&name.as_str()) && old.same_type(&value) && *old != value =>
+            {
                 return Err(format!(
                     "{name} is not configurable in this version; remove it or set the default"
                 ));
@@ -233,8 +236,13 @@ pub fn check_upstream(listen: SocketAddr, url: &str) -> Result<Upstream, String>
         .host()
         .trim_start_matches('[')
         .trim_end_matches(']');
+    // A connect to the unspecified address, or to an IPv4-mapped loopback,
+    // reaches a loopback listener too.
     let loopback = host.eq_ignore_ascii_case("localhost")
-        || host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback());
+        || host.parse::<IpAddr>().is_ok_and(|ip| {
+            let ip = ip.to_canonical();
+            ip.is_loopback() || ip.is_unspecified()
+        });
     if loopback && port == listen.port() {
         return Err(format!("points at the listener {listen}"));
     }

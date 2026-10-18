@@ -152,6 +152,12 @@ fn invalid_configs_are_rejected_with_the_key() {
             "[transforms]\njson_minify = false\n",
             "transforms.json_minify is not configurable in this version",
         ),
+        // A wrong-typed fixed key gets the type error, not the fixed-key error.
+        (
+            "[transforms]\njson_minify = \"true\"\n",
+            "transforms.json_minify must be of type boolean",
+        ),
+        ("mode = 1\n", "mode must be of type string"),
         (
             "[telemetry]\ncontent_capture = true\n",
             "telemetry.content_capture is not configurable in this version",
@@ -238,6 +244,27 @@ fn invalid_configs_are_rejected_with_the_key() {
             "[proxy]\nupstream = \"http://[::1]:8789\"\n",
             "proxy.upstream: points at the listener",
         ),
+        (
+            "[proxy]\nupstream = \"https://localhost:8789\"\n",
+            "proxy.upstream: points at the listener",
+        ),
+        (
+            "[proxy]\nupstream = \"https://127.0.0.1:8789\"\n",
+            "proxy.upstream: points at the listener",
+        ),
+        // The unspecified address and an IPv4-mapped loopback reach the listener.
+        (
+            "[proxy]\nupstream = \"https://0.0.0.0:8789\"\n",
+            "proxy.upstream: points at the listener",
+        ),
+        (
+            "[proxy]\nupstream = \"https://[::]:8789\"\n",
+            "proxy.upstream: points at the listener",
+        ),
+        (
+            "[proxy]\nupstream = \"https://[::ffff:127.0.0.1]:8789\"\n",
+            "proxy.upstream: points at the listener",
+        ),
         ("[proxy]\nupstream = 1\n", "proxy.upstream must be a string"),
         // A quoted top-level key is not the [proxy] upstream.
         (
@@ -286,7 +313,10 @@ fn the_documented_defaults_and_a_loopback_http_upstream_are_valid() {
         export_timeout_ms = 2000\nshutdown_timeout_ms = 2000\n";
     let section = "config_version = 1\n[proxy]\nupstream = \"https://api.anthropic.com\"\n";
     let dotted = "config_version = 1\nproxy.upstream = \"https://api.anthropic.com\"\n";
-    for body in [full, V1, section, dotted] {
+    // A loopback upstream on another port than the listener is valid.
+    let other_port = "config_version = 1\n[proxy]\nlisten = \"127.0.0.1:8789\"\nupstream = \"https://127.0.0.1:9999\"\n";
+    let ipv6_port = "config_version = 1\n[proxy]\nlisten = \"127.0.0.1:8789\"\nupstream = \"http://[::1]:9000\"\n";
+    for body in [full, V1, section, dotted, other_port, ipv6_port] {
         let output = sandbox.config(body).run(&["doctor"]);
         let stdout = text(&output.stdout);
         assert_eq!(output.status.code(), Some(0), "{stdout}");
@@ -680,5 +710,18 @@ fn disable_turns_compression_off_and_gives_fresh_session_guidance() {
     assert_eq!(
         fs::read_to_string(sandbox.state().join("owner")).unwrap(),
         "none\n"
+    );
+
+    // A file in place of the state dir fails with no success guidance.
+    fs::remove_dir_all(sandbox.state()).unwrap();
+    fs::write(sandbox.state(), "").unwrap();
+    let output = sandbox.run(&["disable"]);
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = text(&output.stderr);
+    assert!(stderr.contains("cannot disable compression"), "{stderr}");
+    let stdout = text(&output.stdout);
+    assert!(
+        !stdout.contains("Start a new Claude Code session"),
+        "{stdout}"
     );
 }
