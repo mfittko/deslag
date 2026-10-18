@@ -1,4 +1,15 @@
-//! Opt-in JSON minification of Bash tool results in Messages requests.
+//! Opt-in JSON minification of Bash and MCP tool results in Messages requests.
+//!
+//! A `tool_result` is eligible when its `tool_use_id` names a `tool_use` of
+//! `Bash` or of an `mcp__*` tool and it is not `"is_error": true`. Only its
+//! string `content` and the `text` of its `"type": "text"` content items are
+//! approved for change. Every other block and field, including `thinking` and
+//! its `signature`, `redacted_thinking`, `cache_control`, `is_error` and
+//! unknown types and fields, stays byte-identical. An ineligible new result is
+//! recorded as `unchanged`. The eligibility rule decides new results; results
+//! already pinned in a session manifest, including those recorded under an
+//! earlier policy version, replay as recorded. Local reports carry the tool
+//! category of the result.
 //!
 //! The request is never re-serialized. Each rewritten string lexeme is located
 //! by its byte span in the original body and spliced; all other bytes are
@@ -29,7 +40,7 @@
 //! changes the bytes of already-sent history.
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fmt,
     path::Path,
     pin::Pin,
@@ -347,28 +358,35 @@ fn rewrite(
     job: Job,
     socket: Option<&Path>,
 ) -> Result<Option<Vec<u8>>, ReplayError> {
-    let Some((model, bash_ids, results)) = tool_results(body) else {
+    let Some((model, results)) = tool_results(body) else {
         return Ok(None);
     };
     let candidates: Vec<Candidate> = results
         .iter()
-        .map(|(id, newest, content, targets)| Candidate {
-            id,
-            newest: *newest,
-            source: canonical(*content),
-            texts: targets.iter().filter_map(|t| parse(t)).collect(),
+        .map(|r| Candidate {
+            id: r.id,
+            newest: r.newest,
+            source: canonical(r.content),
+            texts: r.targets.iter().filter_map(|t| parse(t)).collect(),
         })
         .collect();
-    // `decide` runs only for a new result. Only a Bash result whose text
+    // Fail closed: one ineligible result makes every result with its id
+    // ineligible, because they share one pinned decision.
+    let ineligible: HashSet<&str> = results
+        .iter()
+        .filter(|r| r.tool == local::ToolCategory::Other || r.is_error)
+        .map(|r| r.id)
+        .collect();
+    // `decide` runs only for a new result. Only an eligible result whose text
     // json-minify changes is encoded.
     let encode = store.replay(scope, model, &candidates, |c| {
-        bash_ids.contains(c.id) && changes(&c.texts, exec, job)
+        !ineligible.contains(c.id) && changes(&c.texts, exec, job)
     })?;
     let targets = results
         .iter()
         .zip(encode)
         .filter(|(_, encode)| *encode)
-        .flat_map(|((_, _, _, targets), _)| targets.iter().copied());
+        .flat_map(|(r, _)| r.targets.iter().map(|t| (*t, r.tool)));
     Ok(splice(body, targets, job, socket))
 }
 
@@ -408,16 +426,22 @@ fn canonical(content: Option<&RawValue>) -> String {
     })
 }
 
-/// Model, Bash tool_use ids, and per tool result its id, whether it is in the
-/// last message, its whole content, and its string targets in document order.
-type ToolResults<'a> = (
-    &'a str,
-    HashSet<&'a str>,
-    Vec<(&'a str, bool, Option<&'a RawValue>, Vec<&'a RawValue>)>,
-);
+/// One `tool_result` block of a user message.
+struct ToolResult<'a> {
+    id: &'a str,
+    /// The block is in the last message.
+    newest: bool,
+    content: Option<&'a RawValue>,
+    /// The approved string fields, in document order.
+    targets: Vec<&'a RawValue>,
+    /// Category of the `tool_use` that `id` names; `Other` when none does.
+    tool: local::ToolCategory,
+    /// `"is_error": true`.
+    is_error: bool,
+}
 
 /// `None` when the body is not a JSON object with a non-empty `messages` array.
-fn tool_results(body: &[u8]) -> Option<ToolResults<'_>> {
+fn tool_results(body: &[u8]) -> Option<(&str, Vec<ToolResult<'_>>)> {
     let root: Obj = serde_json::from_slice(body).ok()?;
     let raw = parse::<Vec<&RawValue>>(root.get("messages")?)?;
     let last = raw.len().checked_sub(1)?;
@@ -438,10 +462,27 @@ fn tool_results(body: &[u8]) -> Option<ToolResults<'_>> {
                     .map(move |b| (i, b))
             })
     };
-    let bash_ids = blocks("assistant")
-        .filter(|(_, b)| b.str("type") == Some("tool_use") && b.str("name") == Some("Bash"))
-        .filter_map(|(_, b)| b.str("id"))
-        .collect();
+    // An id used by tool uses with different names is `Other`: fail closed.
+    // Names, not categories, are compared, since distinct MCP tools share one
+    // category. A missing, non-string or escaped name is `Other` as well.
+    let mut tools: HashMap<&str, (Option<&str>, local::ToolCategory)> = HashMap::new();
+    for (id, name) in blocks("assistant")
+        .filter(|(_, b)| b.str("type") == Some("tool_use"))
+        .filter_map(|(_, b)| Some((b.str("id")?, b.str("name"))))
+    {
+        let tool = name.map_or(
+            local::ToolCategory::Other,
+            local::ToolCategory::from_tool_name,
+        );
+        tools
+            .entry(id)
+            .and_modify(|(n, t)| {
+                if *n != name {
+                    *t = local::ToolCategory::Other;
+                }
+            })
+            .or_insert((name, tool));
+    }
     let mut results = Vec::new();
     for (i, block) in blocks("user") {
         let (Some("tool_result"), Some(id)) = (block.str("type"), block.str("tool_use_id")) else {
@@ -460,9 +501,18 @@ fn tool_results(body: &[u8]) -> Option<ToolResults<'_>> {
                 None => vec![content],
             },
         };
-        results.push((id, i == last, content, targets));
+        results.push(ToolResult {
+            id,
+            newest: i == last,
+            content,
+            targets,
+            tool: tools
+                .get(id)
+                .map_or(local::ToolCategory::Other, |(_, t)| *t),
+            is_error: block.get("is_error").and_then(parse) == Some(true),
+        });
     }
-    Some((root.str("model").unwrap_or_default(), bash_ids, results))
+    Some((root.str("model").unwrap_or_default(), results))
 }
 
 /// Replaces each string target that `job` changes. `None` when nothing changed.
@@ -471,7 +521,7 @@ fn tool_results(body: &[u8]) -> Option<ToolResults<'_>> {
 /// fail open.
 fn splice<'a>(
     body: &[u8],
-    targets: impl Iterator<Item = &'a RawValue>,
+    targets: impl Iterator<Item = (&'a RawValue, local::ToolCategory)>,
     job: Job,
     socket: Option<&Path>,
 ) -> Option<Vec<u8>> {
@@ -479,14 +529,14 @@ fn splice<'a>(
     let mut out = Vec::with_capacity(body.len());
     let mut pos = 0;
     let mut reports = Vec::new();
-    for raw in targets {
+    for (raw, tool) in targets {
         let Some(text) = parse::<String>(raw) else {
             continue;
         };
         let (changed, mut compressed) = job(&text);
         if socket.is_some() {
             local::add_estimates(&mut compressed, &text, changed.as_deref().unwrap_or(&text));
-            reports.push(compressed);
+            reports.push((compressed, tool));
         }
         let Some(minified) = changed else {
             continue;
@@ -500,17 +550,11 @@ fn splice<'a>(
         pos = start + raw.get().len();
     }
     if let Some(socket) = socket {
-        for compressed in &reports {
+        for (compressed, tool) in &reports {
             // ponytail: no session. Every submission resends the whole history,
             // so per-request attribution from here would count a result once
             // per later request; attributing new blocks only needs replay state.
-            local::send_report(
-                socket,
-                compressed,
-                local::Adapter::Proxy,
-                local::ToolCategory::Bash,
-                None,
-            );
+            local::send_report(socket, compressed, local::Adapter::Proxy, *tool, None);
         }
     }
     if pos == 0 {
@@ -694,6 +738,73 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_ids_fail_closed() {
+        // An error result shares its id with an earlier non-error result.
+        let error_dup = r#"{"messages":[
+{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Bash","input":{}}]},
+{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"[ 1 ]"},{"type":"tool_result","tool_use_id":"t","content":"[ 1 ]","is_error":true}]}]}"#;
+        // Two tool uses with one id and different categories, Bash last.
+        let tool_dup = r#"{"messages":[
+{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"Read","input":{}},{"type":"tool_use","id":"t","name":"Bash","input":{}}]},
+{"role":"user","content":[{"type":"tool_result","tool_use_id":"t","content":"[ 1 ]"}]}]}"#;
+        for (name, body) in [("dup-error", error_dup), ("dup-tool", tool_dup)] {
+            let store = fresh(name);
+            let out = rewrite(body.as_bytes(), &store, "s", &generous(), minify, None);
+            assert!(matches!(out, Ok(None)), "{name}");
+            let _ = std::fs::remove_dir_all(&store.dir);
+        }
+    }
+
+    #[test]
+    fn tool_use_names_decide_eligibility() {
+        let bash = r#"{"type":"tool_use","id":"t","name":"Bash","input":{}}"#;
+        let body = |uses: &str| {
+            format!(
+                r#"{{"messages":[{{"role":"assistant","content":[{uses}]}},{{"role":"user","content":[{{"type":"tool_result","tool_use_id":"t","content":"[ 1 ]"}}]}}]}}"#
+            )
+        };
+        let second = |rest: &str| {
+            body(&format!(
+                r#"{bash},{{"type":"tool_use","id":"t"{rest},"input":{{}}}}"#
+            ))
+        };
+        let cases = [
+            ("bash", body(bash), true),
+            (
+                "mcp",
+                body(r#"{"type":"tool_use","id":"t","name":"mcp__server__tool","input":{}}"#),
+                true,
+            ),
+            ("bash-bash", body(&format!("{bash},{bash}")), true),
+            // A second use with a conflicting or unreadable name fails closed.
+            ("bash-escaped", second(r#","name":"\u0042ash""#), false),
+            ("bash-escaped-read", second(r#","name":"Re\u0061d""#), false),
+            (
+                "escaped-only",
+                body(r#"{"type":"tool_use","id":"t","name":"\u0042ash","input":{}}"#),
+                false,
+            ),
+            ("bash-no-name", second(""), false),
+            ("bash-number", second(r#","name":5"#), false),
+            ("bash-read", second(r#","name":"Read""#), false),
+            // Two MCP tools share a category, but their names conflict.
+            (
+                "mcp-mcp",
+                body(
+                    r#"{"type":"tool_use","id":"t","name":"mcp__a__read","input":{}},{"type":"tool_use","id":"t","name":"mcp__b__write","input":{}}"#,
+                ),
+                false,
+            ),
+        ];
+        for (name, body, minified) in cases {
+            let store = fresh(&format!("names-{name}"));
+            let out = rewrite(body.as_bytes(), &store, "s", &generous(), minify, None);
+            assert_eq!(out.unwrap().is_some(), minified, "{name}");
+            let _ = std::fs::remove_dir_all(&store.dir);
+        }
+    }
+
+    #[test]
     fn expired_job_records_its_result_unchanged() {
         let store = fresh("expired");
         let exec = BoundedExecutor::new(1, Duration::from_millis(200)).unwrap();
@@ -829,7 +940,18 @@ mod tests {
         let report: serde_json::Value = serde_json::from_slice(&buf[..n]).unwrap();
         assert_eq!(report["adapter"], "proxy");
         assert_eq!(report["outcome"], "changed");
+        assert_eq!(report["tool"], "bash");
         assert!(receiver.recv(&mut buf).is_err(), "one block, one report");
+        // An MCP result reports its own category.
+        let mcp = fresh("service-mcp");
+        let body = String::from_utf8(body.to_vec()).unwrap();
+        let body = body.replace(r#""name":"Bash""#, r#""name":"mcp__s__t""#);
+        let out = rewrite(body.as_bytes(), &mcp, "s", &generous(), minify, Some(&path));
+        assert!(out.unwrap().is_some());
+        let n = receiver.recv(&mut buf).unwrap();
+        let report: serde_json::Value = serde_json::from_slice(&buf[..n]).unwrap();
+        assert_eq!(report["tool"], "mcp");
+        let _ = std::fs::remove_dir_all(&mcp.dir);
         // A result whose job panicked is recorded `unchanged` and not reported.
         let other = fresh("service-panic");
         let two = TWO_RESULTS.as_bytes();

@@ -4,7 +4,7 @@ A small, native, deterministic context-compression layer for AI agents.
 
 deslag reduces the representation overhead of tool results before a model sees them. It does not change executed tool calls, it does not silently drop evidence, and telemetry stays off the request path.
 
-> **Status:** early development. The M0 Claude Code plugin and a no-op `PostToolUse` hook adapter (`deslag hook claude`) exist. A first JSON-minification slice is available behind an opt-in `--minify-json` flag on `deslag hook claude` and `deslag proxy`; the hook applies it to Bash stdout and MCP text results, the proxy to Bash results only. The hook flag has run against a live client; the proxy flag has not. One configured owner selects whether the hook or the proxy compresses, and the proxy pins its per-result decisions in local session manifests. The [implementation plan](docs/PLAN.md) is the product brief and backlog. Progress is tracked in the [v0.1 epic](https://github.com/mfittko/deslag/issues/1).
+> **Status:** early development. The M0 Claude Code plugin and a no-op `PostToolUse` hook adapter (`deslag hook claude`) exist. A first JSON-minification slice is available behind an opt-in `--minify-json` flag on `deslag hook claude` and `deslag proxy`; the hook applies it to Bash stdout and MCP text results, the proxy to Bash and MCP results that are not errors. The hook flag has run against a live client; the proxy flag has not. One configured owner selects whether the hook or the proxy compresses, and the proxy pins its per-result decisions in local session manifests. The [implementation plan](docs/PLAN.md) is the product brief and backlog. Progress is tracked in the [v0.1 epic](https://github.com/mfittko/deslag/issues/1).
 
 ## Planned v0.1
 
@@ -38,7 +38,7 @@ With `--minify-json`, two more constants in `crates/deslag-proxy/src/minify.rs` 
 | `MAX_INSPECT_BYTES` | 32 MiB | A larger body is forwarded unrewritten: the buffered prefix, then the rest as it arrives. Its pinned encoded results go out in original form, so that request loses the cached prefix, and its new results stay undecided. |
 | `INSPECT_PERMITS` | 4 | At most 4 requests buffer and rewrite at once. Further eligible requests wait for a permit. `BODY_READ_TIMEOUT` bounds how long a permit holder can wait for its body. The permit is held until the replay of the buffered body ends, also when the client disconnects. The replay parses and rebuilds the body without a time limit and runs one job per text of a new result in sequence. The executor budget below bounds each job, not the whole hold. |
 
-Compression in the proxy and in `deslag hook claude --minify-json` runs under `BoundedExecutor::default()`. The proxy takes it from `Limits::executor`. Each text is one job. In the hook a text is the Bash stdout or one MCP text block. In the proxy a text is one text item of a new Bash `tool_result` content array, or its string content:
+Compression in the proxy and in `deslag hook claude --minify-json` runs under `BoundedExecutor::default()`. The proxy takes it from `Limits::executor`. Each text is one job. In the hook a text is the Bash stdout or one MCP text block. In the proxy a text is one text item of a new eligible Bash or MCP `tool_result` content array, or its string content:
 
 | Limit | Default | Effect |
 | --- | --- | --- |
