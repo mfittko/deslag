@@ -10,7 +10,8 @@ fn deslag(args: &[&str]) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_deslag"));
     let state = std::env::temp_dir().join(format!("deslag-cli-proxy-{}", std::process::id()));
     cmd.args(args)
-        .env("DESLAG_STATE_DIR", state)
+        .env("DESLAG_STATE_DIR", &state)
+        .env("DESLAG_CONFIG", state.join("config.toml"))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -31,7 +32,11 @@ impl Drop for KillOnDrop {
 fn assert_valid_start(extra: &[&str], host: &str) {
     let mut args = vec!["proxy", "--upstream", "https://gw.example/token-secret/"];
     args.extend_from_slice(extra);
-    let mut child = KillOnDrop(deslag(&args).spawn().expect("spawn deslag"));
+    assert_start(deslag(&args), host);
+}
+
+fn assert_start(mut cmd: Command, host: &str) {
+    let mut child = KillOnDrop(cmd.spawn().expect("spawn deslag"));
     let stderr = child.0.stderr.take().unwrap();
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
@@ -56,6 +61,40 @@ fn assert_valid_start(extra: &[&str], host: &str) {
 #[test]
 fn valid_start_reports_bound_address_and_redacted_upstream() {
     assert_valid_start(&["--listen", "127.0.0.1:0"], "127.0.0.1");
+}
+
+#[test]
+fn missing_flags_come_from_the_config_and_flags_win() {
+    let dir = std::env::temp_dir().join(format!("deslag-cli-proxy-config-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let config = dir.join("config.toml");
+    std::fs::write(
+        &config,
+        "config_version = 1\n[proxy]\nlisten = \"127.0.0.1:0\"\nupstream = \"https://gw.example/token-secret/\"\n",
+    )
+    .unwrap();
+    let mut cmd = deslag(&["proxy"]);
+    cmd.env("DESLAG_CONFIG", &config);
+    assert_start(cmd, "127.0.0.1");
+    // The config listen port is taken; the flag overrides it.
+    let taken = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = taken.local_addr().unwrap().port();
+    std::fs::write(
+        &config,
+        format!("config_version = 1\n[proxy]\nlisten = \"127.0.0.1:{port}\"\nupstream = \"https://gw.example/token-secret/\"\n"),
+    )
+    .unwrap();
+    let mut cmd = deslag(&["proxy", "--listen", "127.0.0.1:0"]);
+    cmd.env("DESLAG_CONFIG", &config);
+    assert_start(cmd, "127.0.0.1");
+    // An invalid config file fails even with every flag given.
+    std::fs::write(&config, "config_version = 2\n").unwrap();
+    let mut cmd = deslag(&["proxy", "--upstream", "https://api.anthropic.com"]);
+    cmd.env("DESLAG_CONFIG", &config);
+    let output = cmd.output().unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("config_version"));
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -101,7 +140,7 @@ fn rejected_arguments_exit_2_with_message() {
         ),
         (
             vec!["proxy", "--upstream", up, "--listen", "nope"],
-            "invalid --listen nope",
+            "--listen is not a socket address",
         ),
         (
             vec!["proxy", "--upstream", up, "--listen", "0.0.0.0:0"],

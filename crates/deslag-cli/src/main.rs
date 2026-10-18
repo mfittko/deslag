@@ -1,30 +1,34 @@
 //! `deslag` command-line entry point.
 
+mod config;
 mod hook_conflicts;
 mod local;
 mod stats;
+mod workflow;
 
 use std::cell::RefCell;
 use std::ffi::OsString;
 use std::io::{self, Read, Write};
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::SystemTime;
 
 use deslag_core::{BoundedExecutor, CompressionReport, FIRST_SLICE_JSON_MINIFY_CONTEXT, Rejected};
+use deslag_proxy::serve;
 use deslag_proxy::session::{self, Mode, Owner, Store};
-use deslag_proxy::{Upstream, serve};
 use deslag_telemetry as report;
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
 
 const USAGE: &str = "usage: deslag hook claude [--minify-json]\n       \
-                     deslag proxy --upstream <url> [--listen <addr>] [--minify-json]\n       \
+                     deslag proxy [--upstream <url>] [--listen <addr>] [--minify-json]\n       \
+                     deslag run [--] <command> [args...]\n       \
+                     deslag status|doctor|disable\n       \
                      deslag local start|run [--retention-days <n>]\n       \
                      deslag local stop|status\n       \
                      deslag stats [--json [--session <id>]] [--since <n>h|<n>d]";
-const PROXY_USAGE: &str = "usage: deslag proxy --upstream <url> [--listen <addr>] [--minify-json]";
+const PROXY_USAGE: &str = "usage: deslag proxy [--upstream <url>] [--listen <addr>] [--minify-json]\n\
+                           A missing flag takes its value from the config file.";
 
 // Exit 2 from a Claude Code hook is blocking and feeds stderr to the model; usage errors avoid it.
 const EX_USAGE: u8 = 64;
@@ -69,6 +73,10 @@ fn main() -> ExitCode {
         },
         ["local", args @ ..] => local::command(args),
         ["stats", args @ ..] => stats::command(args),
+        ["run", args @ ..] => workflow::run(args),
+        ["status"] => workflow::status(),
+        ["doctor"] => workflow::doctor(),
+        ["disable"] => workflow::disable(),
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(EX_USAGE)
@@ -79,7 +87,7 @@ fn main() -> ExitCode {
 /// Runs the proxy until it fails. The tokio runtime exists only here, so
 /// `hook claude` stays synchronous.
 fn proxy(args: &[&str]) -> Result<(), String> {
-    let mut listen = "127.0.0.1:8789";
+    let mut listen = None;
     let mut upstream = None;
     let mut minify_json = false;
     let mut args = args.iter().copied();
@@ -89,13 +97,21 @@ fn proxy(args: &[&str]) -> Result<(), String> {
                 .ok_or(format!("{arg} needs a value\n{PROXY_USAGE}"))
         };
         match arg {
-            "--listen" => listen = value()?,
+            "--listen" => listen = Some(value()?),
             "--upstream" => upstream = Some(value()?),
             "--minify-json" => minify_json = true,
             _ => return Err(format!("unknown argument: {arg}\n{PROXY_USAGE}")),
         }
     }
-    let mut upstream = Upstream::parse(upstream.ok_or(PROXY_USAGE)?)?;
+    // Flags win over the config file. An invalid config file is an error even then.
+    let path = config::path();
+    let config = config::load(path.as_deref()).map_err(|e| format!("invalid config: {e}"))?;
+    let addr = match listen {
+        Some(listen) => config::parse_listen(listen).map_err(|e| format!("--listen {e}"))?,
+        None => config.listen,
+    };
+    let upstream = upstream.or(config.upstream.as_deref()).ok_or(PROXY_USAGE)?;
+    let mut upstream = config::check_upstream(addr, upstream)?;
     if minify_json {
         let dir = session::state_dir().ok_or(
             "--minify-json needs a state directory: set DESLAG_STATE_DIR, XDG_STATE_HOME or HOME",
@@ -107,13 +123,6 @@ fn proxy(args: &[&str]) -> Result<(), String> {
             mode: Mode::Safe,
         };
         upstream = upstream.with_json_minification(store);
-    }
-    let addr: SocketAddr = listen
-        .parse()
-        .map_err(|e| format!("invalid --listen {listen}: {e}"))?;
-    // PLAN §15: desktop defaults bind loopback only; network exposure needs authentication first.
-    if !addr.ip().is_loopback() {
-        return Err(format!("--listen must be a loopback address, got {addr}"));
     }
     let runtime =
         tokio::runtime::Runtime::new().map_err(|e| format!("cannot start async runtime: {e}"))?;

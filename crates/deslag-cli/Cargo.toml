@@ -20,6 +20,8 @@ deslag-telemetry = { path = "../deslag-telemetry" }
 tokio = { version = "=1.53.2", features = ["rt-multi-thread", "net"] }
 # arbitrary_precision keeps untouched numbers in tool_response byte-exact on re-emit.
 serde_json = { version = "1.0.152", features = ["arbitrary_precision"] }
+# Config parsing into a `toml::Table` (needs `serde`); no writer.
+toml = { version = "=1.1.2", default-features = false, features = ["parse", "serde", "std"] }
 
 [[bench]]
 name = "hook"

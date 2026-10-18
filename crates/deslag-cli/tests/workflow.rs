@@ -1,0 +1,447 @@
+//! `deslag run`, `status`, `doctor`, `disable` and config validation.
+
+use std::collections::BTreeMap;
+use std::fs;
+use std::net::TcpListener;
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output, Stdio};
+
+/// A temp dir with `home/`, `state/` and `config.toml`. Removed on drop.
+struct Sandbox(PathBuf);
+
+impl Drop for Sandbox {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+impl Sandbox {
+    fn new(name: &str) -> Self {
+        let dir =
+            std::env::temp_dir().join(format!("deslag-workflow-{}-{name}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("home")).unwrap();
+        Sandbox(dir)
+    }
+
+    fn state(&self) -> PathBuf {
+        self.0.join("state")
+    }
+
+    fn config(&self, text: &str) -> &Self {
+        fs::write(self.0.join("config.toml"), text).unwrap();
+        self
+    }
+
+    /// Creates the state dir with mode 0700 and writes `owner` and `compression`.
+    fn owner(&self, owner: &str, compression: &str) -> &Self {
+        fs::create_dir_all(self.state()).unwrap();
+        fs::set_permissions(self.state(), fs::Permissions::from_mode(0o700)).unwrap();
+        fs::write(self.state().join("owner"), format!("{owner}\n")).unwrap();
+        fs::write(self.state().join("compression"), format!("{compression}\n")).unwrap();
+        self
+    }
+
+    /// The binary with every path under the sandbox and no Anthropic variables.
+    fn command(&self, args: &[&str]) -> Command {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_deslag"));
+        let home = self.0.join("home");
+        cmd.args(args)
+            .env("HOME", &home)
+            .env("CLAUDE_CONFIG_DIR", home.join(".claude"))
+            .env("DESLAG_STATE_DIR", self.state())
+            .env("DESLAG_CONFIG", self.0.join("config.toml"))
+            .env_remove("XDG_CONFIG_HOME")
+            .env_remove("ANTHROPIC_BASE_URL")
+            .env_remove("ANTHROPIC_API_KEY")
+            .env_remove("ANTHROPIC_AUTH_TOKEN")
+            .stdin(Stdio::null());
+        cmd
+    }
+
+    fn run(&self, args: &[&str]) -> Output {
+        self.command(args).output().unwrap()
+    }
+}
+
+fn text(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+/// Every file under `dir` with its content.
+fn snapshot(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+    let mut files = BTreeMap::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                stack.push(path.clone());
+                files.insert(path, Vec::new());
+            } else {
+                files.insert(path.clone(), fs::read(&path).unwrap());
+            }
+        }
+    }
+    files
+}
+
+const V1: &str = "config_version = 1\n";
+
+#[test]
+fn invalid_configs_are_rejected_with_the_key() {
+    let sandbox = Sandbox::new("invalid");
+    for (body, expected) in [
+        ("", "config_version is missing"),
+        ("config_version = 2\n", "config_version is unsupported"),
+        ("config_version = \"1\"\n", "config_version is unsupported"),
+        ("bogus = 1\n", "unknown config key: bogus"),
+        ("[nope]\n", "unknown config key: nope"),
+        (
+            "[compression]\nfoo = 1\n",
+            "unknown config key: compression.foo",
+        ),
+        ("compression = 1\n", "compression must be of type table"),
+        (
+            "[compression]\nmax_parallel_jobs = \"4\"\n",
+            "compression.max_parallel_jobs must be of type integer",
+        ),
+        (
+            "[compression]\nmin_candidate_bytes = 10\nmax_candidate_bytes = 9\n",
+            "compression.min_candidate_bytes must not exceed",
+        ),
+        (
+            "[compression]\nmin_estimated_savings_ratio = 1.5\n",
+            "compression.min_estimated_savings_ratio must be within 0..=1",
+        ),
+        (
+            "[compression]\nmax_parallel_jobs = 0\n",
+            "compression.max_parallel_jobs must be at least 1",
+        ),
+        (
+            "[compression]\nprocessing_budget_ms = 0\n",
+            "compression.processing_budget_ms must be at least 1",
+        ),
+        (
+            "[compression]\nmin_candidate_bytes = -1\n",
+            "compression.min_candidate_bytes must be at least 0",
+        ),
+        (
+            "[transforms]\njson_table = true\n",
+            "transforms.json_table is not implemented",
+        ),
+        ("mode = \"fast\"\n", "mode must be one of"),
+        (
+            "[proxy]\nlisten = \"0.0.0.0:8789\"\n",
+            "proxy.listen must be a loopback address",
+        ),
+        (
+            "[proxy]\nlisten = \"nope\"\n",
+            "proxy.listen is not a socket address",
+        ),
+        (
+            "[proxy]\nupstream = \"http://api.example.com\"\n",
+            "proxy.upstream: plain http",
+        ),
+        (
+            "[proxy]\nupstream = \"ftp://api.example.com\"\n",
+            "proxy.upstream: upstream URL scheme",
+        ),
+        (
+            "[proxy]\nupstream = \"https://u:p@api.example.com\"\n",
+            "proxy.upstream: upstream URL must not contain credentials",
+        ),
+        (
+            "[proxy]\nupstream = \"http://127.0.0.1:8789\"\n",
+            "proxy.upstream: points at the listener",
+        ),
+        (
+            "[proxy]\nlisten = \"127.0.0.1:443\"\nupstream = \"https://localhost/v1\"\n",
+            "proxy.upstream: points at the listener",
+        ),
+        ("[proxy]\nupstream = 1\n", "proxy.upstream must be a string"),
+    ] {
+        let body = if body.starts_with("config_version") || body.is_empty() {
+            body.to_string()
+        } else {
+            format!("{V1}{body}")
+        };
+        let output = sandbox.config(&body).run(&["doctor"]);
+        let stdout = text(&output.stdout);
+        assert_eq!(output.status.code(), Some(1), "{body}: {stdout}");
+        assert!(
+            stdout.contains(&format!("FAIL: config is invalid: {expected}")),
+            "{body}: {stdout}"
+        );
+        // `run` refuses an invalid config before it starts a child.
+        let output = sandbox.run(&["run", "--", "true"]);
+        assert_eq!(output.status.code(), Some(2), "{body}");
+        assert!(text(&output.stderr).contains(expected), "{body}");
+    }
+}
+
+#[test]
+fn the_documented_defaults_and_a_loopback_http_upstream_are_valid() {
+    let sandbox = Sandbox::new("valid");
+    sandbox.owner("none", "off");
+    let full = "config_version = 1\nmode = \"observe\"\n\
+        [compression]\nmin_candidate_bytes = 2048\nmax_candidate_bytes = 2097152\nmax_json_depth = 64\n\
+        max_table_rows = 20000\nmin_estimated_token_savings = 64\nmin_estimated_savings_ratio = 0.10\n\
+        processing_budget_ms = 10\nmax_parallel_jobs = 4\n\
+        [transforms]\njson_minify = true\njson_table = false\nexact_line_runs = false\nline_templates = false\n\
+        [proxy]\nlisten = \"127.0.0.1:8789\"\nupstream = \"http://127.0.0.1:9000\"\ninspection_buffer_bytes = 16777216\n\
+        [telemetry]\ncontent_capture = false\nlocal_reports = true\notlp_enabled = false\nqueue_capacity = 4096\n\
+        export_timeout_ms = 2000\nshutdown_timeout_ms = 2000\n";
+    for body in [full, V1] {
+        let output = sandbox.config(body).run(&["doctor"]);
+        let stdout = text(&output.stdout);
+        assert_eq!(output.status.code(), Some(0), "{stdout}");
+        assert!(stdout.contains("ok: config is valid"), "{stdout}");
+        assert!(stdout.contains("transforms: json_minify"), "{stdout}");
+    }
+    // A missing file means the defaults.
+    fs::remove_file(sandbox.0.join("config.toml")).unwrap();
+    let stdout = text(&sandbox.run(&["status"]).stdout);
+    assert!(stdout.contains("(missing, defaults apply)"), "{stdout}");
+    assert!(stdout.contains("proxy listen: 127.0.0.1:8789"), "{stdout}");
+}
+
+#[test]
+fn run_sets_the_base_url_only_for_the_child_and_edits_no_settings() {
+    let sandbox = Sandbox::new("run");
+    let proxy = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = proxy.local_addr().unwrap();
+    sandbox.config(&format!("{V1}[proxy]\nlisten = \"{addr}\"\n"));
+    let before = snapshot(&sandbox.0);
+    for args in [
+        &[
+            "run",
+            "--",
+            "sh",
+            "-c",
+            "printf %s \"$ANTHROPIC_BASE_URL\"; exit 3",
+        ][..],
+        &[
+            "run",
+            "sh",
+            "-c",
+            "printf %s \"$ANTHROPIC_BASE_URL\"; exit 3",
+        ][..],
+    ] {
+        let output = sandbox.run(args);
+        assert_eq!(output.status.code(), Some(3), "{}", text(&output.stderr));
+        assert_eq!(text(&output.stdout), format!("http://{addr}"));
+    }
+    let output = sandbox.run(&["run", "--", "/nonexistent/deslag-child"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(text(&output.stderr).contains("cannot run /nonexistent/deslag-child"));
+    // No settings file, state file or config file was created or changed.
+    assert_eq!(snapshot(&sandbox.0), before);
+    assert!(!sandbox.0.join("home/.claude").exists());
+    assert!(std::env::var_os("ANTHROPIC_BASE_URL").is_none_or(|v| v != *format!("http://{addr}")));
+}
+
+#[test]
+fn run_without_a_listening_proxy_fails_with_guidance() {
+    let sandbox = Sandbox::new("run-down");
+    let port = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    sandbox.config(&format!("{V1}[proxy]\nlisten = \"127.0.0.1:{port}\"\n"));
+    let marker = sandbox.0.join("ran");
+    let output = sandbox.run(&["run", "--", "touch", marker.to_str().unwrap()]);
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(2), "{stderr}");
+    assert!(
+        stderr.contains(&format!("no deslag proxy listens on 127.0.0.1:{port}")),
+        "{stderr}"
+    );
+    assert!(stderr.contains("deslag proxy --upstream"), "{stderr}");
+    assert!(!marker.exists());
+    assert_eq!(sandbox.run(&["run"]).status.code(), Some(64));
+}
+
+#[test]
+fn status_states_hook_mode_proxy_mode_or_off() {
+    let sandbox = Sandbox::new("status");
+    sandbox.config(V1);
+    for (owner, compression, mode) in [
+        ("hook", "on", "hook mode"),
+        ("hook", "off", "off"),
+        ("proxy", "off", "proxy mode"),
+        ("none", "on", "off"),
+        ("none", "off", "off"),
+    ] {
+        let output = sandbox.owner(owner, compression).run(&["status"]);
+        let stdout = text(&output.stdout);
+        assert_eq!(output.status.code(), Some(0));
+        assert!(
+            stdout.starts_with(&format!("deslag {}\n", env!("CARGO_PKG_VERSION"))),
+            "{stdout}"
+        );
+        assert!(
+            stdout.contains(&format!("compression: {mode}\n")),
+            "{owner} {compression}: {stdout}"
+        );
+        assert!(stdout.contains("local service: not running"), "{stdout}");
+        assert!(stdout.contains("(valid)"), "{stdout}");
+    }
+}
+
+const SECRETS: &[&str] = &[
+    "sk-ant-api03-Zq7xR2mN9pL4vK8wT1yH6jF3bD5cA0sE",
+    "sk-ant-oat01-Hk3mP9qR2vX7nL4wT8yB1jF6cD0sAeZ",
+    "ghp_Q4xL9mT2vR7nK8wP1yH6jF3bD5cA0sEzZ",
+    "urlpassword9F3k",
+    "querysecret7Hq2",
+];
+
+#[test]
+fn doctor_redacts_credentials_and_states_the_mode() {
+    let sandbox = Sandbox::new("redact");
+    sandbox.config(V1).owner("hook", "on");
+    let mut cmd = sandbox.command(&["doctor"]);
+    cmd.env("ANTHROPIC_API_KEY", SECRETS[0])
+        .env("ANTHROPIC_AUTH_TOKEN", SECRETS[1])
+        .env("MY_SERVICE_SECRET", SECRETS[2])
+        .env(
+            "ANTHROPIC_BASE_URL",
+            format!(
+                "https://user:{}@gw.example/v1?key={}",
+                SECRETS[3], SECRETS[4]
+            ),
+        );
+    let output = cmd.output().unwrap();
+    let (stdout, stderr) = (text(&output.stdout), text(&output.stderr));
+    for secret in SECRETS {
+        assert!(
+            !stdout.contains(secret) && !stderr.contains(secret),
+            "{secret} leaked:\n{stdout}{stderr}"
+        );
+    }
+    assert!(
+        stdout.contains("ANTHROPIC_API_KEY: set (redacted)"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("ANTHROPIC_AUTH_TOKEN: set (redacted)"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("ANTHROPIC_BASE_URL: https://gw.example/[redacted]"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("compression: hook mode"), "{stdout}");
+    assert_eq!(output.status.code(), Some(0), "{stdout}");
+
+    // A config with a credential in the upstream, or in a line that does not parse.
+    for body in [
+        format!(
+            "{V1}[proxy]\nupstream = \"https://u:{}@gw.example\"\n",
+            SECRETS[3]
+        ),
+        format!(
+            "{V1}[proxy]\nupstream = \"https://u:{}@gw.example\n",
+            SECRETS[3]
+        ),
+        format!(
+            "{V1}[proxy]\nupstream = \"https://gw.example/{}\"\n",
+            SECRETS[4]
+        ),
+    ] {
+        let output = sandbox.config(&body).owner("proxy", "off").run(&["doctor"]);
+        let all = text(&output.stdout) + &text(&output.stderr);
+        assert!(
+            !all.contains(SECRETS[3]) && !all.contains(SECRETS[4]),
+            "{all}"
+        );
+        assert!(all.contains("compression: proxy mode"), "{all}");
+    }
+}
+
+#[test]
+fn doctor_fails_on_a_bad_state_dir_owner_mismatch_or_dead_base_url() {
+    let sandbox = Sandbox::new("checks");
+    sandbox.config(V1).owner("hook", "on");
+    assert_eq!(sandbox.run(&["doctor"]).status.code(), Some(0));
+
+    fs::set_permissions(sandbox.state(), fs::Permissions::from_mode(0o755)).unwrap();
+    let stdout = text(&sandbox.run(&["doctor"]).stdout);
+    assert!(stdout.contains("has mode 0755; expected 0700"), "{stdout}");
+
+    sandbox.owner("proxy", "on");
+    let output = sandbox.run(&["doctor"]);
+    let stdout = text(&output.stdout);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stdout.contains("FAIL: compression is on but the owner is proxy"),
+        "{stdout}"
+    );
+
+    let port = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    sandbox
+        .config(&format!("{V1}[proxy]\nlisten = \"127.0.0.1:{port}\"\n"))
+        .owner("proxy", "off");
+    let mut cmd = sandbox.command(&["doctor"]);
+    cmd.env("ANTHROPIC_BASE_URL", format!("http://127.0.0.1:{port}"));
+    let output = cmd.output().unwrap();
+    let stdout = text(&output.stdout);
+    assert_eq!(output.status.code(), Some(1), "{stdout}");
+    assert!(
+        stdout.contains("but no deslag proxy listens there"),
+        "{stdout}"
+    );
+
+    fs::remove_dir_all(sandbox.state()).unwrap();
+    let stdout = text(&sandbox.run(&["doctor"]).stdout);
+    assert!(stdout.contains("FAIL: state dir"), "{stdout}");
+}
+
+#[test]
+fn disable_turns_compression_off_and_gives_fresh_session_guidance() {
+    let sandbox = Sandbox::new("disable");
+    sandbox.config(V1).owner("hook", "on");
+    let output = sandbox.run(&["disable"]);
+    let stdout = text(&output.stdout);
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    assert_eq!(
+        fs::read_to_string(sandbox.state().join("owner")).unwrap(),
+        "none\n"
+    );
+    assert_eq!(
+        fs::read_to_string(sandbox.state().join("compression")).unwrap(),
+        "off\n"
+    );
+    assert!(
+        stdout.contains("New tool results stay unchanged"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("already compressed or pinned in the current session stay as they are"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("Start a new Claude Code session"),
+        "{stdout}"
+    );
+    let output = sandbox.run(&["doctor"]);
+    assert!(text(&output.stdout).contains("compression: off"));
+    assert_eq!(output.status.code(), Some(0));
+
+    // Without a state dir, disable creates it with mode 0700.
+    fs::remove_dir_all(sandbox.state()).unwrap();
+    assert_eq!(sandbox.run(&["disable"]).status.code(), Some(0));
+    let mode = fs::metadata(sandbox.state()).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o700);
+    assert_eq!(
+        fs::read_to_string(sandbox.state().join("owner")).unwrap(),
+        "none\n"
+    );
+}
