@@ -7,6 +7,7 @@
 //! query as `/[redacted]`.
 
 use std::env::VarError;
+use std::ffi::OsString;
 use std::net::{SocketAddr, TcpStream};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::os::unix::process::CommandExt;
@@ -30,8 +31,11 @@ fn fail(message: impl std::fmt::Display) -> ExitCode {
 
 /// Launches a child with `ANTHROPIC_BASE_URL` pointing at the configured
 /// proxy. Only the child's environment changes; no settings file is written.
-pub fn run(args: &[&str]) -> ExitCode {
-    let args = args.strip_prefix(&["--"]).unwrap_or(args);
+pub fn run(args: &[OsString]) -> ExitCode {
+    let args = match args {
+        [first, rest @ ..] if first == "--" => rest,
+        _ => args,
+    };
     let Some((program, rest)) = args.split_first() else {
         eprintln!("{RUN_USAGE}");
         return ExitCode::from(crate::EX_USAGE);
@@ -66,7 +70,7 @@ pub fn run(args: &[&str]) -> ExitCode {
         .args(rest)
         .env("ANTHROPIC_BASE_URL", proxy)
         .exec();
-    eprintln!("deslag: cannot run {program}: {error}");
+    eprintln!("deslag: cannot run {}: {error}", program.display());
     // The shell's codes: 127 for a missing command, 126 for one that cannot run.
     ExitCode::from(if error.kind() == std::io::ErrorKind::NotFound {
         127

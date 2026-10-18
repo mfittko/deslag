@@ -38,7 +38,21 @@ const EX_USAGE: u8 = 64;
 const MAX_HOOK_INPUT_BYTES: u64 = 16 * 1024 * 1024;
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let args_os: Vec<OsString> = std::env::args_os().skip(1).collect();
+    // `run` forwards its arguments to the child unchanged, so they stay OS strings.
+    if let [first, rest @ ..] = args_os.as_slice()
+        && first == "run"
+    {
+        return workflow::run(rest);
+    }
+    let Ok(args) = args_os
+        .into_iter()
+        .map(OsString::into_string)
+        .collect::<Result<Vec<String>, _>>()
+    else {
+        eprintln!("{USAGE}");
+        return ExitCode::from(EX_USAGE);
+    };
     match args
         .iter()
         .map(String::as_str)
@@ -73,7 +87,6 @@ fn main() -> ExitCode {
         },
         ["local", args @ ..] => local::command(args),
         ["stats", args @ ..] => stats::command(args),
-        ["run", args @ ..] => workflow::run(args),
         ["status"] => workflow::status(),
         ["doctor"] => workflow::doctor(),
         ["disable"] => workflow::disable(),

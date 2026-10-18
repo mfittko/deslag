@@ -1,8 +1,10 @@
 //! `deslag run`, `status`, `doctor`, `disable` and config validation.
 
 use std::collections::BTreeMap;
+use std::ffi::OsStr;
 use std::fs;
 use std::net::TcpListener;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -484,6 +486,14 @@ fn run_sets_the_base_url_only_for_the_child_and_edits_no_settings() {
         assert_eq!(text(&output.stdout), format!("http://{addr}"));
         assert_eq!(text(&output.stderr), "");
     }
+    // A non-UTF-8 argument reaches the child unchanged.
+    let output = sandbox
+        .command(&["run", "--", "sh", "-c", "printf %s \"$1\"", "sh"])
+        .arg(OsStr::from_bytes(b"a\xffb"))
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
+    assert_eq!(output.stdout, b"a\xffb");
     // A different parent value gets a redacted notice; the proxy's own value does not.
     let child = ["run", "--", "sh", "-c", "printf %s \"$ANTHROPIC_BASE_URL\""];
     for (parent, notice) in [
