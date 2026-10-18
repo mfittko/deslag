@@ -7,6 +7,28 @@ until a release folds them in; see `changes/README.md` and `docs/release.md`.
 
 ## Unreleased
 
+## 0.1.0-alpha.4 - 2026-10-18
+
+### Added
+
+- A versioned TOML config file (`DESLAG_CONFIG`, else `$XDG_CONFIG_HOME/deslag/config.toml`, else `$HOME/.config/deslag/config.toml`); validation rejects unknown keys, unsupported versions, inconsistent thresholds and unsafe listener or upstream values, and names the key, or the line for a TOML syntax error (#20)
+- `deslag run [--] <command>` launches a child with `ANTHROPIC_BASE_URL` pointing at the configured proxy, in the child's environment only, and fails with guidance when no proxy listens there (#20)
+- `deslag status` and `deslag doctor` report the version, config validity, hook mode, proxy mode or off, transforms and the local service; `doctor` checks the state dir, the owner and the routing, redacts credentials and exits 1 on a failed check (#20)
+- `deslag disable` writes owner `none` and compression `off`, and tells you to start a new Claude Code session for an unchanged history (#20)
+- `<state dir>/ignore-hooks` lists plugin keys whose `PostToolUse` hooks the hook conflict scan skips (#97)
+- `/deslag:compression on|off|status` toggles hook compression for the Claude Code plugin; `on` writes `on` to `<state dir>/compression` and `hook` to `<state dir>/owner`, and the plugin hook then runs `deslag hook claude --minify-json`; the default stays off (#20)
+- The savings widget line ends with the hook compression state, `compression on` or `compression off`. The widget and `/deslag:compression status` read the owner like the binary does: the whole `<state dir>/owner` file with trailing whitespace stripped (#20)
+
+### Changed
+
+- `deslag proxy` takes a missing `--upstream` or `--listen` from the config file; an invalid config file stops it even with both flags (#20)
+- If you added a project hook that runs `deslag hook claude --minify-json` by hand, remove it; with the toggle on, both that hook and the plugin hook compress
+- `deslag proxy --minify-json` also minifies MCP tool results, skips results marked `is_error`, and reports the result tool category; the rule applies to new results only, and results already pinned in a session manifest, including those recorded under policy version 1, replay as recorded (#19)
+
+### Fixed
+
+- `deslag stats` counts a hook result blocked by a hook conflict as `skipped` with reason `hook_conflict` instead of `changed`, with the original size emitted and the candidate fields kept; restart a running `deslag local` service after the upgrade, because an older service drops reports with the new reason (#97)
+
 ## 0.1.0-alpha.3 - 2026-10-14
 
 ### Added
