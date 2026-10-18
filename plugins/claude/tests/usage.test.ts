@@ -23,6 +23,8 @@ function world(on: any, env: Record<string, string | undefined>) {
   const w = {
     env,
     reads,
+    files: {} as Record<string, string>,
+    paths: [] as string[],
     result: undefined as any,
     error: undefined as Error | undefined,
     session: 'sess-1' as string | undefined,
@@ -63,6 +65,12 @@ function world(on: any, env: Record<string, string | undefined>) {
     if (wake) wake(e.text);
     else statusQueued.push(e.text);
     return { value: undefined };
+  });
+  // A path missing from `files` rejects, like a missing file.
+  on('fs.read', async (_$: unknown, e: any) => {
+    w.paths.push(e.path);
+    if (!(e.path in w.files)) throw new Error('ENOENT');
+    return { value: w.files[e.path] };
   });
   on('clock.sleep', async () => {
     await new Promise<void>((r) => sleeping.push(r));
@@ -319,9 +327,28 @@ describe('savings widget', () => {
     expect(read.url).toBe('http://deslag/session/sess-1');
     expect(read.init.socketPath).toBe('/state/local-http.sock');
     expect(await status).toBe(
-      'deslag: ~120 tokens removed (estimate) of 5,432 input tokens · session ~1,200 removed (estimate)',
+      'deslag: ~120 tokens removed (estimate) of 5,432 input tokens · session ~1,200 removed (estimate) · compression off',
     );
   });
+
+  // Only a first line of exactly `on` is on.
+  for (const [text, state] of [
+    ['on\n', 'on'],
+    ['on', 'on'],
+    ['off\n', 'off'],
+    ['on \n', 'off'],
+    ['', 'off'],
+  ] as const) {
+    test(`compression file ${JSON.stringify(text)}: the line ends with compression ${state}`, OPTS, async ($, on) => {
+      const w = world(on, { ...WIDGET });
+      w.files['/state/compression'] = text;
+      w.reply = serve(() => json(DOC));
+      const status = w.status();
+      await step($, w, result(1));
+      expect(await status).toMatch(new RegExp(`removed \\(estimate\\) · compression ${state}$`));
+      expect(w.paths).toEqual(['/state/compression']);
+    });
+  }
 
   test('unknown estimates and usage show as unknown, never 0', OPTS, async ($, on) => {
     const w = world(on, { ...WIDGET });
@@ -334,7 +361,7 @@ describe('savings widget', () => {
     const status = w.status();
     await step($, w, result(0));
     expect(await status).toBe(
-      'deslag: unknown tokens removed (estimate) of unknown input tokens · session unknown removed (estimate)',
+      'deslag: unknown tokens removed (estimate) of unknown input tokens · session unknown removed (estimate) · compression off',
     );
   });
 

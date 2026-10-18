@@ -121,7 +121,8 @@ const estimate = (n) => (Number.isSafeInteger(n) ? `~${count(n)}` : 'unknown');
 
 // The widget line for a `deslag stats --json --session <id>` document: the
 // last request's estimated removed tokens next to its provider input tokens,
-// and the session total. Throws on a document without requests.
+// and the session total. Throws on a document without requests. The widget
+// appends the compression state to this line.
 export function savingsLine(doc) {
   const last = doc.requests.at(-1);
   if (doc.schema_version !== 1 || !last) throw new Error('no request');
@@ -133,10 +134,19 @@ export function savingsLine(doc) {
   );
 }
 
+// The hook's toggle: compression is on only when the first line of
+// `<state dir>/compression` is exactly `on`. A failed read is off.
+const compressionState = ($, socket) =>
+  Promise.resolve()
+    .then(() => $.fs.read(socket.replace(/local-http\.sock$/, 'compression')))
+    .then((text) => (String(text).split('\n')[0] === 'on' ? 'on' : 'off'))
+    .catch(() => 'off');
+
 async function readLine($, { session, socket }) {
+  const state = compressionState($, socket);
   const res = await $.http.fetch(`http://deslag/session/${session}`, { socketPath: socket });
   if (!res?.ok) throw new Error(`status ${res?.status}`);
-  return savingsLine(JSON.parse(res.text));
+  return `${savingsLine(JSON.parse(res.text))} · compression ${await state}`;
 }
 
 // Bumped by each refresh that sets the line; only the latest one writes it.

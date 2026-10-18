@@ -222,6 +222,75 @@ expect_eq "hook runs the binary that install.sh installed" "fake-deslag hook cla
   "$(run_hook "$tmp/data-shared" </dev/null)"
 expect_eq "hook makes no network call" "" "$(cat "$tmp/network.log" 2>/dev/null || true)"
 
+# --- compression -----------------------------------------------------------------
+compression_sh=$root/scripts/compression.sh
+run_compression() { # run_compression <env...> -- <args...>: only the given env is set
+  local vars=()
+  while [ "$1" != -- ]; do vars+=("$1"); shift; done
+  shift
+  env -i PATH=/usr/bin:/bin "${vars[@]}" "$compression_sh" "$@"
+}
+run_hook_env() { # run_hook_env <data> <env...>; stdin passes through
+  local d=$1; shift
+  env -i PATH="$tmp/fakebin:/usr/bin:/bin" CLAUDE_PLUGIN_ROOT="$root" CLAUDE_PLUGIN_DATA="$d" "$@" "$hook_sh"
+}
+st=$tmp/state
+out=$(run_compression DESLAG_STATE_DIR="$st" -- status)
+expect_match "compression status defaults to off" "compression: off" "$out"
+expect_match "compression status reports a missing owner as none" "owner: none" "$out"
+expect_eq "compression status creates nothing" absent "$([ -e "$st" ] && echo present || echo absent)"
+expect_eq "hook without a compression file runs without --minify-json" "fake-deslag hook claude" \
+  "$(run_hook_env "$data" DESLAG_STATE_DIR="$st" </dev/null)"
+
+expect_ok "compression on succeeds" run_compression DESLAG_STATE_DIR="$st" -- on
+expect_eq "compression on writes on and owner hook" "on:hook" "$(cat "$st/compression"):$(cat "$st/owner")"
+expect_eq "compression on keeps the state files private" "700:600:600" \
+  "$(mode "$st"):$(mode "$st/compression"):$(mode "$st/owner")"
+expect_eq "compression on leaves no temp file" "" "$(find "$st" -mindepth 1 -name ".*")"
+expect_eq "hook with compression on runs with --minify-json" "fake-deslag hook claude --minify-json" \
+  "$(run_hook_env "$data" DESLAG_STATE_DIR="$st" </dev/null)"
+out=$(run_compression DESLAG_STATE_DIR="$st" -- status "$data")
+expect_match "compression status reports on and owner hook" "compression: on.*owner: hook" "$(tr '\n' ' ' <<<"$out")"
+expect_match "compression status with a data dir reports the binary" "installed at" "$out"
+expect_match "compression status without the binary points to /deslag:install" "missing.*/deslag:install" \
+  "$(run_compression DESLAG_STATE_DIR="$st" -- status "$tmp/data-none" | tr '\n' ' ')"
+expect_match "an empty subcommand is status" "compression: on" "$(run_compression DESLAG_STATE_DIR="$st" -- "")"
+
+echo proxy >"$st/owner"
+expect_match "compression on but owner proxy is noted" "owner is proxy" "$(run_compression DESLAG_STATE_DIR="$st" -- status)"
+expect_match "compression on from owner proxy gives fresh-session guidance" "fresh Claude Code session" \
+  "$(run_compression DESLAG_STATE_DIR="$st" -- on)"
+expect_eq "compression on replaces owner proxy with hook" hook "$(cat "$st/owner")"
+
+expect_ok "compression off succeeds" run_compression DESLAG_STATE_DIR="$st" -- off
+expect_eq "compression off writes off and keeps the owner" "off:hook" "$(cat "$st/compression"):$(cat "$st/owner")"
+expect_match "compression status reports off" "compression: off" "$(run_compression DESLAG_STATE_DIR="$st" -- status)"
+expect_eq "hook with compression off runs without --minify-json" "fake-deslag hook claude" \
+  "$(run_hook_env "$data" DESLAG_STATE_DIR="$st" </dev/null)"
+printf 'on \n' >"$st/compression"
+expect_eq "hook treats a first line other than on as off" "fake-deslag hook claude" \
+  "$(run_hook_env "$data" DESLAG_STATE_DIR="$st" </dev/null)"
+printf 'on' >"$st/compression"
+expect_eq "hook accepts on without a trailing newline" "fake-deslag hook claude --minify-json" \
+  "$(run_hook_env "$data" DESLAG_STATE_DIR="$st" </dev/null)"
+
+# Empty and relative values are skipped, like deslag_telemetry::state_dir.
+expect_ok "compression on skips a relative DESLAG_STATE_DIR" \
+  run_compression DESLAG_STATE_DIR=rel XDG_STATE_HOME="$tmp/xdg" -- on
+expect_eq "compression on falls back to XDG_STATE_HOME/deslag" on "$(cat "$tmp/xdg/deslag/compression")"
+expect_eq "hook skips a relative DESLAG_STATE_DIR" "fake-deslag hook claude --minify-json" \
+  "$(run_hook_env "$data" DESLAG_STATE_DIR=rel XDG_STATE_HOME="$tmp/xdg" </dev/null)"
+expect_ok "compression on skips empty and relative values" \
+  run_compression DESLAG_STATE_DIR= XDG_STATE_HOME=rel HOME="$tmp/home" -- on
+expect_eq "compression on falls back to HOME/.local/state/deslag" on "$(cat "$tmp/home/.local/state/deslag/compression")"
+expect_eq "hook skips empty and relative values" "fake-deslag hook claude --minify-json" \
+  "$(run_hook_env "$data" DESLAG_STATE_DIR= XDG_STATE_HOME=rel HOME="$tmp/home" </dev/null)"
+expect_fail "compression without a state dir fails" "no state directory" run_compression DESLAG_STATE_DIR=rel -- on
+: >"$tmp/state-file"
+expect_fail "compression on refuses a state dir that is a file" "not a directory" \
+  run_compression DESLAG_STATE_DIR="$tmp/state-file" -- on
+expect_fail "compression rejects an unknown subcommand" "usage" run_compression DESLAG_STATE_DIR="$st" -- frobnicate
+
 hooks_json=$root/hooks/hooks.json
 expect_eq "hooks.json registers only PostToolUse" '["PostToolUse"]' "$(jq -c '.hooks | keys' "$hooks_json")"
 # shellcheck disable=SC2016 # the literal placeholder is expected
@@ -242,6 +311,14 @@ for c in install status uninstall; do
     'allowed-tools: Bash("${CLAUDE_PLUGIN_ROOT}/scripts/install.sh":*)' \
     "$(grep '^allowed-tools:' "$root/commands/$c.md")"
 done
+# shellcheck disable=SC2016 # the literal placeholders are expected
+expect_eq "commands/compression.md passes the arguments and the data dir" \
+  '!`"${CLAUDE_PLUGIN_ROOT}/scripts/compression.sh" "$ARGUMENTS" "${CLAUDE_PLUGIN_DATA}"`' \
+  "$(grep '^!`' "$root/commands/compression.md")"
+# shellcheck disable=SC2016 # the literal placeholder is expected
+expect_eq "commands/compression.md allows only compression.sh" \
+  'allowed-tools: Bash("${CLAUDE_PLUGIN_ROOT}/scripts/compression.sh":*)' \
+  "$(grep '^allowed-tools:' "$root/commands/compression.md")"
 
 # --- uninstall -----------------------------------------------------------------
 expect_ok "uninstall succeeds" run_install "$good" "$data" uninstall
