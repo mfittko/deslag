@@ -10,8 +10,35 @@ use serde_json::{Value, json};
 
 use crate::score::{shuffle, splitmix64};
 
-const JSON_ARMS: [&str; 4] = ["json-minify", "table-csv", "table-mdkv", "table-v2"];
-const LINE_ARMS: [&str; 2] = ["lines-v1", "lines-v2"];
+/// A generated task set: id prefix, task counts and the arms each kind lists.
+pub struct TaskSet {
+    pub name: &'static str,
+    prefix: &'static str,
+    json_tasks: usize,
+    log_tasks: usize,
+    json_arms: &'static [&'static str],
+    line_arms: &'static [&'static str],
+}
+
+/// `full`: the run-2 corpus, every arm.
+pub const FULL: TaskSet = TaskSet {
+    name: "full",
+    prefix: "gen",
+    json_tasks: 94,
+    log_tasks: 101,
+    json_arms: &["json-minify", "table-csv", "table-mdkv", "table-v2"],
+    line_arms: &["lines-v1", "lines-v2"],
+};
+
+/// `table`: the run-3 corpus, JSON tables against `table-v2` only.
+pub const TABLE: TaskSet = TaskSet {
+    name: "table",
+    prefix: "r3",
+    json_tasks: 210,
+    log_tasks: 0,
+    json_arms: &["table-v2"],
+    line_arms: &[],
+};
 const ID_CHARS: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const HEX: &[u8] = b"0123456789abcdef";
 const ADJ: [&str; 12] = [
@@ -356,7 +383,7 @@ fn num(rng: &mut Rng, decimal: bool, i: usize, zero: bool) -> String {
     }
 }
 
-fn json_task(t: usize, rng: &mut Rng) -> Gen {
+fn json_task(t: usize, rng: &mut Rng, set: &TaskSet) -> Gen {
     // Only every third audit slot is a buried table; the others reuse another schema.
     let si = if t % 7 == 6 && !(t / 7).is_multiple_of(3) {
         t / 7 % 6
@@ -508,15 +535,15 @@ fn json_task(t: usize, rng: &mut Rng) -> Gen {
         _ => "exact",
     };
     task(
-        format!("gen-json-{t:03}"),
+        format!("{}-json-{t:03}", set.prefix),
         s.category,
-        ("json", rule, &JSON_ARMS),
+        ("json", rule, set.json_arms),
         pretty(&objects),
         qa,
     )
 }
 
-fn log_task(t: usize, rng: &mut Rng) -> Gen {
+fn log_task(t: usize, rng: &mut Rng, set: &TaskSet) -> Gen {
     let kind = [0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2, 3][t % 16];
     let buried = kind == 3;
     let (base, spread) = if buried { (100, 5) } else { (12, 11) };
@@ -609,17 +636,17 @@ fn log_task(t: usize, rng: &mut Rng) -> Gen {
     };
     let rule = if buried { "exact_ci" } else { "exact" };
     task(
-        format!("gen-log-{t:03}"),
+        format!("{}-log-{t:03}", set.prefix),
         category,
-        ("log", rule, &LINE_ARMS),
+        ("log", rule, set.line_arms),
         input,
         (question, a, query),
     )
 }
 
 /// Incompressible controls: one prose line, or an already minimal JSON object.
-fn incompressible(k: usize, rng: &mut Rng) -> Gen {
-    let id = format!("gen-ctl-incompressible-{k:02}");
+fn incompressible(k: usize, rng: &mut Rng, set: &TaskSet) -> Gen {
+    let id = format!("{}-ctl-incompressible-{k:02}", set.prefix);
     let g = if k.is_multiple_of(2) {
         let date = format!("2026-{:02}-{:02}", 10 + rng.below(3), 1 + rng.below(28));
         let who = format!("{} {}", FIRST[rng.below(6)], LAST[rng.below(6)]);
@@ -634,7 +661,7 @@ fn incompressible(k: usize, rng: &mut Rng) -> Gen {
         task(
             id,
             "incompressible",
-            ("txt", "exact_ci", &[&JSON_ARMS[..], &LINE_ARMS].concat()),
+            ("txt", "exact_ci", &[set.json_arms, set.line_arms].concat()),
             input,
             (
                 format!("Who is the on-call engineer for the week of {date}?"),
@@ -649,7 +676,7 @@ fn incompressible(k: usize, rng: &mut Rng) -> Gen {
         task(
             id,
             "incompressible",
-            ("json", "number", &[&JSON_ARMS[..], &LINE_ARMS].concat()),
+            ("json", "number", &[set.json_arms, set.line_arms].concat()),
             input,
             (
                 format!("How many rows did the {job} job write?"),
@@ -666,8 +693,8 @@ fn incompressible(k: usize, rng: &mut Rng) -> Gen {
 
 /// Evidence-drop controls: one answer line holds the evidence string, which
 /// `drop-evidence` removes and every transform keeps.
-fn evidence_drop(k: usize, rng: &mut Rng) -> Gen {
-    let id = format!("gen-ctl-evidence-drop-{k:02}");
+fn evidence_drop(k: usize, rng: &mut Rng, set: &TaskSet) -> Gen {
+    let id = format!("{}-ctl-evidence-drop-{k:02}", set.prefix);
     let n = 20 + rng.below(12);
     let g = if k.is_multiple_of(2) {
         let at = rng.below(n);
@@ -694,7 +721,7 @@ fn evidence_drop(k: usize, rng: &mut Rng) -> Gen {
                 (
                     "json",
                     "exact",
-                    &[&["drop-evidence"][..], &JSON_ARMS].concat(),
+                    &[&["drop-evidence"][..], set.json_arms].concat(),
                 ),
                 pretty(&rows),
                 (format!("Who revoked session sess_k{at}?"), who, query),
@@ -717,7 +744,7 @@ fn evidence_drop(k: usize, rng: &mut Rng) -> Gen {
                 (
                     "log",
                     "exact",
-                    &[&["drop-evidence"][..], &LINE_ARMS].concat(),
+                    &[&["drop-evidence"][..], set.line_arms].concat(),
                 ),
                 lines.join("\n") + "\n",
                 ("Which alert triggered the rollback?".into(), alert, query),
@@ -731,12 +758,14 @@ fn evidence_drop(k: usize, rng: &mut Rng) -> Gen {
 }
 
 /// Writes `<out>/manifest.json` and `<out>/inputs/<task-id>.<ext>`.
-pub fn run(seed: u64, out: &Path) -> Result<(), String> {
+pub fn run(seed: u64, set: &TaskSet, out: &Path) -> Result<(), String> {
     let mut rng = Rng(seed);
-    let mut gens: Vec<Gen> = (0..94).map(|t| json_task(t, &mut rng)).collect();
-    gens.extend((0..101).map(|t| log_task(t, &mut rng)));
-    gens.extend((0..6).map(|k| incompressible(k, &mut rng)));
-    gens.extend((0..6).map(|k| evidence_drop(k, &mut rng)));
+    let mut gens: Vec<Gen> = (0..set.json_tasks)
+        .map(|t| json_task(t, &mut rng, set))
+        .collect();
+    gens.extend((0..set.log_tasks).map(|t| log_task(t, &mut rng, set)));
+    gens.extend((0..6).map(|k| incompressible(k, &mut rng, set)));
+    gens.extend((0..6).map(|k| evidence_drop(k, &mut rng, set)));
     for g in &gens {
         let tag = |e: String| format!("task {}: {e}", g.id);
         check(&g.input, &g.query, &g.answer).map_err(tag)?;
@@ -761,7 +790,11 @@ pub fn run(seed: u64, out: &Path) -> Result<(), String> {
         }
         tasks.push(t);
     }
-    let doc = json!({ "generator": "deslag-eval generate", "seed": seed, "tasks": tasks });
+    let mut doc = json!({ "generator": "deslag-eval generate", "seed": seed, "tasks": tasks });
+    // The full set omits the field, so the run-2 manifest stays byte-identical.
+    if set.name != FULL.name {
+        doc["set"] = json!(set.name);
+    }
     // ponytail: byte-identical output relies on serde_json's sorted Map (preserve_order off); enabling that feature breaks the regeneration test.
     let text = serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())? + "\n";
     let path = out.join("manifest.json");

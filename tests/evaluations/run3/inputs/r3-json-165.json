@@ -1,0 +1,77 @@
+[
+  {
+    "service_id": "svc_WWJGG1P7",
+    "service_name": "lunar-gecko-2",
+    "tier": "bronze",
+    "error_rate": 115.57,
+    "owner": null
+  },
+  {
+    "service_id": "svc_6HR86XZB",
+    "service_name": "dusty-egret",
+    "tier": "bronze",
+    "error_rate": 141.68,
+    "owner": null
+  },
+  {
+    "service_id": "svc_8EDVTPJ8",
+    "service_name": "fuzzy-marmot",
+    "tier": "bronze",
+    "error_rate": 167.14,
+    "owner": "core-team"
+  },
+  {
+    "service_id": "svc_FF1PYN0F",
+    "service_name": "hazy-iguana",
+    "tier": "bronze",
+    "error_rate": 121.66,
+    "owner": "beta-team"
+  },
+  {
+    "service_id": "svc_K6D4WZK7",
+    "service_name": "ivory-gecko",
+    "tier": "bronze",
+    "error_rate": 170.87,
+    "owner": "data-team"
+  },
+  {
+    "service_id": "svc_J97KH37X",
+    "service_name": "lunar-dingo",
+    "tier": "bronze",
+    "error_rate": 145.45,
+    "owner": "edge-team"
+  },
+  {
+    "service_id": "svc_NJK1AJ65",
+    "service_name": "ivory-dingo",
+    "tier": "bronze",
+    "error_rate": 129.52,
+    "owner": "alpha-team"
+  },
+  {
+    "service_id": "svc_EHYQWQPP",
+    "service_name": "eager-dingo",
+    "tier": "bronze",
+    "error_rate": 160.90
+  },
+  {
+    "service_id": "svc_WWJGG1PJ",
+    "service_name": "lunar-gecko",
+    "tier": "gold",
+    "error_rate": 100.53,
+    "owner": null
+  },
+  {
+    "service_id": "svc_DMMPYJPY",
+    "service_name": "gentle-iguana",
+    "tier": "bronze",
+    "error_rate": 107.20,
+    "owner": null
+  },
+  {
+    "service_id": "svc_051TMDKX",
+    "service_name": "hazy-egret",
+    "tier": "bronze",
+    "error_rate": 149.12
+  }
+]

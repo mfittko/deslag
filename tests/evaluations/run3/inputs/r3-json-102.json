@@ -1,0 +1,96 @@
+[
+  {
+    "service_id": "svc_STTM4CA7",
+    "service_name": "amber-koala",
+    "tier": "bronze",
+    "error_rate": 144.22,
+    "owner": "alpha-team"
+  },
+  {
+    "service_id": "svc_762VJB4H",
+    "service_name": "dusty-heron",
+    "tier": "bronze",
+    "error_rate": 152.01
+  },
+  {
+    "service_id": "svc_JAKAWVK9",
+    "service_name": "ivory-falcon",
+    "tier": "bronze",
+    "error_rate": 168.57,
+    "owner": null
+  },
+  {
+    "service_id": "svc_JWWTHMV5",
+    "service_name": "jolly-jackal",
+    "tier": "bronze",
+    "error_rate": 180.47,
+    "owner": "data-team"
+  },
+  {
+    "service_id": "svc_4TZTR3V7",
+    "service_name": "calm-falcon",
+    "tier": "bronze",
+    "error_rate": 138.25,
+    "owner": null
+  },
+  {
+    "service_id": "svc_B7XFK1XC",
+    "service_name": "brisk-falcon",
+    "tier": "bronze",
+    "error_rate": 128.16
+  },
+  {
+    "service_id": "svc_AKC6PAT4",
+    "service_name": "amber-heron",
+    "tier": "gold",
+    "error_rate": 103.33,
+    "owner": null
+  },
+  {
+    "service_id": "svc_24C1M4EY",
+    "service_name": "jolly-falcon",
+    "tier": "bronze",
+    "error_rate": 107.66,
+    "owner": null
+  },
+  {
+    "service_id": "svc_GCJG0AP0",
+    "service_name": "amber-lemur",
+    "tier": "bronze",
+    "error_rate": 121.97,
+    "owner": null
+  },
+  {
+    "service_id": "svc_AKC6PAT7",
+    "service_name": "amber-heron-2",
+    "tier": "bronze",
+    "error_rate": 118.35,
+    "owner": null
+  },
+  {
+    "service_id": "svc_VDHF9WXQ",
+    "service_name": "dusty-gecko",
+    "tier": "bronze",
+    "error_rate": 159.69
+  },
+  {
+    "service_id": "svc_RRYG8TVE",
+    "service_name": "amber-badger",
+    "tier": "bronze",
+    "error_rate": 170.41,
+    "owner": null
+  },
+  {
+    "service_id": "svc_F1ZDXE52",
+    "service_name": "keen-falcon",
+    "tier": "bronze",
+    "error_rate": 191.50,
+    "owner": null
+  },
+  {
+    "service_id": "svc_NYS455A5",
+    "service_name": "ivory-dingo",
+    "tier": "bronze",
+    "error_rate": 190.92
+  }
+]

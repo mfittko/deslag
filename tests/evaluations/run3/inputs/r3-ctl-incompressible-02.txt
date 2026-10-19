@@ -1,0 +1,1 @@
+Rotation notes for the edge-team. The on-call engineer for the week of 2026-12-06 is Mina Lindqvist. Escalations go to the secondary after 5 minutes without acknowledgement. The handover call moved to Tuesday because of a public holiday.

@@ -1,0 +1,91 @@
+[
+  {
+    "issue_id": "iss_APS4X57M",
+    "title": "jolly-jackal",
+    "state": "closed",
+    "comments": 164,
+    "assignee": "data-team"
+  },
+  {
+    "issue_id": "iss_TPC8YJ8G",
+    "title": "lunar-gecko",
+    "state": "closed",
+    "comments": 189,
+    "assignee": "alpha-team"
+  },
+  {
+    "issue_id": "iss_FDHVDZF1",
+    "title": "fuzzy-heron",
+    "state": "closed",
+    "comments": 141,
+    "assignee": null
+  },
+  {
+    "issue_id": "iss_HJ98WDE6",
+    "title": "ivory-falcon",
+    "state": "blocked",
+    "comments": 228,
+    "assignee": "infra-team"
+  },
+  {
+    "issue_id": "iss_NFJHJH9H",
+    "title": "ivory-egret",
+    "state": "closed",
+    "comments": 119,
+    "assignee": null
+  },
+  {
+    "issue_id": "iss_VK409GXS",
+    "title": "hazy-iguana",
+    "state": "closed",
+    "comments": 128
+  },
+  {
+    "issue_id": "iss_J3310SCT",
+    "title": "eager-iguana",
+    "state": "closed",
+    "comments": 171,
+    "assignee": null
+  },
+  {
+    "issue_id": "iss_HJ98WDE7",
+    "title": "ivory-falcon-2",
+    "state": "closed",
+    "comments": 212,
+    "assignee": "data-team"
+  },
+  {
+    "issue_id": "iss_FXEF5TEM",
+    "title": "brisk-falcon",
+    "state": "closed",
+    "comments": 124,
+    "assignee": null
+  },
+  {
+    "issue_id": "iss_CG9ASWEK",
+    "title": "ivory-dingo",
+    "state": "closed",
+    "comments": 142,
+    "assignee": "data-team"
+  },
+  {
+    "issue_id": "iss_24MHA4E8",
+    "title": "gentle-gecko",
+    "state": "closed",
+    "comments": 152
+  },
+  {
+    "issue_id": "iss_60EJKFBJ",
+    "title": "hazy-cedar",
+    "state": "closed",
+    "comments": 180,
+    "assignee": null
+  },
+  {
+    "issue_id": "iss_T95R8MP2",
+    "title": "hazy-heron",
+    "state": "closed",
+    "comments": 162,
+    "assignee": null
+  }
+]

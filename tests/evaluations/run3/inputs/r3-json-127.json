@@ -1,0 +1,62 @@
+[
+  {
+    "match_id": "mat_XN9F2EGZ",
+    "symbol": "dusty-cedar",
+    "kind": "fn",
+    "line": 163
+  },
+  {
+    "match_id": "mat_W9HYR89N",
+    "symbol": "jolly-koala",
+    "kind": "fn",
+    "line": 149
+  },
+  {
+    "match_id": "mat_WNQ0Y0ZE",
+    "symbol": "amber-jackal",
+    "kind": "fn",
+    "line": 146
+  },
+  {
+    "match_id": "mat_FZ7E4408",
+    "symbol": "lunar-egret",
+    "kind": "fn",
+    "line": 116
+  },
+  {
+    "match_id": "mat_W9S0YHHJ",
+    "symbol": "calm-jackal",
+    "kind": "fn",
+    "line": 125
+  },
+  {
+    "match_id": "mat_G7F8KM5K",
+    "symbol": "brisk-jackal",
+    "kind": "fn",
+    "line": 137
+  },
+  {
+    "match_id": "mat_D4198K6W",
+    "symbol": "dusty-lemur",
+    "kind": "fn",
+    "line": 157
+  },
+  {
+    "match_id": "mat_1XS77C5K",
+    "symbol": "ivory-cedar",
+    "kind": "fn",
+    "line": 132
+  },
+  {
+    "match_id": "mat_Y21F1A97",
+    "symbol": "fuzzy-jackal-2",
+    "kind": "fn",
+    "line": 107
+  },
+  {
+    "match_id": "mat_Y21F1A9Z",
+    "symbol": "fuzzy-jackal",
+    "kind": "macro",
+    "line": 103
+  }
+]

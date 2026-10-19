@@ -1,0 +1,72 @@
+[
+  {
+    "user_id": "usr_1N0Y0MRC",
+    "login": "lunar-lemur",
+    "role": "member",
+    "quota_gb": 140.15,
+    "team": "alpha-team"
+  },
+  {
+    "user_id": "usr_YP0VWSF1",
+    "login": "gentle-falcon",
+    "role": "member",
+    "quota_gb": 146.33,
+    "team": "alpha-team"
+  },
+  {
+    "user_id": "usr_QQFWTEP0",
+    "login": "jolly-heron",
+    "role": "member",
+    "quota_gb": 133.90,
+    "team": "edge-team"
+  },
+  {
+    "user_id": "usr_T14RHE6S",
+    "login": "amber-koala",
+    "role": "member",
+    "quota_gb": 155.48,
+    "team": "beta-team"
+  },
+  {
+    "user_id": "usr_ADWT144K",
+    "login": "hazy-marmot",
+    "role": "member",
+    "quota_gb": 163.86,
+    "team": null
+  },
+  {
+    "user_id": "usr_M71XB0T7",
+    "login": "dusty-marmot",
+    "role": "member",
+    "quota_gb": 118.11,
+    "team": null
+  },
+  {
+    "user_id": "usr_EEQJSHAA",
+    "login": "keen-cedar",
+    "role": "member",
+    "quota_gb": 156.36,
+    "team": "beta-team"
+  },
+  {
+    "user_id": "usr_JXDVGY3X",
+    "login": "amber-falcon",
+    "role": "owner",
+    "quota_gb": 102.23,
+    "team": "infra-team"
+  },
+  {
+    "user_id": "usr_NP7KMHMD",
+    "login": "hazy-jackal",
+    "role": "member",
+    "quota_gb": 125.02,
+    "team": "core-team"
+  },
+  {
+    "user_id": "usr_JXDVGY37",
+    "login": "amber-falcon-2",
+    "role": "member",
+    "quota_gb": 110.40,
+    "team": null
+  }
+]

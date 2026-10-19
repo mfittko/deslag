@@ -1,0 +1,71 @@
+[
+  {
+    "service_id": "svc_A11EBDRB",
+    "service_name": "keen-cedar",
+    "tier": "bronze",
+    "error_rate": 117.41,
+    "owner": "data-team"
+  },
+  {
+    "service_id": "svc_BHYZMX8Z",
+    "service_name": "amber-marmot",
+    "tier": "bronze",
+    "error_rate": 150.73,
+    "owner": null
+  },
+  {
+    "service_id": "svc_S0E50PW8",
+    "service_name": "brisk-falcon",
+    "tier": "bronze",
+    "error_rate": 139.86,
+    "owner": "infra-team"
+  },
+  {
+    "service_id": "svc_8JWRG87G",
+    "service_name": "keen-iguana",
+    "tier": "bronze",
+    "error_rate": 157.12,
+    "owner": "data-team"
+  },
+  {
+    "service_id": "svc_9VEC5XE0",
+    "service_name": "dusty-dingo",
+    "tier": "bronze",
+    "error_rate": 169.66,
+    "owner": "core-team"
+  },
+  {
+    "service_id": "svc_TF6GD9PJ",
+    "service_name": "ivory-marmot",
+    "tier": "gold",
+    "error_rate": 103.42,
+    "owner": null
+  },
+  {
+    "service_id": "svc_Z38PSXEV",
+    "service_name": "lunar-cedar",
+    "tier": "bronze",
+    "error_rate": 131.07
+  },
+  {
+    "service_id": "svc_4GRKCGVV",
+    "service_name": "jolly-gecko",
+    "tier": "bronze",
+    "error_rate": 146.70,
+    "owner": null
+  },
+  {
+    "service_id": "svc_TF6GD9P7",
+    "service_name": "ivory-marmot-2",
+    "tier": "bronze",
+    "error_rate": 108.65,
+    "owner": "edge-team"
+  },
+  {
+    "service_id": "svc_1TBF2JK7",
+    "service_name": "eager-dingo",
+    "tier": "bronze",
+    "error_rate": 123.83,
+    "owner": null
+  }
+]

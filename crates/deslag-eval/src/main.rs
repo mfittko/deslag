@@ -26,7 +26,7 @@ const USAGE: &str = "usage:
   deslag-eval variants <manifest>
   deslag-eval run --manifest <path> --backend mock|claude --seed <u64> --out <results.jsonl>
                   [--model <id>] [--budget-usd <f>] [--per-run-usd <f>]
-  deslag-eval generate --seed <u64> --out <dir>
+  deslag-eval generate --seed <u64> --out <dir> [--set full|table]
   deslag-eval report <results.jsonl>
   deslag-eval estimate --manifest <path> [--input-usd-per-mtok <f>] [--output-usd-per-mtok <f>]
                   [--overhead-tokens <n>] [--output-tokens <n>] [--per-run-usd <f>]
@@ -226,13 +226,18 @@ fn load_file(
 }
 
 fn generate(args: &[String]) -> Result<(), String> {
-    let f = flags(args, "seed out")?;
+    let f = flags(args, "seed out set")?;
+    let set = match f.get("set").map_or("full", String::as_str) {
+        "full" => &generate::FULL,
+        "table" => &generate::TABLE,
+        other => return Err(format!("--set: unknown set {other}\n{USAGE}")),
+    };
     let out: String = parsed(&f, "out", None)?;
     // An empty path resolves to the current directory and would overwrite its manifest.json.
     if out.trim().is_empty() {
         return Err(format!("--out needs a non-empty path\n{USAGE}"));
     }
-    generate::run(parsed(&f, "seed", None)?, Path::new(&out))
+    generate::run(parsed(&f, "seed", None)?, set, Path::new(&out))
 }
 
 /// The arm's payload. `None` when the transform declines, so the payload is

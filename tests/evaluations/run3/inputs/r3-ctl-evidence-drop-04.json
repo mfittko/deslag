@@ -1,0 +1,127 @@
+[
+  {
+    "session": "sess_k0",
+    "user": "u0",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k1",
+    "user": "u3",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k2",
+    "user": "u6",
+    "revoked_by": "svc-brisk-jackal"
+  },
+  {
+    "session": "sess_k3",
+    "user": "u9",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k4",
+    "user": "u12",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k5",
+    "user": "u15",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k6",
+    "user": "u18",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k7",
+    "user": "u21",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k8",
+    "user": "u24",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k9",
+    "user": "u27",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k10",
+    "user": "u30",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k11",
+    "user": "u33",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k12",
+    "user": "u36",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k13",
+    "user": "u39",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k14",
+    "user": "u42",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k15",
+    "user": "u45",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k16",
+    "user": "u48",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k17",
+    "user": "u51",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k18",
+    "user": "u54",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k19",
+    "user": "u57",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k20",
+    "user": "u60",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k21",
+    "user": "u63",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k22",
+    "user": "u66",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k23",
+    "user": "u69",
+    "revoked_by": null
+  },
+  {
+    "session": "sess_k24",
+    "user": "u72",
+    "revoked_by": null
+  }
+]

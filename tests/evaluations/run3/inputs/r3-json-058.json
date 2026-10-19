@@ -1,0 +1,71 @@
+[
+  {
+    "job_id": "job_MWFZDNDW",
+    "name": "brisk-cedar",
+    "conclusion": "success",
+    "duration_s": 152.05,
+    "runner": "beta-team"
+  },
+  {
+    "job_id": "job_WHYQBAS3",
+    "name": "hazy-koala",
+    "conclusion": "success",
+    "duration_s": 157.04,
+    "runner": null
+  },
+  {
+    "job_id": "job_2ZEQHABB",
+    "name": "dusty-dingo",
+    "conclusion": "success",
+    "duration_s": 135.14,
+    "runner": "alpha-team"
+  },
+  {
+    "job_id": "job_K6YNTMKN",
+    "name": "lunar-jackal",
+    "conclusion": "failure",
+    "duration_s": 197.10
+  },
+  {
+    "job_id": "job_FZE2PBZM",
+    "name": "calm-gecko",
+    "conclusion": "success",
+    "duration_s": 130.06,
+    "runner": "infra-team"
+  },
+  {
+    "job_id": "job_ZW08B2CQ",
+    "name": "fuzzy-marmot",
+    "conclusion": "success",
+    "duration_s": 168.58,
+    "runner": "data-team"
+  },
+  {
+    "job_id": "job_TTNPZ4SV",
+    "name": "calm-cedar",
+    "conclusion": "success",
+    "duration_s": 117.80,
+    "runner": null
+  },
+  {
+    "job_id": "job_3FKKMEQ5",
+    "name": "calm-koala",
+    "conclusion": "success",
+    "duration_s": 147.45,
+    "runner": "edge-team"
+  },
+  {
+    "job_id": "job_K6YNTMK7",
+    "name": "lunar-jackal-2",
+    "conclusion": "success",
+    "duration_s": 111.59,
+    "runner": null
+  },
+  {
+    "job_id": "job_ZJAHE35V",
+    "name": "gentle-cedar",
+    "conclusion": "success",
+    "duration_s": 121.02,
+    "runner": "beta-team"
+  }
+]

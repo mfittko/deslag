@@ -1,0 +1,98 @@
+[
+  {
+    "service_id": "svc_Q6TG7YQZ",
+    "service_name": "dusty-badger",
+    "tier": "bronze",
+    "error_rate": 184.11,
+    "owner": "beta-team"
+  },
+  {
+    "service_id": "svc_GEZFKEYD",
+    "service_name": "calm-lemur",
+    "tier": "bronze",
+    "error_rate": 146.90,
+    "owner": null
+  },
+  {
+    "service_id": "svc_FPPACKBT",
+    "service_name": "jolly-gecko",
+    "tier": "bronze",
+    "error_rate": 128.99,
+    "owner": null
+  },
+  {
+    "service_id": "svc_59KEDPKR",
+    "service_name": "dusty-jackal",
+    "tier": "bronze",
+    "error_rate": 151.34,
+    "owner": "edge-team"
+  },
+  {
+    "service_id": "svc_D6G93AKW",
+    "service_name": "gentle-dingo",
+    "tier": "bronze",
+    "error_rate": 165.80,
+    "owner": null
+  },
+  {
+    "service_id": "svc_1GRHNJ8A",
+    "service_name": "eager-jackal",
+    "tier": "bronze",
+    "error_rate": 174.81,
+    "owner": null
+  },
+  {
+    "service_id": "svc_BC1K2FP7",
+    "service_name": "brisk-badger-2",
+    "tier": "bronze",
+    "error_rate": 112.94,
+    "owner": "edge-team"
+  },
+  {
+    "service_id": "svc_B8TWZ0KD",
+    "service_name": "fuzzy-lemur",
+    "tier": "bronze",
+    "error_rate": 183.81,
+    "owner": null
+  },
+  {
+    "service_id": "svc_BC1K2FP6",
+    "service_name": "brisk-badger",
+    "tier": "gold",
+    "error_rate": 219.60,
+    "owner": "infra-team"
+  },
+  {
+    "service_id": "svc_QZEAM3NW",
+    "service_name": "eager-heron",
+    "tier": "bronze",
+    "error_rate": 119.51,
+    "owner": "data-team"
+  },
+  {
+    "service_id": "svc_A28MS8QA",
+    "service_name": "eager-koala",
+    "tier": "bronze",
+    "error_rate": 121.84
+  },
+  {
+    "service_id": "svc_MH972EHF",
+    "service_name": "fuzzy-gecko",
+    "tier": "bronze",
+    "error_rate": 141.06,
+    "owner": null
+  },
+  {
+    "service_id": "svc_GD1ZT710",
+    "service_name": "hazy-egret",
+    "tier": "bronze",
+    "error_rate": 194.76,
+    "owner": null
+  },
+  {
+    "service_id": "svc_FQXS3TM1",
+    "service_name": "fuzzy-badger",
+    "tier": "bronze",
+    "error_rate": 156.04
+  }
+]

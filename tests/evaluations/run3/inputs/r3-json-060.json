@@ -1,0 +1,82 @@
+[
+  {
+    "service_id": "svc_KFW26NV0",
+    "service_name": "keen-marmot",
+    "tier": "bronze",
+    "error_rate": 175.95,
+    "owner": null
+  },
+  {
+    "service_id": "svc_4FBMHZ1R",
+    "service_name": "jolly-lemur",
+    "tier": "bronze",
+    "error_rate": 142.60,
+    "owner": null
+  },
+  {
+    "service_id": "svc_G91XSW63",
+    "service_name": "ivory-badger",
+    "tier": "bronze",
+    "error_rate": 168.56,
+    "owner": null
+  },
+  {
+    "service_id": "svc_WZPJB8K4",
+    "service_name": "amber-cedar",
+    "tier": "bronze",
+    "error_rate": 129.75,
+    "owner": "infra-team"
+  },
+  {
+    "service_id": "svc_JA4X2R1D",
+    "service_name": "dusty-gecko",
+    "tier": "bronze",
+    "error_rate": 181.19
+  },
+  {
+    "service_id": "svc_WGEFQAJG",
+    "service_name": "keen-cedar",
+    "tier": "bronze",
+    "error_rate": 160.15
+  },
+  {
+    "service_id": "svc_CCZE84D5",
+    "service_name": "brisk-koala",
+    "tier": "gold",
+    "error_rate": 206.60,
+    "owner": "beta-team"
+  },
+  {
+    "service_id": "svc_F6Q079MC",
+    "service_name": "gentle-koala",
+    "tier": "bronze",
+    "error_rate": 150.47,
+    "owner": null
+  },
+  {
+    "service_id": "svc_SGQK8N9V",
+    "service_name": "keen-iguana",
+    "tier": "bronze",
+    "error_rate": 123.67,
+    "owner": "core-team"
+  },
+  {
+    "service_id": "svc_HP97WMGA",
+    "service_name": "hazy-iguana",
+    "tier": "bronze",
+    "error_rate": 117.96
+  },
+  {
+    "service_id": "svc_PT57ZVJ2",
+    "service_name": "jolly-iguana",
+    "tier": "bronze",
+    "error_rate": 136.99
+  },
+  {
+    "service_id": "svc_CCZE84D7",
+    "service_name": "brisk-koala-2",
+    "tier": "bronze",
+    "error_rate": 110.73,
+    "owner": "infra-team"
+  }
+]
