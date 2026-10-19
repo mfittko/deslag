@@ -79,6 +79,8 @@ The `.deslag-data` marker lets `/deslag:uninstall` remove the copied binary. The
 
 `/deslag:compression on` writes `on` to `$DESLAG_STATE_DIR/compression` and `hook` to `$DESLAG_STATE_DIR/owner`, so the plugin hook runs `deslag hook claude --minify-json` and owns compression. Hook compression is off until you run it.
 
+When another `PostToolUse` hook matches Bash or MCP tools, the hook leaves those results unchanged. `/deslag:compression on`, `deslag status` and `deslag doctor` then print a `conflict: PostToolUse hook in <file> also matches Bash; ...` line and a `conflict fix:` line. For a plugin hook that never returns `updatedToolOutput`, the fix line names the plugin key to add to `$DESLAG_STATE_DIR/ignore-hooks`. For a settings-file hook, it says to remove the hook or narrow its matcher. See [Hook conflict reporting](compatibility.md#hook-conflict-reporting).
+
 Ask Claude:
 
 ```text

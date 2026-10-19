@@ -53,6 +53,7 @@ impl Sandbox {
         cmd.args(args)
             .env("HOME", &home)
             .env("CLAUDE_CONFIG_DIR", home.join(".claude"))
+            .env("CLAUDE_PROJECT_DIR", &self.0)
             .env("DESLAG_STATE_DIR", self.state())
             .env("DESLAG_CONFIG", self.0.join("config.toml"))
             .env_remove("XDG_CONFIG_HOME")
@@ -919,4 +920,113 @@ fn disable_turns_compression_off_and_gives_fresh_session_guidance() {
         !stdout.contains("Start a new Claude Code session"),
         "{stdout}"
     );
+}
+
+/// Writes a `PostToolUse` hook matching Bash into the user settings and into an
+/// enabled plugin `other@market`. Returns the two hook file paths.
+fn conflicting_hooks(sandbox: &Sandbox) -> (PathBuf, PathBuf) {
+    let claude = sandbox.0.join("home/.claude");
+    let install = claude.join("plugins/cache/other");
+    let hooks = r#"{"hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "jq ."}]}]}}"#;
+    fs::create_dir_all(install.join("hooks")).unwrap();
+    fs::write(install.join("hooks/hooks.json"), hooks).unwrap();
+    fs::write(
+        claude.join("plugins/installed_plugins.json"),
+        format!(
+            r#"{{"version": 2, "plugins": {{"other@market": [{{"installPath": "{}"}}]}}}}"#,
+            install.display()
+        ),
+    )
+    .unwrap();
+    let settings = claude.join("settings.json");
+    fs::write(
+        &settings,
+        hooks.replacen('{', r#"{"enabledPlugins": {"other@market": true}, "#, 1),
+    )
+    .unwrap();
+    (settings, install.join("hooks/hooks.json"))
+}
+
+#[test]
+fn status_and_doctor_name_each_hook_conflict_and_the_fix() {
+    let sandbox = Sandbox::new("conflicts");
+    sandbox.config(V1).owner("hook", "on");
+    let output = sandbox.run(&["status"]);
+    assert!(
+        text(&output.stdout).contains("hook conflicts: none\n"),
+        "{}",
+        text(&output.stdout)
+    );
+    let (settings, plugin) = conflicting_hooks(&sandbox);
+    let ignore = sandbox.state().join("ignore-hooks");
+    for command in ["status", "doctor"] {
+        let stdout = text(&sandbox.run(&[command]).stdout);
+        for path in [&settings, &plugin] {
+            assert!(
+                stdout.contains(&format!(
+                    "conflict: PostToolUse hook in {} also matches Bash; \
+                     deslag leaves those results unchanged\n",
+                    path.display()
+                )),
+                "{command}: {stdout}"
+            );
+        }
+        assert!(
+            stdout.contains(&format!(
+                "conflict fix: only if plugin other@market never returns updatedToolOutput, \
+                 add the line `other@market` to {}\n",
+                ignore.display()
+            )),
+            "{command}: {stdout}"
+        );
+        assert!(
+            stdout.contains(&format!(
+                "conflict fix: hooks in settings files cannot be listed in ignore-hooks; \
+                 remove the hook or narrow its matcher in {}\n",
+                settings.display()
+            )),
+            "{command}: {stdout}"
+        );
+    }
+
+    // Listing the plugin clears its conflict; the settings hook stays.
+    fs::write(&ignore, "other@market\n").unwrap();
+    let stdout = text(&sandbox.run(&["status"]).stdout);
+    assert!(!stdout.contains(&plugin.display().to_string()), "{stdout}");
+    assert!(stdout.contains(&settings.display().to_string()), "{stdout}");
+    // Without the settings hook nothing conflicts.
+    fs::write(&settings, r#"{"enabledPlugins": {"other@market": true}}"#).unwrap();
+    for command in ["status", "doctor"] {
+        let output = sandbox.run(&[command]);
+        let stdout = text(&output.stdout);
+        assert_eq!(output.status.code(), Some(0), "{command}: {stdout}");
+        assert!(stdout.contains("hook conflicts: none\n"), "{stdout}");
+        assert!(!stdout.contains("conflict:"), "{stdout}");
+    }
+}
+
+#[test]
+fn doctor_fails_on_a_hook_conflict_only_while_the_hook_compresses() {
+    let sandbox = Sandbox::new("conflict-exit");
+    sandbox.config(V1).owner("hook", "on");
+    assert_eq!(sandbox.run(&["doctor"]).status.code(), Some(0));
+    conflicting_hooks(&sandbox);
+    let output = sandbox.run(&["doctor"]);
+    let stdout = text(&output.stdout);
+    assert_eq!(output.status.code(), Some(1), "{stdout}");
+    assert!(
+        stdout.contains("FAIL: compression is on but foreign PostToolUse hooks in 2 file(s)"),
+        "{stdout}"
+    );
+    assert_eq!(sandbox.run(&["status"]).status.code(), Some(0));
+    for (owner, compression) in [("hook", "off"), ("proxy", "on"), ("none", "off")] {
+        let output = sandbox.owner(owner, compression).run(&["doctor"]);
+        let stdout = text(&output.stdout);
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{owner} {compression}: {stdout}"
+        );
+        assert!(stdout.contains("conflict: "), "{stdout}");
+    }
 }

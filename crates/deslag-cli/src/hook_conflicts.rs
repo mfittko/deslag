@@ -35,6 +35,19 @@ fn is_own_command(command: &str) -> bool {
     }
 }
 
+/// Tools whose results deslag compresses. `mcp__*` stands for every MCP tool.
+pub const ROUTED_TOOLS: [&str; 2] = ["Bash", "mcp__*"];
+
+/// A settings or plugin hooks file with a foreign `PostToolUse` hook that may
+/// match one of `ROUTED_TOOLS`.
+#[derive(Debug)]
+pub struct Conflict {
+    pub path: PathBuf,
+    /// The plugin key for a plugin hooks file; `None` for a settings file.
+    pub plugin: Option<String>,
+    pub tools: Vec<&'static str>,
+}
+
 /// Returns a diagnostic naming the first settings or plugin hooks file with a
 /// `PostToolUse` hook, other than deslag's own, whose matcher may match `tool`.
 /// Missing, unreadable and malformed files never report a conflict. The hooks
@@ -45,7 +58,55 @@ pub fn find(
     project_dir: Option<&Path>,
     state_dir: Option<&Path>,
 ) -> Option<String> {
+    let files = sources(config_dir, project_dir, state_dir);
+    let (path, _, _) = files
+        .iter()
+        .find(|(_, _, file)| has_matching_hook(file, tool))?;
+    Some(format!(
+        "PostToolUse hook in {} also matches {tool}; leaving the output unchanged",
+        path.display()
+    ))
+}
+
+/// Every file `find` would report for a routed tool, in scan order, with the
+/// routed tools it matches.
+// ponytail: a literal MCP matcher such as `mcp__github__get_issue` does not match
+// `mcp__*` here, so it is not listed. Match tool name prefixes when that hides a real conflict.
+pub fn all(
+    config_dir: Option<&Path>,
+    project_dir: Option<&Path>,
+    state_dir: Option<&Path>,
+) -> Vec<Conflict> {
+    sources(config_dir, project_dir, state_dir)
+        .into_iter()
+        .filter_map(|(path, plugin, file)| {
+            let tools: Vec<&'static str> = ROUTED_TOOLS
+                .into_iter()
+                .filter(|tool| has_matching_hook(&file, tool))
+                .collect();
+            (!tools.is_empty()).then_some(Conflict {
+                path,
+                plugin,
+                tools,
+            })
+        })
+        .collect()
+}
+
+/// The settings files, then the hooks files of enabled plugins not listed in
+/// `<state_dir>/ignore-hooks`, each with its plugin key and parsed JSON. Each
+/// file appears once, also when the project `.claude` dir is the config dir or
+/// several settings files enable the same plugin.
+fn sources(
+    config_dir: Option<&Path>,
+    project_dir: Option<&Path>,
+    state_dir: Option<&Path>,
+) -> Vec<(PathBuf, Option<String>, Value)> {
     let ignored = state_dir.map(ignored_plugins).unwrap_or_default();
+    let mut seen = std::collections::HashSet::new();
+    let mut first = |path: &Path| {
+        seen.insert(std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()))
+    };
     let mut paths = Vec::new();
     if let Some(dir) = config_dir {
         paths.push(dir.join("settings.json"));
@@ -54,16 +115,17 @@ pub fn find(
         paths.push(dir.join(".claude").join("settings.json"));
         paths.push(dir.join(".claude").join("settings.local.json"));
     }
-    let mut files: Vec<(PathBuf, Value)> = paths
+    let mut files: Vec<(PathBuf, Option<String>, Value)> = paths
         .into_iter()
-        .filter_map(|path| read_json(&path).map(|value| (path, value)))
+        .filter(|path| first(path))
+        .filter_map(|path| read_json(&path).map(|value| (path, None, value)))
         .collect();
     if let Some(installed) =
         config_dir.and_then(|dir| read_json(&dir.join("plugins").join("installed_plugins.json")))
     {
         let enabled: Vec<String> = files
             .iter()
-            .filter_map(|(_, settings)| settings.get("enabledPlugins")?.as_object())
+            .filter_map(|(_, _, settings)| settings.get("enabledPlugins")?.as_object())
             .flatten()
             .filter(|(_, on)| on.as_bool() == Some(true))
             .map(|(key, _)| key.clone())
@@ -73,19 +135,16 @@ pub fn find(
             let installs = installed["plugins"][&key].as_array().into_iter().flatten();
             for path in installs.filter_map(|install| install["installPath"].as_str()) {
                 let path = Path::new(path).join("hooks").join("hooks.json");
+                if !first(&path) {
+                    continue;
+                }
                 if let Some(hooks) = read_json(&path) {
-                    files.push((path, hooks));
+                    files.push((path, Some(key.clone()), hooks));
                 }
             }
         }
     }
-    let (path, _) = files
-        .iter()
-        .find(|(_, file)| has_matching_hook(file, tool))?;
-    Some(format!(
-        "PostToolUse hook in {} also matches {tool}; leaving the output unchanged",
-        path.display()
-    ))
+    files
 }
 
 /// Plugin keys in `<state_dir>/ignore-hooks`, one per line. Blank lines and `#`
@@ -360,5 +419,60 @@ mod tests {
         fs::create_dir_all(dir.join(".claude")).unwrap();
         fs::write(dir.join(".claude/settings.json"), r#"{"hooks":[1]}"#).unwrap();
         assert_eq!(find("Bash", Some(&dir), Some(&dir), None), None);
+    }
+
+    #[test]
+    fn all_lists_each_source_with_its_plugin_and_routed_tools() {
+        let dir = plugin_setup("all", "other@market", true, "jq .");
+        let mut settings = hooks("mcp__.*", "jq .");
+        settings["enabledPlugins"] = serde_json::json!({"other@market": true});
+        write(&dir.join("settings.json"), &settings);
+        let found = all(Some(&dir), None, Some(&dir));
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert_eq!(found[0].path, dir.join("settings.json"));
+        assert_eq!(found[0].plugin, None);
+        // A regex matcher counts as matching every tool.
+        assert_eq!(found[0].tools, ["Bash", "mcp__*"]);
+        assert!(found[1].path.ends_with("hooks/hooks.json"));
+        assert_eq!(found[1].plugin.as_deref(), Some("other@market"));
+        assert_eq!(found[1].tools, ["Bash"]);
+        fs::write(dir.join("ignore-hooks"), "other@market\n").unwrap();
+        let found = all(Some(&dir), None, Some(&dir));
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].plugin, None);
+    }
+
+    #[test]
+    fn all_lists_a_file_once_when_the_project_claude_dir_is_the_config_dir() {
+        let home = temp_dir("home-project");
+        let config = home.join(".claude");
+        let install = home.join("plugins/cache/other");
+        write(&install.join("hooks/hooks.json"), &hooks("Bash", "jq ."));
+        write(
+            &config.join("plugins/installed_plugins.json"),
+            &serde_json::json!({"version": 2, "plugins": {
+                "other@market": [{"installPath": install, "version": "1.0.0"}]
+            }}),
+        );
+        let mut settings = hooks("Bash", "jq .");
+        settings["enabledPlugins"] = serde_json::json!({"other@market": true});
+        write(&config.join("settings.json"), &settings);
+        let found = all(Some(&config), Some(&home), None);
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert_eq!(found[0].plugin, None);
+        assert_eq!(found[1].plugin.as_deref(), Some("other@market"));
+    }
+
+    #[test]
+    fn all_lists_a_plugin_once_when_two_settings_files_enable_it() {
+        let dir = plugin_setup("two-enable", "other@market", true, "jq .");
+        let project = temp_dir("two-enable-project");
+        write(
+            &project.join(".claude/settings.json"),
+            &serde_json::json!({"enabledPlugins": {"other@market": true}}),
+        );
+        let found = all(Some(&dir), Some(&project), None);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].plugin.as_deref(), Some("other@market"));
     }
 }
