@@ -420,13 +420,13 @@ Secondary measure; it never decides pass or fail. Non-control tasks; drop-eviden
 
 On 2026-10-19, the command in [Live run 3 (predeclared)](#live-run-3-predeclared) ran once at commit 93d8699 (v0.1.0-alpha.4 plus 3 commits) with model `claude-haiku-5-5`, Claude Code 2.1.303 and seed 106, on the run-3 corpus (`tests/evaluations/run3/manifest.json` sha256 `2ecb581995d8b615a1d3ea580835c24a3ff1f3e196f1701e6d81405bf66aedc1`). All 447 runs completed with exit 0 and no backend error. The harness reported a total spend of USD 0.1478, within the authorized USD 1.00. The results file `tmp/eval/live-claude-haiku-5-5-seed106.jsonl` is not committed. Its sha256 is `af1034df33ddb3a2939076c1df32f0321d64ab9270c926f379a4a83b1aee8757`.
 
-`table-v2` is `not shown`. It has 210 non-control pairs, so the run meets the predeclared size of 200 pairs and its verdict decides `table-v2` for this corpus, model and seed. b = 4 and c = 3: the baseline succeeded on 207 of 210 tasks and `table-v2` on 206. The difference is -0.5 pp and the lower bound is -2.7 pp, below the -2.0 pp margin. `table-v2` is not `inferior`. Run 2 gave the same lower bound of -2.7 pp with 105 pairs. This report does not pool the two runs, because the methodology does not predeclare pooling.
+`table-v2` is `not shown`. It has 210 non-control pairs, so the run meets the predeclared size of 200 pairs and is the decisive run for this issue: `table-v2` does not pass the non-inferiority criterion on this corpus, model and seed. b = 4 and c = 3: the baseline succeeded on 207 of 210 tasks and `table-v2` on 206. The difference is -0.5 pp and the lower bound is -2.7 pp, below the -2.0 pp margin. `table-v2` is not `inferior`. Run 2 gave the same lower bound of -2.7 pp with 105 pairs. This report does not pool the two runs, because the methodology does not predeclare pooling.
 
 The controls behaved as designed: `drop-evidence` lost the evidence on all 6 evidence-drop tasks, `table-v2` kept the evidence on the 3 JSON evidence-drop tasks, and `table-v2` left all 6 incompressible tasks unchanged.
 
 Apart from the `drop-evidence` control, 7 runs failed: 3 baseline runs and 4 `table-v2` runs. No task failed in both runs, so all 7 are discordant pairs. Every failed answer is a single value or list with no added text, so these failures are not answer-format effects. The 4 `table-v2` failures:
 
-- `r3-json-002` and `r3-json-171`: id lookups in tables of 11 and 13 rows. The answer is the name of row 0. The matching row is row 3.
+- `r3-json-002` and `r3-json-171`: id lookups in tables of 11 and 13 rows. The answer is the name of the first row. The matching row is the fourth row.
 - `r3-json-088`: the answer is the near-duplicate decoy id, which differs from the accepted id in its last character.
 - `r3-json-012`: the highest `amount_cents` among paid orders is 207. The answer is 183, the value of another paid order.
 
@@ -434,7 +434,7 @@ The 3 baseline failures are a near-duplicate decoy id (`r3-json-124`), a wrong s
 
 The paired Claude prompt-token saving of `table-v2`, the secondary measure, is 119079 tokens (33.0%). The percentage includes the system prompt and client overhead of every call. The `deslag-estimate-v1` payload saving is 87196 tokens (57.9% of the estimated payload tokens), 26.8% lower than the Claude saving.
 
-The pre-run estimate of USD 0.58 overstated the cost about 4 times. It assumed 704008 input tokens and 128 output tokens per run. The client reported 631807 input tokens (896 uncached, 5774 cache read, 625137 cache creation) and 45210 output tokens, about 101 per run.
+The pre-run estimate of USD 0.58 was about 4 times the reported spend. It assumed 704008 input tokens and 128 output tokens per run. The client reported 631807 input tokens (896 uncached, 5774 cache read, 625137 cache creation) and 45210 output tokens, about 101 per run.
 
 Report output of `cargo run -q -p deslag-eval --locked -- report tmp/eval/live-claude-haiku-5-5-seed106.jsonl`, verbatim:
 
