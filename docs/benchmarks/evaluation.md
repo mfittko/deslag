@@ -2,13 +2,13 @@
 
 The method, the scoring rules and the non-inferiority criterion are predeclared in [benchmark-methodology.md](../benchmark-methodology.md). The corpus is `tests/evaluations/manifest.json`, which includes the generated corpus `tests/evaluations/generated/manifest.json` (seed 7700). It holds 228 synthetic tasks: the 21 pilot tasks (17 in the PLAN §14.4 categories, 2 incompressible controls, 2 evidence-drop controls) and 207 generated tasks (195 in the categories, 6 incompressible controls, 6 evidence-drop controls). It has 935 (task, arm) runs.
 
-This file holds live run 1 (pilot corpus), the predeclared live run 2 and its report (full corpus), the predeclared live run 3 (run-3 corpus), a two-call live plumbing smoke check and the offline mock dry runs (full corpus and run-3 corpus). The run-3 corpus is the standalone manifest `tests/evaluations/run3/manifest.json` (generator seed 10600, set `table`). It holds 222 synthetic tasks (210 JSON tasks, 6 incompressible controls, 6 evidence-drop controls) and 447 runs: baseline, `table-v2`, and `drop-evidence` on the evidence-drop controls.
+This file holds live run 1 (pilot corpus), the predeclared live run 2 and its report (full corpus), the predeclared live run 3 and its report (run-3 corpus), a two-call live plumbing smoke check and the offline mock dry runs (full corpus and run-3 corpus). The run-3 corpus is the standalone manifest `tests/evaluations/run3/manifest.json` (generator seed 10600, set `table`). It holds 222 synthetic tasks (210 JSON tasks, 6 incompressible controls, 6 evidence-drop controls) and 447 runs: baseline, `table-v2`, and `drop-evidence` on the evidence-drop controls.
 
 ## Status
 
 | Field | Value |
 | --- | --- |
-| Live model results | live run 1: `claude-haiku-5-5`, seed 16, Claude Code 2.1.296, 90 runs, reported total USD 0.0443; live run 2: `claude-haiku-5-5`, seed 77, Claude Code 2.1.303, 935 runs, reported total USD 0.2888 |
+| Live model results | live run 1: `claude-haiku-5-5`, seed 16, Claude Code 2.1.296, 90 runs, reported total USD 0.0443; live run 2: `claude-haiku-5-5`, seed 77, Claude Code 2.1.303, 935 runs, reported total USD 0.2888; live run 3: `claude-haiku-5-5`, seed 106, Claude Code 2.1.303, 447 runs, reported total USD 0.1478 |
 | Live run 1 verdicts | every arm is `not shown`; no arm is `inferior`; no arm passed |
 | Corpus size per arm | live run 1 (pilot): 4 to 12 non-control pairs; with zero discordant pairs an arm needs at least 81 to pass; below that an arm passes only when discordance favors it, and the observed favorable discordance (`lines-v1`, b = 0, c = 1) was insufficient |
 | Live run 1 failures | the only transform-arm failure, `lines-v2` on `buried-artifact-sha`, also failed in baseline |
@@ -16,9 +16,9 @@ This file holds live run 1 (pilot corpus), the predeclared live run 2 and its re
 | table-v1 CSV vs Markdown-KV | live run 1: 11/11 for both formats; one run on one model cannot rank them, and CSV does not become a default from it; live run 2: table-csv 99/105, Markdown-KV 102/105, neither arm passes |
 | Corpus size per arm (full corpus) | non-control pairs: json-minify 106, table-csv 105, table-mdkv 105, table-v2 105, lines-v1 106, lines-v2 105; changed non-control pairs (the transform changed the payload): json-minify 106, table-csv 104, table-mdkv 104, table-v2 105, lines-v1 104, lines-v2 105; 935 runs |
 | Live run 2 | `json-minify` passes (b = 1, c = 5, lower bound -0.3 pp); every other arm is `not shown`; no arm is `inferior`; `drop-evidence` lost the evidence on all 8 evidence-drop tasks; no transform becomes a default from it |
-| Live run 3 | predeclared, not run yet: run-3 corpus, `claude-haiku-5-5`, seed 106, `table-v2` primary with 210 non-control pairs, 447 runs, `--budget-usd 1.00`, estimate USD 0.58; run-3 corpus generated with seed 10600 and set `table` (`tests/evaluations/run3/manifest.json` sha256 `2ecb581995d8b615a1d3ea580835c24a3ff1f3e196f1701e6d81405bf66aedc1`), mock output, `variants` and `estimate` outputs reproduced on it at the merge commit of this PR |
+| Live run 3 | `table-v2` is `not shown` on 210 non-control pairs (b = 4, c = 3, lower bound -2.7 pp); it is not `inferior`; paired Claude prompt-token saving 33.0%; `drop-evidence` lost the evidence on all 6 evidence-drop tasks; `table-v2` does not become a default from it; run-3 corpus generated with seed 10600 and set `table` (`tests/evaluations/run3/manifest.json` sha256 `2ecb581995d8b615a1d3ea580835c24a3ff1f3e196f1701e6d81405bf66aedc1`), mock output, `variants` and `estimate` outputs reproduced on it at commit 93d8699 |
 | Mock dry run | below, full corpus and run-3 corpus, plumbing evidence only |
-| Generated | live run 1 at commit 2627754 (v0.1.0-alpha.2), 2026-10-12; live run 2 at commit 85b9eed (v0.1.0-alpha.4), 2026-10-19; mock output reproduced on the full corpus generated with seed 7700 at commit e159c9d (`tests/evaluations/generated/manifest.json` sha256 `e620eeec695f7a909b58eb4e087d22e21241286f2681c5b824a820588171d848`) |
+| Generated | live run 1 at commit 2627754 (v0.1.0-alpha.2), 2026-10-12; live run 2 at commit 85b9eed (v0.1.0-alpha.4), 2026-10-19; live run 3 at commit 93d8699, 2026-10-19; mock output reproduced on the full corpus generated with seed 7700 at commit e159c9d (`tests/evaluations/generated/manifest.json` sha256 `e620eeec695f7a909b58eb4e087d22e21241286f2681c5b824a820588171d848`) |
 
 ## Live runs
 
@@ -415,6 +415,95 @@ Secondary measure; it never decides pass or fail. Non-control tasks; drop-eviden
 | table-csv | 105 | 57472 | 55.5 | 105 | 214368 | 137015 | 77353 | 36.1 | -25.7 |
 | table-mdkv | 105 | 28525 | 27.6 | 105 | 214368 | 180097 | 34271 | 16.0 | -16.8 |
 | table-v2 | 105 | 58653 | 56.7 | 105 | 214368 | 135514 | 78854 | 36.8 | -25.6 |
+
+## Live run 3
+
+On 2026-10-19, the command in [Live run 3 (predeclared)](#live-run-3-predeclared) ran once at commit 93d8699 (v0.1.0-alpha.4 plus 3 commits) with model `claude-haiku-5-5`, Claude Code 2.1.303 and seed 106, on the run-3 corpus (`tests/evaluations/run3/manifest.json` sha256 `2ecb581995d8b615a1d3ea580835c24a3ff1f3e196f1701e6d81405bf66aedc1`). All 447 runs completed with exit 0 and no backend error. The harness reported a total spend of USD 0.1478, within the authorized USD 1.00. The results file `tmp/eval/live-claude-haiku-5-5-seed106.jsonl` is not committed. Its sha256 is `af1034df33ddb3a2939076c1df32f0321d64ab9270c926f379a4a83b1aee8757`.
+
+`table-v2` is `not shown`. It has 210 non-control pairs, so the run meets the predeclared size of 200 pairs and is the decisive run for this issue: `table-v2` does not pass the non-inferiority criterion on this corpus, model and seed. b = 4 and c = 3: the baseline succeeded on 207 of 210 tasks and `table-v2` on 206. The difference is -0.5 pp and the lower bound is -2.7 pp, below the -2.0 pp margin. `table-v2` is not `inferior`. Run 2 gave the same lower bound of -2.7 pp with 105 pairs. This report does not pool the two runs, because the methodology does not predeclare pooling.
+
+The controls behaved as designed: `drop-evidence` lost the evidence on all 6 evidence-drop tasks, `table-v2` kept the evidence on the 3 JSON evidence-drop tasks, and `table-v2` left all 6 incompressible tasks unchanged.
+
+Apart from the `drop-evidence` control, 7 runs failed: 3 baseline runs and 4 `table-v2` runs. No task failed in both runs, so all 7 are discordant pairs. Every failed answer is a single value or list with no added text, so these failures are not answer-format effects. The 4 `table-v2` failures:
+
+- `r3-json-002` and `r3-json-171`: id lookups in tables of 11 and 13 rows. The answer is the name of the first row. The matching row is the fourth row.
+- `r3-json-088`: the answer is the near-duplicate decoy id, which differs from the accepted id in its last character.
+- `r3-json-012`: the highest `amount_cents` among paid orders is 207. The answer is 183, the value of another paid order.
+
+The 3 baseline failures are a near-duplicate decoy id (`r3-json-124`), a wrong service for the highest error rate (`r3-json-200`), and a null-coupon set that lists 2 of the 4 accepted ids (`r3-json-054`). This report does not establish a cause for the `table-v2` failures.
+
+The paired Claude prompt-token saving of `table-v2`, the secondary measure, is 119079 tokens (33.0%). The percentage includes the system prompt and client overhead of every call. The `deslag-estimate-v1` payload saving is 87196 tokens (57.9% of the estimated payload tokens), 26.8% lower than the Claude saving.
+
+The pre-run estimate of USD 0.58 was about 4 times the reported spend. It assumed 704008 input tokens and 128 output tokens per run. The client reported 631807 input tokens (896 uncached, 5774 cache read, 625137 cache creation) and 45210 output tokens, about 101 per run.
+
+Report output of `cargo run -q -p deslag-eval --locked -- report tmp/eval/live-claude-haiku-5-5-seed106.jsonl`, verbatim:
+
+### Run
+
+| Field | Value |
+| --- | --- |
+| backend | claude |
+| model | claude-haiku-5-5 |
+| client version | 2.1.303 (Claude Code) |
+| seed | 106 |
+| result lines | 447 |
+| runs without a baseline partner | 0 |
+| reported cost, USD | 0.1478 |
+
+### Non-inferiority per arm
+
+Non-control tasks. Agresti-Min lower one-sided 95% bound; an arm passes when the bound exceeds -2.0 pp and is inferior when the upper one-sided 95% bound is below -2.0 pp. b: only baseline succeeded; c: only the arm succeeded.
+
+| Arm | Pairs | Unchanged | b | c | Baseline success | Arm success | Difference pp | Lower bound pp | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| table-v2 | 210 | 0 | 4 | 3 | 207/210 (98.6%) | 206/210 (98.1%) | -0.5 | -2.7 | not shown |
+
+### Per category
+
+| Category | Arm | Pairs | Baseline success | Arm success | Difference pp | Lower bound pp | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| aggregation | table-v2 | 35 | 34/35 (97.1%) | 34/35 (97.1%) | +0.0 | -7.7 | not shown |
+| api_query | table-v2 | 30 | 30/30 (100.0%) | 30/30 (100.0%) | +0.0 | -5.1 | not shown |
+| buried_evidence | table-v2 | 10 | 10/10 (100.0%) | 10/10 (100.0%) | +0.0 | -13.7 | not shown |
+| code_search | table-v2 | 35 | 35/35 (100.0%) | 35/35 (100.0%) | +0.0 | -4.4 | not shown |
+| exact_id | table-v2 | 35 | 33/35 (94.3%) | 34/35 (97.1%) | +2.9 | -6.2 | not shown |
+| failure_diagnosis | table-v2 | 35 | 35/35 (100.0%) | 34/35 (97.1%) | -2.9 | -8.9 | not shown |
+| issue_triage | table-v2 | 30 | 30/30 (100.0%) | 29/30 (96.7%) | -3.3 | -10.3 | not shown |
+
+### Table format read-back
+
+Non-control tasks that ran both table arms. Control tasks are excluded.
+
+| Format | Arm | Runs | Success | Wrong | Abstain | Backend error |
+| --- | --- | --- | --- | --- | --- | --- |
+| table-v1 CSV | table-csv | 0 | n/a | 0 | 0 | 0 |
+| Markdown-KV | table-mdkv | 0 | n/a | 0 | 0 | 0 |
+
+### Controls
+
+| Control | Arm | Pairs | Baseline success | Arm success | Unchanged | Discordant | Result |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| evidence_drop | drop-evidence | 6 | 6/6 (100.0%) | 0/6 (0.0%) | 0 | 6 | evidence loss detected |
+| evidence_drop | table-v2 | 3 | 3/3 (100.0%) | 3/3 (100.0%) | 0 | 0 | evidence kept |
+| incompressible | table-v2 | 6 | 6/6 (100.0%) | 6/6 (100.0%) | 6 | 0 | all variants unchanged |
+
+### Per arm
+
+All tasks, controls included. Payload tokens are estimates (deslag-estimate-v1). The columns from Input tokens to Turns are backend-reported sums; n/a means not reported, and a negative or non-finite value counts as not reported. Wall ms is the summed harness wall clock of the backend calls.
+
+| Arm | Runs | Success | Wrong | Abstain | Backend error | Payload tokens (estimate) | Input tokens | Output tokens | Cache read | Cache creation | Cost USD | Duration ms | Turns | Wall ms |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline | 222 | 219/222 (98.6%) | 3 | 0 | 0 | 154311 | 446 | 19921 | 1446 | 372152 | 0.0844 | 363479 | 223 | 637909 |
+| table-v2 | 219 | 215/219 (98.2%) | 4 | 0 | 0 | 64521 | 438 | 24890 | 3086 | 245870 | 0.0617 | 357941 | 219 | 627784 |
+| drop-evidence | 6 | 0/6 (0.0%) | 0 | 6 | 0 | 3259 | 12 | 399 | 1242 | 7115 | 0.0016 | 9582 | 6 | 17077 |
+
+### Paired savings
+
+Secondary measure; it never decides pass or fail. Non-control tasks; drop-evidence is a control arm and has no row. Saved is baseline minus arm, summed over the pairs. The estimate columns sum payload tokens (deslag-estimate-v1) over all pairs. The Claude columns sum backend-reported input, cache read and cache creation tokens over the pairs where both runs report all three; they include the system prompt and client overhead, which cancel in the difference but dilute the percentage. Estimate error % is the estimate saved on those same pairs minus the Claude saved, over the absolute Claude saved; positive means the estimate overstates the saving. A pair whose baseline or arm payload estimate is not a finite number of at least 0 is dropped from the whole row.
+
+| Arm | Pairs | Saved tokens (estimate) | Saved % (estimate) | Pairs with Claude tokens | Baseline prompt tokens (Claude) | Arm prompt tokens (Claude) | Saved tokens (Claude) | Saved % (Claude) | Estimate error % |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| table-v2 | 210 | 87196 | 57.9 | 210 | 360969 | 241890 | 119079 | 33.0 | -26.8 |
 
 ## Mock dry run
 
