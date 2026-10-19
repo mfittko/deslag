@@ -52,9 +52,11 @@ BPE files are already cached.
 
 These encodings belong to other model families. Their counts are calibration
 references. They are not Claude counts, and no deslag count is exact for any
-model family. Calibration against live Claude counts is pending: it needs an
-authorized out-of-band run of a provider token-counting endpoint, outside
-production code, and no API key was available. Production code never calls a counting API.
+model family. Per-fixture calibration against live Claude counts is pending:
+it needs an authorized out-of-band run of a provider token-counting endpoint,
+outside production code, and no API key was available. Production code never
+calls a counting API. [Error against live Claude savings](#error-against-live-claude-savings)
+compares savings, not per-fixture counts.
 
 ## Measured error
 
@@ -114,3 +116,27 @@ U+1F468 U+200D U+1F469 U+200D U+1F467 estimates 8 tokens. The references give
 The test pins the estimate for every fixture. A heuristic change that moves
 any count must bump the label version, then update these tables, the pinned
 counts and the bounds in the test.
+
+## Error against live Claude savings
+
+Live run 2 in [docs/benchmarks/evaluation.md](../../../../../docs/benchmarks/evaluation.md#live-run-2)
+(`claude-haiku-5-5`, Claude Code 2.1.303, seed 77, commit 85b9eed) reports
+both savings per arm over the same non-control pairs. Estimate saved sums the
+`deslag-estimate-v1` payload saving, baseline minus arm. Claude saved sums the
+backend-reported `input_tokens + cache_read_tokens + cache_creation_tokens`,
+baseline minus arm. Error is `(estimate saved - Claude saved) / |Claude saved|`.
+
+| Arm | Pairs | Estimate saved | Claude saved | Error |
+| --- | ---: | ---: | ---: | ---: |
+| `json-minify` | 106 | 31643 | 37373 | -15.3% |
+| `lines-v1` | 106 | 5552 | 7797 | -28.8% |
+| `lines-v2` | 105 | 15744 | 23743 | -33.7% |
+| `table-csv` | 105 | 57472 | 77353 | -25.7% |
+| `table-mdkv` | 105 | 28525 | 34271 | -16.8% |
+| `table-v2` | 105 | 58653 | 78854 | -25.6% |
+
+The estimate understates the Claude saving for every arm, by 15.3% to 33.7%.
+This matches the bias in [Recorded bounds and bias](#recorded-bounds-and-bias):
+a gain decision based on the estimate does not overstate the gain. One run on
+one model gives these numbers. The estimator, its label and its bounds stay
+unchanged.
