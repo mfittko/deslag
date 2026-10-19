@@ -1015,7 +1015,7 @@ fn doctor_fails_on_a_hook_conflict_only_while_the_hook_compresses() {
     let stdout = text(&output.stdout);
     assert_eq!(output.status.code(), Some(1), "{stdout}");
     assert!(
-        stdout.contains("FAIL: compression is on but foreign PostToolUse hooks in 2 files"),
+        stdout.contains("FAIL: compression is on but foreign PostToolUse hooks in 2 file(s)"),
         "{stdout}"
     );
     assert_eq!(sandbox.run(&["status"]).status.code(), Some(0));

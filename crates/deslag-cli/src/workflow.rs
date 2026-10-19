@@ -287,13 +287,13 @@ pub fn doctor() -> ExitCode {
     let count = facts.conflicts.len();
     check(
         match (count, facts.toggle_on && facts.owner == Owner::Hook) {
-            (0, _) => Ok("no other PostToolUse hook matches a routed tool".into()),
+            (0, _) => Ok("no other PostToolUse hook matches Bash or the mcp__* wildcard; literal MCP tool matchers are not checked".into()),
             (_, true) => Err(format!(
-                "compression is on but foreign PostToolUse hooks in {count} files match a routed tool, \
+                "compression is on but foreign PostToolUse hooks in {count} file(s) match Bash or mcp__*, \
              so the hook leaves those results unchanged; see the conflict lines above"
             )),
             (_, false) => Ok(format!(
-                "foreign PostToolUse hooks in {count} files match a routed tool; they block the hook only \
+                "foreign PostToolUse hooks in {count} file(s) match Bash or mcp__*; they block the hook only \
              while compression is on with owner hook"
             )),
         },

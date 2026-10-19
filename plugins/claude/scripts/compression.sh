@@ -75,7 +75,7 @@ status() {
   [ -z "$data" ] || "$root/scripts/install.sh" status "$data" || true
   [ "$state" = on ] && [ -n "$data" ] || return 0
   local version bin
-  version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$root/.claude-plugin/plugin.json" | head -n 1)
+  version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$root/.claude-plugin/plugin.json" 2>/dev/null | head -n 1 || true)
   bin=$data/bin/$version/deslag
   if [ -n "$version" ] && [ -f "$bin" ] && [ -x "$bin" ]; then
     "$bin" status </dev/null 2>/dev/null | grep '^conflict' || true
