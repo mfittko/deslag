@@ -6,7 +6,9 @@
 #   on      Write `on` and make the hook the compression owner (<state dir>/owner).
 #   off     Write `off`. The owner stays unchanged.
 #   status  Report the toggle, the owner and, with a data dir, whether the
-#           version-matched binary is installed. An empty subcommand is status.
+#           version-matched binary is installed. With compression on and that
+#           binary installed, also the `conflict` lines of `deslag status`.
+#           An empty subcommand is status.
 # The state dir rule is deslag_telemetry::state_dir: DESLAG_STATE_DIR, else
 # $XDG_STATE_HOME/deslag, else $HOME/.local/state/deslag. Empty and relative
 # values are skipped. <data-dir> falls back to $CLAUDE_PLUGIN_DATA.
@@ -71,6 +73,13 @@ status() {
     echo "note: the owner is $owner, so the hook does not compress. Run /deslag:compression on to make the hook the owner."
   fi
   [ -z "$data" ] || "$root/scripts/install.sh" status "$data" || true
+  [ "$state" = on ] && [ -n "$data" ] || return 0
+  local version bin
+  version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$root/.claude-plugin/plugin.json" | head -n 1)
+  bin=$data/bin/$version/deslag
+  if [ -n "$version" ] && [ -f "$bin" ] && [ -x "$bin" ]; then
+    "$bin" status </dev/null 2>/dev/null | grep '^conflict' || true
+  fi
 }
 
 on() {

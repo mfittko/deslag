@@ -311,6 +311,24 @@ expect_fail "compression on refuses a state file that is a directory" "not a fil
 expect_eq "compression on leaves the directory and no temp file" "compression" "$(ls -A "$tmp/state-dirfile")"
 expect_fail "compression rejects an unknown subcommand" "usage" run_compression DESLAG_STATE_DIR="$st" -- frobnicate
 
+# With compression on, the installed binary's `status` conflict lines are shown.
+cst=$tmp/state-conflict
+cdata=$tmp/data-conflict
+mkdir -p "$cdata/bin/$version"
+printf '#!/bin/sh\necho "deslag status line"\necho "conflict: stub $*"\necho "conflict fix: stub fix"\ncat\n' >"$cdata/bin/$version/deslag"
+chmod 755 "$cdata/bin/$version/deslag"
+out=$(run_compression DESLAG_STATE_DIR="$cst" -- on "$cdata" </dev/null)
+expect_match "compression on prints the binary's conflict lines" "conflict: stub status.*conflict fix: stub fix" "$(tr '\n' ' ' <<<"$out")"
+expect_eq "compression on prints only the conflict lines of the binary" absent \
+  "$(grep -q 'deslag status line' <<<"$out" && echo present || echo absent)"
+expect_match "compression status prints the binary's conflict lines" "conflict: stub status" \
+  "$(echo stdin | run_compression DESLAG_STATE_DIR="$cst" -- status "$cdata")"
+expect_eq "compression status without a binary prints no conflict line" absent \
+  "$(run_compression DESLAG_STATE_DIR="$cst" -- status "$tmp/data-none" | grep -q '^conflict' && echo present || echo absent)"
+out=$(run_compression DESLAG_STATE_DIR="$cst" -- off "$cdata")
+expect_eq "compression off prints no conflict line" absent \
+  "$(grep -q '^conflict' <<<"$out" && echo present || echo absent)"
+
 hooks_json=$root/hooks/hooks.json
 expect_eq "hooks.json registers only PostToolUse" '["PostToolUse"]' "$(jq -c '.hooks | keys' "$hooks_json")"
 # shellcheck disable=SC2016 # the literal placeholder is expected

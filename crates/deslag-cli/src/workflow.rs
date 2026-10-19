@@ -19,6 +19,7 @@ use deslag_proxy::session::{self, Owner};
 use deslag_telemetry as report;
 
 use crate::config::{self, Config};
+use crate::hook_conflicts::{self, Conflict};
 use crate::local;
 
 const RUN_USAGE: &str = "usage: deslag run [--] <command> [args...]";
@@ -90,6 +91,7 @@ struct Facts {
     state_dir: Option<PathBuf>,
     owner: Owner,
     toggle_on: bool,
+    conflicts: Vec<Conflict>,
 }
 
 impl Facts {
@@ -106,12 +108,58 @@ impl Facts {
                 toggle.split('\n').next() == Some("on"),
             )
         });
+        // Same sources as the hook: an empty variable counts as unset, and the
+        // project dir falls back to the current dir in place of the event cwd.
+        let env = |key: &str| std::env::var_os(key).filter(|value| !value.is_empty());
+        let config_dir = env("CLAUDE_CONFIG_DIR")
+            .map(PathBuf::from)
+            .or_else(|| env("HOME").map(|home| PathBuf::from(home).join(".claude")));
+        let project_dir = env("CLAUDE_PROJECT_DIR")
+            .map(PathBuf::from)
+            .or_else(|| std::env::current_dir().ok());
+        let conflicts = hook_conflicts::all(
+            config_dir.as_deref(),
+            project_dir.as_deref(),
+            state_dir.as_deref(),
+        );
         Facts {
             config_path,
             config,
             state_dir,
             owner,
             toggle_on,
+            conflicts,
+        }
+    }
+
+    /// One `conflict:` line per conflicting file, each followed by its fix.
+    /// compression.sh greps the `conflict` prefix.
+    fn print_conflicts(&self) {
+        if self.conflicts.is_empty() {
+            println!("hook conflicts: none");
+            return;
+        }
+        let ignore = self.state_dir.as_ref().map_or_else(
+            || "<state dir>/ignore-hooks".into(),
+            |dir| dir.join("ignore-hooks").display().to_string(),
+        );
+        for conflict in &self.conflicts {
+            let path = conflict.path.display();
+            println!(
+                "conflict: PostToolUse hook in {path} also matches {}; \
+                 deslag leaves those results unchanged",
+                conflict.tools.join(", ")
+            );
+            match &conflict.plugin {
+                Some(key) => println!(
+                    "conflict fix: only if plugin {key} never returns updatedToolOutput, \
+                     add the line `{key}` to {ignore}"
+                ),
+                None => println!(
+                    "conflict fix: hooks in settings files cannot be listed in ignore-hooks; \
+                     remove the hook or narrow its matcher in {path}"
+                ),
+            }
         }
     }
 
@@ -174,6 +222,7 @@ impl Facts {
             "local service: {}",
             if local { "running" } else { "not running" }
         );
+        self.print_conflicts();
     }
 }
 
@@ -234,6 +283,21 @@ pub fn doctor() -> ExitCode {
             owner_name(facts.owner)
         )));
     }
+    // A conflict blocks compression only while the plugin hook compresses.
+    let count = facts.conflicts.len();
+    check(
+        match (count, facts.toggle_on && facts.owner == Owner::Hook) {
+            (0, _) => Ok("no other PostToolUse hook matches a routed tool".into()),
+            (_, true) => Err(format!(
+                "compression is on but foreign PostToolUse hooks in {count} files match a routed tool, \
+             so the hook leaves those results unchanged; see the conflict lines above"
+            )),
+            (_, false) => Ok(format!(
+                "foreign PostToolUse hooks in {count} files match a routed tool; they block the hook only \
+             while compression is on with owner hook"
+            )),
+        },
+    );
     if let Ok(config) = &facts.config {
         check(check_base_url(config.listen));
     }
