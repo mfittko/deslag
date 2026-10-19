@@ -1,0 +1,97 @@
+[
+  {
+    "service_id": "svc_VR43JCP8",
+    "service_name": "hazy-jackal",
+    "tier": "bronze",
+    "error_rate": 177.20,
+    "owner": null
+  },
+  {
+    "service_id": "svc_Q12XN7ZV",
+    "service_name": "eager-marmot",
+    "tier": "gold",
+    "error_rate": 100.65,
+    "owner": null
+  },
+  {
+    "service_id": "svc_Q2YQ14ZR",
+    "service_name": "fuzzy-badger",
+    "tier": "bronze",
+    "error_rate": 109.51,
+    "owner": null
+  },
+  {
+    "service_id": "svc_FKJA1CH3",
+    "service_name": "brisk-lemur",
+    "tier": "bronze",
+    "error_rate": 159.78
+  },
+  {
+    "service_id": "svc_XF700ZVQ",
+    "service_name": "eager-falcon",
+    "tier": "bronze",
+    "error_rate": 138.15
+  },
+  {
+    "service_id": "svc_G15ZG53F",
+    "service_name": "jolly-egret",
+    "tier": "bronze",
+    "error_rate": 134.52,
+    "owner": "infra-team"
+  },
+  {
+    "service_id": "svc_NBJN0YJK",
+    "service_name": "amber-marmot",
+    "tier": "bronze",
+    "error_rate": 146.42,
+    "owner": "infra-team"
+  },
+  {
+    "service_id": "svc_02BZJ8C7",
+    "service_name": "ivory-koala",
+    "tier": "bronze",
+    "error_rate": 197.76,
+    "owner": "core-team"
+  },
+  {
+    "service_id": "svc_MFT038HR",
+    "service_name": "lunar-heron",
+    "tier": "bronze",
+    "error_rate": 164.86,
+    "owner": "alpha-team"
+  },
+  {
+    "service_id": "svc_DWEJSMW6",
+    "service_name": "brisk-koala",
+    "tier": "bronze",
+    "error_rate": 184.20
+  },
+  {
+    "service_id": "svc_RE80JM71",
+    "service_name": "gentle-gecko",
+    "tier": "bronze",
+    "error_rate": 173.81,
+    "owner": null
+  },
+  {
+    "service_id": "svc_BYNBTTNF",
+    "service_name": "eager-gecko",
+    "tier": "bronze",
+    "error_rate": 150.94,
+    "owner": "edge-team"
+  },
+  {
+    "service_id": "svc_FNA1S6GZ",
+    "service_name": "calm-dingo",
+    "tier": "bronze",
+    "error_rate": 124.03,
+    "owner": null
+  },
+  {
+    "service_id": "svc_Q12XN7Z7",
+    "service_name": "eager-marmot-2",
+    "tier": "bronze",
+    "error_rate": 116.61,
+    "owner": null
+  }
+]

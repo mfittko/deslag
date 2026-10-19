@@ -1,0 +1,78 @@
+[
+  {
+    "match_id": "mat_NXNFEHW0",
+    "symbol": "jolly-jackal",
+    "kind": "fn",
+    "line": 162,
+    "crate": "beta-team"
+  },
+  {
+    "match_id": "mat_0AR9CFNP",
+    "symbol": "lunar-falcon",
+    "kind": "fn",
+    "line": 167,
+    "crate": "infra-team"
+  },
+  {
+    "match_id": "mat_SHQR1XW7",
+    "symbol": "dusty-cedar-2",
+    "kind": "fn",
+    "line": 120,
+    "crate": null
+  },
+  {
+    "match_id": "mat_PJJEXQFG",
+    "symbol": "eager-heron",
+    "kind": "fn",
+    "line": 142,
+    "crate": null
+  },
+  {
+    "match_id": "mat_02JMKNZG",
+    "symbol": "ivory-falcon",
+    "kind": "fn",
+    "line": 133,
+    "crate": null
+  },
+  {
+    "match_id": "mat_8Q1K2CME",
+    "symbol": "jolly-iguana",
+    "kind": "fn",
+    "line": 140
+  },
+  {
+    "match_id": "mat_SHQR1XWR",
+    "symbol": "dusty-cedar",
+    "kind": "macro",
+    "line": 105,
+    "crate": null
+  },
+  {
+    "match_id": "mat_99JYNFP6",
+    "symbol": "hazy-badger",
+    "kind": "fn",
+    "line": 176,
+    "crate": "alpha-team"
+  },
+  {
+    "match_id": "mat_S71B40R3",
+    "symbol": "lunar-egret",
+    "kind": "fn",
+    "line": 155,
+    "crate": "data-team"
+  },
+  {
+    "match_id": "mat_Z9HET4PB",
+    "symbol": "jolly-marmot",
+    "kind": "fn",
+    "line": 113,
+    "crate": null
+  },
+  {
+    "match_id": "mat_E1CBQWC5",
+    "symbol": "gentle-iguana",
+    "kind": "fn",
+    "line": 125,
+    "crate": "core-team"
+  }
+]

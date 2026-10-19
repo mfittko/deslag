@@ -1,0 +1,91 @@
+[
+  {
+    "user_id": "usr_SSDW6A1S",
+    "login": "keen-koala",
+    "role": "member",
+    "quota_gb": 174.20,
+    "team": null
+  },
+  {
+    "user_id": "usr_6ZNFKW2P",
+    "login": "dusty-egret",
+    "role": "member",
+    "quota_gb": 127.47,
+    "team": "beta-team"
+  },
+  {
+    "user_id": "usr_AQF72WFM",
+    "login": "fuzzy-marmot",
+    "role": "member",
+    "quota_gb": 186.69
+  },
+  {
+    "user_id": "usr_64KZBF8K",
+    "login": "ivory-marmot",
+    "role": "owner",
+    "quota_gb": 213.90,
+    "team": "infra-team"
+  },
+  {
+    "user_id": "usr_64KZBF87",
+    "login": "ivory-marmot-2",
+    "role": "member",
+    "quota_gb": 112.98,
+    "team": "infra-team"
+  },
+  {
+    "user_id": "usr_NADJESMF",
+    "login": "gentle-egret",
+    "role": "member",
+    "quota_gb": 153.69
+  },
+  {
+    "user_id": "usr_7C4YS4P9",
+    "login": "amber-badger",
+    "role": "member",
+    "quota_gb": 119.22,
+    "team": "core-team"
+  },
+  {
+    "user_id": "usr_VT1Z55GB",
+    "login": "gentle-marmot",
+    "role": "member",
+    "quota_gb": 160.89,
+    "team": null
+  },
+  {
+    "user_id": "usr_HX8P5MKJ",
+    "login": "jolly-marmot",
+    "role": "member",
+    "quota_gb": 132.42,
+    "team": "data-team"
+  },
+  {
+    "user_id": "usr_E6388QPB",
+    "login": "amber-egret",
+    "role": "member",
+    "quota_gb": 142.69,
+    "team": "beta-team"
+  },
+  {
+    "user_id": "usr_1K4AJWD5",
+    "login": "fuzzy-koala",
+    "role": "member",
+    "quota_gb": 138.09,
+    "team": "core-team"
+  },
+  {
+    "user_id": "usr_FBT35X9N",
+    "login": "hazy-badger",
+    "role": "member",
+    "quota_gb": 177.37,
+    "team": "infra-team"
+  },
+  {
+    "user_id": "usr_8HA83389",
+    "login": "eager-lemur",
+    "role": "member",
+    "quota_gb": 169.86,
+    "team": null
+  }
+]

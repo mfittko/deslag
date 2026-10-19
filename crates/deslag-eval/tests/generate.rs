@@ -44,14 +44,30 @@ fn files(dir: &Path, rel: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
 }
 
 #[test]
-fn regenerating_the_committed_corpus_is_byte_identical() {
-    let committed = evaluations().join("generated");
+fn regenerating_the_committed_corpora_is_byte_identical() {
+    for dir in ["generated", "run3"] {
+        regenerates_byte_identically(dir);
+    }
+}
+
+/// Regenerates `tests/evaluations/<dir>` from its committed seed and set into a fresh directory.
+fn regenerates_byte_identically(dir: &str) {
+    let committed = evaluations().join(dir);
     let doc: Value =
         serde_json::from_str(&std::fs::read_to_string(committed.join("manifest.json")).unwrap())
             .unwrap();
     let seed = doc["seed"].as_u64().unwrap().to_string();
-    let out = fresh_dir("regenerated");
-    let o = eval(&["generate", "--seed", &seed, "--out", out.to_str().unwrap()]);
+    let set = doc["set"].as_str().unwrap_or("full");
+    let out = fresh_dir(&format!("regenerated-{dir}"));
+    let o = eval(&[
+        "generate",
+        "--seed",
+        &seed,
+        "--set",
+        set,
+        "--out",
+        out.to_str().unwrap(),
+    ]);
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
     let (mut a, mut b) = (BTreeMap::new(), BTreeMap::new());
     files(&committed, Path::new(""), &mut a);
@@ -176,7 +192,13 @@ fn self_check_keeps_null_distinct_from_a_missing_key() {
 
 #[test]
 fn buried_json_tasks_are_lookups_with_the_answer_in_the_last_40_percent() {
-    let dir = evaluations().join("generated");
+    for (dir, min) in [("generated", 5), ("run3", 10)] {
+        buried_lookups(dir, min);
+    }
+}
+
+fn buried_lookups(dir: &str, min: usize) {
+    let dir = evaluations().join(dir);
     let doc: Value =
         serde_json::from_str(&std::fs::read_to_string(dir.join("manifest.json")).unwrap()).unwrap();
     let mut buried = 0;
@@ -199,7 +221,7 @@ fn buried_json_tasks_are_lookups_with_the_answer_in_the_last_40_percent() {
             .collect();
         assert!(at.len() == 1 && at[0] * 10 >= rows.len() * 6, "{q} {at:?}");
     }
-    assert!(buried >= 5, "{buried} buried JSON tasks");
+    assert!(buried >= min, "{buried} buried JSON tasks");
 }
 
 #[test]
@@ -252,4 +274,20 @@ fn include_loads_one_level_and_refuses_nesting_and_duplicate_ids() {
     let o = eval(&["variants", top.to_str().unwrap()]);
     assert_eq!(o.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&o.stderr).contains("duplicate id"));
+}
+
+#[test]
+fn generate_refuses_an_unknown_set() {
+    let out = fresh_dir("unknown-set");
+    let o = eval(&[
+        "generate",
+        "--seed",
+        "1",
+        "--set",
+        "logs",
+        "--out",
+        out.to_str().unwrap(),
+    ]);
+    assert_eq!(o.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&o.stderr).contains("unknown set logs"));
 }

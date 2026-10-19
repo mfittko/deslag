@@ -2,7 +2,7 @@
 
 The method, the scoring rules and the non-inferiority criterion are predeclared in [benchmark-methodology.md](../benchmark-methodology.md). The corpus is `tests/evaluations/manifest.json`, which includes the generated corpus `tests/evaluations/generated/manifest.json` (seed 7700). It holds 228 synthetic tasks: the 21 pilot tasks (17 in the PLAN §14.4 categories, 2 incompressible controls, 2 evidence-drop controls) and 207 generated tasks (195 in the categories, 6 incompressible controls, 6 evidence-drop controls). It has 935 (task, arm) runs.
 
-This file holds live run 1 (pilot corpus), the predeclared live run 2 and its report (full corpus), a two-call live plumbing smoke check and the offline mock dry run (full corpus).
+This file holds live run 1 (pilot corpus), the predeclared live run 2 and its report (full corpus), the predeclared live run 3 (run-3 corpus), a two-call live plumbing smoke check and the offline mock dry runs (full corpus and run-3 corpus). The run-3 corpus is the standalone manifest `tests/evaluations/run3/manifest.json` (generator seed 10600, set `table`). It holds 222 synthetic tasks (210 JSON tasks, 6 incompressible controls, 6 evidence-drop controls) and 447 runs: baseline, `table-v2`, and `drop-evidence` on the evidence-drop controls.
 
 ## Status
 
@@ -16,7 +16,8 @@ This file holds live run 1 (pilot corpus), the predeclared live run 2 and its re
 | table-v1 CSV vs Markdown-KV | live run 1: 11/11 for both formats; one run on one model cannot rank them, and CSV does not become a default from it; live run 2: table-csv 99/105, Markdown-KV 102/105, neither arm passes |
 | Corpus size per arm (full corpus) | non-control pairs: json-minify 106, table-csv 105, table-mdkv 105, table-v2 105, lines-v1 106, lines-v2 105; changed non-control pairs (the transform changed the payload): json-minify 106, table-csv 104, table-mdkv 104, table-v2 105, lines-v1 104, lines-v2 105; 935 runs |
 | Live run 2 | `json-minify` passes (b = 1, c = 5, lower bound -0.3 pp); every other arm is `not shown`; no arm is `inferior`; `drop-evidence` lost the evidence on all 8 evidence-drop tasks; no transform becomes a default from it |
-| Mock dry run | below, full corpus, plumbing evidence only |
+| Live run 3 | predeclared, not run yet: run-3 corpus, `claude-haiku-5-5`, seed 106, `table-v2` primary with 210 non-control pairs, 447 runs, `--budget-usd 1.00`, estimate USD 0.58; run-3 corpus generated with seed 10600 and set `table` (`tests/evaluations/run3/manifest.json` sha256 `2ecb581995d8b615a1d3ea580835c24a3ff1f3e196f1701e6d81405bf66aedc1`), mock output, `variants` and `estimate` outputs reproduced on it at the merge commit of this PR |
+| Mock dry run | below, full corpus and run-3 corpus, plumbing evidence only |
 | Generated | live run 1 at commit 2627754 (v0.1.0-alpha.2), 2026-10-12; live run 2 at commit 85b9eed (v0.1.0-alpha.4), 2026-10-19; mock output reproduced on the full corpus generated with seed 7700 at commit e159c9d (`tests/evaluations/generated/manifest.json` sha256 `e620eeec695f7a909b58eb4e087d22e21241286f2681c5b824a820588171d848`) |
 
 ## Live runs
@@ -86,6 +87,58 @@ Estimate with the default assumptions, from the same command without the assumpt
 The default estimate exceeds `--budget-usd 3.00`. The run-2 estimate of USD 2.59 is below USD 2.70, the point at which the runner stops (the budget minus the per-run cap). Before each call, the runner stops when the spent amount plus the per-run cap would exceed the budget.
 
 After a run, add its report as a new section above the mock dry run, with the client version and the total spend, and update the Status table.
+
+### Live run 3 (predeclared)
+
+Run 3 is predeclared here before any live call on the run-3 corpus. It decides `table-v2`, which live run 2 left at `not shown` with 105 pairs. `table-v2` is the primary arm of this run.
+
+The run-3 corpus is `tests/evaluations/run3/manifest.json`. It is a standalone manifest without an include. The generator wrote it with `cargo run -q -p deslag-eval --locked -- generate --seed 10600 --set table --out tests/evaluations/run3`. The manifest sha256 is `2ecb581995d8b615a1d3ea580835c24a3ff1f3e196f1701e6d81405bf66aedc1`. The corpus holds 222 synthetic tasks: 210 JSON tasks, 6 incompressible controls and 6 evidence-drop controls. Its task ids start with `r3-`, so its results cannot be confused with run 2. The JSON tasks use the same slot logic as the run-2 generator and therefore the same share of hard tasks: buried evidence (10 tasks), exact ids, near-duplicate decoy rows, null vs missing fields, number lexemes and deep rows. The generator self-checks every answer against the uncompressed payload.
+
+The manifest arms restrict the run to the baseline and `table-v2`. Every non-control task and every incompressible control lists `table-v2` only. The 3 JSON evidence-drop controls list `drop-evidence` and `table-v2`. The 3 log evidence-drop controls list `drop-evidence` only. The run has 447 (task, arm) runs: 222 baseline, 219 `table-v2` and 6 `drop-evidence`. `table-v2` has 210 non-control pairs, and the transform changes the payload in all 210.
+
+The corpus, the generator and the manifest are committed and frozen before this run. No task is changed after live results. The scoring rules and the non-inferiority criterion are those of the methodology and stay unchanged. The paired Claude prompt-token savings are a secondary measure and never decide pass or fail. Run 3 runs once. It is not rerun without a new operator approval.
+
+```sh
+mkdir -p tmp/eval
+DESLAG_EVAL_LIVE=1 cargo run -q -p deslag-eval --locked -- run \
+  --manifest tests/evaluations/run3/manifest.json \
+  --backend claude --model claude-haiku-5-5 --seed 106 \
+  --budget-usd 1.00 --per-run-usd 0.30 \
+  --out tmp/eval/live-claude-haiku-5-5-seed106.jsonl
+cargo run -q -p deslag-eval --locked -- report tmp/eval/live-claude-haiku-5-5-seed106.jsonl
+```
+
+Run 3 states its own assumptions from the live run 2 measurement. The run-2 estimate of USD 2.59 used prices of 1 and 5 USD per Mtok, 1000 overhead tokens per call and 128 output tokens per run. The reported spend was USD 0.2888, so the estimate was about 9 times the spend. The client reported 1441504 input tokens against 1590323 estimated, so the 1000-token overhead held. It reported about 80 output tokens per run, so 128 output tokens stay. Run 3 assumes half the run-2 prices: 0.5 and 2.5 USD per Mtok. With these prices the estimate is still about 4.5 times the spend that the run-2 ratio predicts (about USD 0.13). The defaults stay unchanged.
+
+Estimate with the run-3 assumptions, from `cargo run -q -p deslag-eval --locked -- estimate --manifest tests/evaluations/run3/manifest.json --input-usd-per-mtok 0.5 --output-usd-per-mtok 2.5 --overhead-tokens 1000 --output-tokens 128 --per-run-usd 0.30`:
+
+| Field | Value |
+| --- | --- |
+| Runs (task, arm) | 447 |
+| Estimated input tokens (deslag-estimate-v1, incl. 1000 overhead per run) | 704008 |
+| Assumed output tokens per run | 128 |
+| Assumed prices, USD per Mtok | input 0.5 (x1.25 cache write), output 2.5 |
+| Estimated cost | USD 0.58 |
+| Cap if every call stays within --per-run-usd (447 runs at 0.3) | USD 134.10 |
+
+Estimate with the default assumptions, from `cargo run -q -p deslag-eval --locked -- estimate --manifest tests/evaluations/run3/manifest.json`:
+
+| Field | Value |
+| --- | --- |
+| Runs (task, arm) | 447 |
+| Estimated input tokens (deslag-estimate-v1, incl. 2000 overhead per run) | 1151008 |
+| Assumed output tokens per run | 256 |
+| Assumed prices, USD per Mtok | input 3 (x1.25 cache write), output 15 |
+| Estimated cost | USD 6.03 |
+| Cap if every call stays within --per-run-usd (447 runs at 0.3) | USD 134.10 |
+
+The default estimate exceeds `--budget-usd 1.00`. The run-3 estimate of USD 0.58 is below USD 1.00 and below USD 0.70, the point at which the runner stops (the budget minus the per-run cap). Before each call, the runner stops when the spent amount plus the per-run cap would exceed the budget. The operator authorized at most USD 1.00 of live spend for run 3.
+
+The run-3 prices are calibrated from the run-2 reported spend. With the run-2 prices of 1 and 5 USD per Mtok, the same command estimates USD 1.17. The runner also charges the per-run cap of USD 0.30 for each run without a valid reported cost, so three such runs stop it. A budget stop or a per-run cap stop ends run 3, and run 3 is not rerun. A stopped run is reported as it is, from the pairs where both runs completed. Below 200 non-control pairs, the `table-v2` verdict is reported but is not decisive for this issue.
+
+The run-3 mock dry run is in [Mock dry run (run-3 corpus)](#mock-dry-run-run-3-corpus). The run-3 payload sizes are in [Run-3 payload sizes](#run-3-payload-sizes).
+
+After the run, add its report as a new section above the mock dry run, with the commit, the client version, the total spend, both savings measures and the results-file sha256, and update the Status table.
 
 ## Live plumbing smoke check
 
@@ -497,6 +550,87 @@ Secondary measure; it never decides pass or fail. Non-control tasks; drop-eviden
 | table-mdkv | 105 | 28525 | 27.6 | 0 | n/a | n/a | n/a | n/a | n/a |
 | table-v2 | 105 | 58653 | 56.7 | 0 | n/a | n/a | n/a | n/a | n/a |
 
+## Mock dry run (run-3 corpus)
+
+This is the mock dry run over the run-3 corpus (`tests/evaluations/run3/manifest.json`, 222 tasks, 447 runs). The mock backend works as in [Mock dry run](#mock-dry-run): it measures evidence presence only. The run shows that every non-control `table-v2` run keeps the answer, that `drop-evidence` loses the evidence on all 6 evidence-drop controls and that `table-v2` leaves all 6 incompressible controls unchanged. The verdicts below describe the mock backend only. They predict nothing about live run 3.
+
+```sh
+mkdir -p tmp/eval
+rm -f tmp/eval/mock-run3-seed106.jsonl
+cargo run -q -p deslag-eval --locked -- run --manifest tests/evaluations/run3/manifest.json \
+  --backend mock --seed 106 --out tmp/eval/mock-run3-seed106.jsonl
+cargo run -q -p deslag-eval --locked -- report tmp/eval/mock-run3-seed106.jsonl
+```
+
+Report output, verbatim:
+
+### Run
+
+| Field | Value |
+| --- | --- |
+| backend | mock |
+| model | n/a |
+| client version | deslag-eval 0.1.0-alpha.4 |
+| seed | 106 |
+| result lines | 447 |
+| runs without a baseline partner | 0 |
+| reported cost, USD | n/a |
+
+### Non-inferiority per arm
+
+Non-control tasks. Agresti-Min lower one-sided 95% bound; an arm passes when the bound exceeds -2.0 pp and is inferior when the upper one-sided 95% bound is below -2.0 pp. b: only baseline succeeded; c: only the arm succeeded.
+
+| Arm | Pairs | Unchanged | b | c | Baseline success | Arm success | Difference pp | Lower bound pp | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| table-v2 | 210 | 0 | 0 | 0 | 210/210 (100.0%) | 210/210 (100.0%) | +0.0 | -0.8 | passes |
+
+### Per category
+
+| Category | Arm | Pairs | Baseline success | Arm success | Difference pp | Lower bound pp | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| aggregation | table-v2 | 35 | 35/35 (100.0%) | 35/35 (100.0%) | +0.0 | -4.4 | not shown |
+| api_query | table-v2 | 30 | 30/30 (100.0%) | 30/30 (100.0%) | +0.0 | -5.1 | not shown |
+| buried_evidence | table-v2 | 10 | 10/10 (100.0%) | 10/10 (100.0%) | +0.0 | -13.7 | not shown |
+| code_search | table-v2 | 35 | 35/35 (100.0%) | 35/35 (100.0%) | +0.0 | -4.4 | not shown |
+| exact_id | table-v2 | 35 | 35/35 (100.0%) | 35/35 (100.0%) | +0.0 | -4.4 | not shown |
+| failure_diagnosis | table-v2 | 35 | 35/35 (100.0%) | 35/35 (100.0%) | +0.0 | -4.4 | not shown |
+| issue_triage | table-v2 | 30 | 30/30 (100.0%) | 30/30 (100.0%) | +0.0 | -5.1 | not shown |
+
+### Table format read-back
+
+Non-control tasks that ran both table arms. Control tasks are excluded.
+
+| Format | Arm | Runs | Success | Wrong | Abstain | Backend error |
+| --- | --- | --- | --- | --- | --- | --- |
+| table-v1 CSV | table-csv | 0 | n/a | 0 | 0 | 0 |
+| Markdown-KV | table-mdkv | 0 | n/a | 0 | 0 | 0 |
+
+### Controls
+
+| Control | Arm | Pairs | Baseline success | Arm success | Unchanged | Discordant | Result |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| evidence_drop | drop-evidence | 6 | 6/6 (100.0%) | 0/6 (0.0%) | 0 | 6 | evidence loss detected |
+| evidence_drop | table-v2 | 3 | 3/3 (100.0%) | 3/3 (100.0%) | 0 | 0 | evidence kept |
+| incompressible | table-v2 | 6 | 6/6 (100.0%) | 6/6 (100.0%) | 6 | 0 | all variants unchanged |
+
+### Per arm
+
+All tasks, controls included. Payload tokens are estimates (deslag-estimate-v1). The columns from Input tokens to Turns are backend-reported sums; n/a means not reported, and a negative or non-finite value counts as not reported. Wall ms is the summed harness wall clock of the backend calls.
+
+| Arm | Runs | Success | Wrong | Abstain | Backend error | Payload tokens (estimate) | Input tokens | Output tokens | Cache read | Cache creation | Cost USD | Duration ms | Turns | Wall ms |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline | 222 | 222/222 (100.0%) | 0 | 0 | 0 | 154311 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| table-v2 | 219 | 219/219 (100.0%) | 0 | 0 | 0 | 64521 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+| drop-evidence | 6 | 0/6 (0.0%) | 0 | 6 | 0 | 3259 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | 0 |
+
+### Paired savings
+
+Secondary measure; it never decides pass or fail. Non-control tasks; drop-evidence is a control arm and has no row. Saved is baseline minus arm, summed over the pairs. The estimate columns sum payload tokens (deslag-estimate-v1) over all pairs. The Claude columns sum backend-reported input, cache read and cache creation tokens over the pairs where both runs report all three; they include the system prompt and client overhead, which cancel in the difference but dilute the percentage. Estimate error % is the estimate saved on those same pairs minus the Claude saved, over the absolute Claude saved; positive means the estimate overstates the saving. A pair whose baseline or arm payload estimate is not a finite number of at least 0 is dropped from the whole row.
+
+| Arm | Pairs | Saved tokens (estimate) | Saved % (estimate) | Pairs with Claude tokens | Baseline prompt tokens (Claude) | Arm prompt tokens (Claude) | Saved tokens (Claude) | Saved % (Claude) | Estimate error % |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| table-v2 | 210 | 87196 | 57.9 | 0 | n/a | n/a | n/a | n/a | n/a |
+
 ## Payload sizes
 
 Per-arm summary for the full corpus (the pilot and the generated tasks), from `cargo run -q -p deslag-eval --locked -- variants tests/evaluations/manifest.json`. Tokens are `deslag-estimate-v1` estimates. Tasks is the number of tasks that list the arm, controls included. Changed is the number of those tasks where the transform changed the payload. Baseline tokens sum the baseline payload of the same tasks. Arm tokens sum the arm payload.
@@ -512,6 +646,17 @@ Per-arm summary for the full corpus (the pilot and the generated tasks), from `c
 | drop-evidence | 8 | 8 | 4665 | 4506 |
 
 The same command prints one row per (task, arm), 935 rows, with bytes, estimated tokens and the changed flag. Add `> tmp/eval/variants.md` to keep the rows.
+
+### Run-3 payload sizes
+
+Per-arm summary for the run-3 corpus, from `cargo run -q -p deslag-eval --locked -- variants tests/evaluations/run3/manifest.json`. The columns are those of the full-corpus table above. `table-v2` lists 219 tasks: 210 non-control tasks, all changed, and 9 controls, of which the 3 JSON evidence-drop controls change.
+
+| Arm | Tasks | Changed | Baseline tokens (estimate) | Arm tokens (estimate) |
+| --- | --- | --- | --- | --- |
+| table-v2 | 219 | 213 | 153021 | 64521 |
+| drop-evidence | 6 | 6 | 3379 | 3259 |
+
+The same command prints one row per (task, arm), 447 rows.
 
 ### Pilot payload sizes
 

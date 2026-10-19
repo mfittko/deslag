@@ -1,0 +1,73 @@
+[
+  {
+    "service_id": "svc_B9SC2WNP",
+    "service_name": "calm-jackal",
+    "tier": "bronze",
+    "error_rate": 148.74
+  },
+  {
+    "service_id": "svc_6J4MAZXN",
+    "service_name": "keen-gecko",
+    "tier": "bronze",
+    "error_rate": 132.18,
+    "owner": null
+  },
+  {
+    "service_id": "svc_66CXXWQ1",
+    "service_name": "keen-dingo",
+    "tier": "bronze",
+    "error_rate": 116.50,
+    "owner": "data-team"
+  },
+  {
+    "service_id": "svc_WX52J8XJ",
+    "service_name": "keen-egret",
+    "tier": "bronze",
+    "error_rate": 172.79
+  },
+  {
+    "service_id": "svc_KN5C7557",
+    "service_name": "amber-cedar-2",
+    "tier": "bronze",
+    "error_rate": 111.85
+  },
+  {
+    "service_id": "svc_WQT6VNKW",
+    "service_name": "gentle-iguana",
+    "tier": "bronze",
+    "error_rate": 152.53,
+    "owner": "beta-team"
+  },
+  {
+    "service_id": "svc_3794HQ92",
+    "service_name": "keen-heron",
+    "tier": "bronze",
+    "error_rate": 166.31,
+    "owner": null
+  },
+  {
+    "service_id": "svc_S0MV61QW",
+    "service_name": "fuzzy-falcon",
+    "tier": "bronze",
+    "error_rate": 137.40
+  },
+  {
+    "service_id": "svc_WHCPE1N4",
+    "service_name": "dusty-falcon",
+    "tier": "bronze",
+    "error_rate": 160.88
+  },
+  {
+    "service_id": "svc_KN5C755T",
+    "service_name": "amber-cedar",
+    "tier": "gold",
+    "error_rate": 103.22,
+    "owner": "infra-team"
+  },
+  {
+    "service_id": "svc_ANNH3H6E",
+    "service_name": "lunar-dingo",
+    "tier": "bronze",
+    "error_rate": 123.81
+  }
+]

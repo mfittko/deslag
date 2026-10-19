@@ -1,0 +1,2914 @@
+{
+  "generator": "deslag-eval generate",
+  "seed": 10600,
+  "set": "table",
+  "tasks": [
+    {
+      "answers": [
+        "usr_N4VRMH5W,usr_P0AHRTKR,usr_PYB2SXK0"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-000",
+      "input": "inputs/r3-json-000.json",
+      "question": "List the user_id values of all users with role auditor, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "mat_TRX1GFWC"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-001",
+      "input": "inputs/r3-json-001.json",
+      "question": "What is the match_id of the match whose symbol is lunar-cedar?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "amber-iguana"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-002",
+      "input": "inputs/r3-json-002.json",
+      "question": "What is the name of the CI job with job_id job_QA7PY7SV?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "194"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-003",
+      "input": "inputs/r3-json-003.json",
+      "question": "What is the highest comments value among issues with state closed?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "svc_FNA1S6GZ,svc_Q12XN7Z7,svc_Q12XN7ZV,svc_Q2YQ14ZR,svc_RE80JM71,svc_VR43JCP8"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-004",
+      "input": "inputs/r3-json-004.json",
+      "question": "List the service_id values of all services whose owner is null, comma-separated. A row with no owner field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "lunar-heron"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-005",
+      "input": "inputs/r3-json-005.json",
+      "question": "What is the customer of the order with order_id ord_T6PAME52?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "evt_MPQCCTH5"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "r3-json-006",
+      "input": "inputs/r3-json-006.json",
+      "question": "What is the event_id of the audit event whose target is calm-heron?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "212.80"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-007",
+      "input": "inputs/r3-json-007.json",
+      "question": "What is the highest quota_gb value among users with role member?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "gentle-jackal"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-008",
+      "input": "inputs/r3-json-008.json",
+      "question": "What is the symbol of the match with match_id mat_KKTJM152?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "job_35352TV4,job_7T6F2E7A,job_TKTVZRH0"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-009",
+      "input": "inputs/r3-json-009.json",
+      "question": "List the job_id values of all CI jobs with conclusion cancelled, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "iss_PHQFPADJ,iss_RPG5RHMH,iss_VXQEKCH6"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-010",
+      "input": "inputs/r3-json-010.json",
+      "question": "List the issue_id values of all issues with state stale, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "svc_3ZX0Q0S7,svc_3ZX0Q0SH,svc_83NKWT7R,svc_NY0AE7ZB,svc_QDT1QHTS,svc_WYNFWKH2"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-011",
+      "input": "inputs/r3-json-011.json",
+      "question": "List the service_id values of all services whose owner is null, comma-separated. A row with no owner field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "207"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-012",
+      "input": "inputs/r3-json-012.json",
+      "question": "What is the highest amount_cents value among orders with status paid?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "mat_DSY7B7GH"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-013",
+      "input": "inputs/r3-json-013.json",
+      "question": "What is the match_id of the match with line 207?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "usr_GQTXCE0Q"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-014",
+      "input": "inputs/r3-json-014.json",
+      "question": "What is the user_id of the user with quota_gb 207.40?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_6AZ257ZC,mat_C2KHMW1E,mat_W9SGN5F5"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-015",
+      "input": "inputs/r3-json-015.json",
+      "question": "List the match_id values of all matches with kind const, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "eager-gecko"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-016",
+      "input": "inputs/r3-json-016.json",
+      "question": "Which CI job has the highest duration_s value? Answer with its name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "iss_WRT90TSA"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-017",
+      "input": "inputs/r3-json-017.json",
+      "question": "What is the issue_id of the issue with comments 206?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ivory-egret"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-018",
+      "input": "inputs/r3-json-018.json",
+      "question": "Which service has the highest error_rate value? Answer with its service_name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "199"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-019",
+      "input": "inputs/r3-json-019.json",
+      "question": "What is the highest amount_cents value among orders with status paid?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "job_1R8PNB1T"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-020",
+      "input": "inputs/r3-json-020.json",
+      "question": "What is the job_id of the CI job with duration_s 222.50?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "amber-iguana"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-021",
+      "input": "inputs/r3-json-021.json",
+      "question": "Which user has the highest quota_gb value? Answer with its login.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_51CJ5XV8,mat_ATBRXRNH,mat_FF44JC5D"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-022",
+      "input": "inputs/r3-json-022.json",
+      "question": "List the match_id values of all matches with kind const, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "dusty-egret"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-023",
+      "input": "inputs/r3-json-023.json",
+      "question": "Which CI job has the highest duration_s value? Answer with its name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "212"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-024",
+      "input": "inputs/r3-json-024.json",
+      "question": "What is the highest comments value among issues with state closed?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "eager-badger"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-025",
+      "input": "inputs/r3-json-025.json",
+      "question": "Which service has the highest error_rate value? Answer with its service_name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_HK8XV2FP,ord_N362QZJB,ord_T859QZCF"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-026",
+      "input": "inputs/r3-json-026.json",
+      "question": "List the order_id values of all orders with status disputed, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "dusty-dingo"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "r3-json-027",
+      "input": "inputs/r3-json-027.json",
+      "question": "What is the target of the audit event with event_id evt_G35KQQ4R?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "usr_CG5B0C42"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-028",
+      "input": "inputs/r3-json-028.json",
+      "question": "What is the user_id of the user whose login is brisk-lemur?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_7EFNS57G"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-029",
+      "input": "inputs/r3-json-029.json",
+      "question": "What is the match_id of the match with line 204?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "job_4NMB6CB8,job_D0HBHVZQ,job_RA80M199"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-030",
+      "input": "inputs/r3-json-030.json",
+      "question": "List the job_id values of all CI jobs with conclusion cancelled, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "eager-badger"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-031",
+      "input": "inputs/r3-json-031.json",
+      "question": "What is the title of the issue with issue_id iss_X07FZ0MC?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc_81HHSRE5"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-032",
+      "input": "inputs/r3-json-032.json",
+      "question": "What is the service_id of the service whose service_name is gentle-heron?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_YF85X50Y"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-033",
+      "input": "inputs/r3-json-033.json",
+      "question": "What is the order_id of the order with amount_cents 207?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "brisk-cedar"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-034",
+      "input": "inputs/r3-json-034.json",
+      "question": "Which service has the highest error_rate value? Answer with its service_name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ivory-egret"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-035",
+      "input": "inputs/r3-json-035.json",
+      "question": "What is the login of the user with user_id usr_XPEJ2M5A?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "jolly-koala"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-036",
+      "input": "inputs/r3-json-036.json",
+      "question": "What is the symbol of the match with match_id mat_N18FMQ6F?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "job_ARXJCK23,job_HDDTTPAV,job_T67CC4ZE"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-037",
+      "input": "inputs/r3-json-037.json",
+      "question": "List the job_id values of all CI jobs with conclusion cancelled, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "iss_CPM4N4Z1"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-038",
+      "input": "inputs/r3-json-038.json",
+      "question": "What is the issue_id of the issue with comments 211?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "gentle-koala"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-039",
+      "input": "inputs/r3-json-039.json",
+      "question": "Which service has the highest error_rate value? Answer with its service_name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_HJH2F5AZ"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-040",
+      "input": "inputs/r3-json-040.json",
+      "question": "What is the order_id of the order whose customer is lunar-egret?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_EJFVXA9S,ord_FN1WF14N,ord_W5FQNM9K"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-041",
+      "input": "inputs/r3-json-041.json",
+      "question": "List the order_id values of all orders with status disputed, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "usr_H55DAQSZ"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-042",
+      "input": "inputs/r3-json-042.json",
+      "question": "What is the user_id of the user with quota_gb 217.10?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_2J8R4ARA,mat_GBQH3FGQ,mat_JH90WF1Z,mat_QSACC07H,mat_R1ZKBVGD,mat_WZ9DER37,mat_WZ9DER3P"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-043",
+      "input": "inputs/r3-json-043.json",
+      "question": "List the match_id values of all matches whose crate is null, comma-separated. A row with no crate field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "job_NEQFA3SE"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-044",
+      "input": "inputs/r3-json-044.json",
+      "question": "What is the job_id of the CI job whose name is gentle-falcon?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "iss_725WDGJZ,iss_DV1E7Q80,iss_XVRMM1VK"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-045",
+      "input": "inputs/r3-json-045.json",
+      "question": "List the issue_id values of all issues with state stale, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "195.80"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-046",
+      "input": "inputs/r3-json-046.json",
+      "question": "What is the highest error_rate value among services with tier bronze?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "ord_S3NPT92B"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-047",
+      "input": "inputs/r3-json-047.json",
+      "question": "What is the order_id of the order with amount_cents 203?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "calm-heron"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "r3-json-048",
+      "input": "inputs/r3-json-048.json",
+      "question": "What is the target of the audit event with event_id evt_V9RGN1WH?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "brisk-iguana"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-049",
+      "input": "inputs/r3-json-049.json",
+      "question": "Which user has the highest quota_gb value? Answer with its login.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "brisk-falcon"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-050",
+      "input": "inputs/r3-json-050.json",
+      "question": "What is the symbol of the match with match_id mat_9H046TMB?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "gentle-iguana"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-051",
+      "input": "inputs/r3-json-051.json",
+      "question": "What is the name of the CI job with job_id job_0VQ5EB8B?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "iss_1D9D89FQ"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-052",
+      "input": "inputs/r3-json-052.json",
+      "question": "What is the issue_id of the issue with comments 207?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc_401Y9451,svc_BK6MP6SZ,svc_RJH6PRPM"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-053",
+      "input": "inputs/r3-json-053.json",
+      "question": "List the service_id values of all services with tier silver, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "ord_7QW83HDP,ord_9GKRQN27,ord_9GKRQN2T,ord_MPN46CBB"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-054",
+      "input": "inputs/r3-json-054.json",
+      "question": "List the order_id values of all orders whose coupon is null, comma-separated. A row with no coupon field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "mat_A04PJ5Q5"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-055",
+      "input": "inputs/r3-json-055.json",
+      "question": "What is the match_id of the match with line 217?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "usr_PMNCB7W3"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-056",
+      "input": "inputs/r3-json-056.json",
+      "question": "What is the user_id of the user whose login is amber-badger?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_FSDF03ZB"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-057",
+      "input": "inputs/r3-json-057.json",
+      "question": "What is the match_id of the match with line 224?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "lunar-jackal"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-058",
+      "input": "inputs/r3-json-058.json",
+      "question": "Which CI job has the highest duration_s value? Answer with its name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "iss_XDJ7M157"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-059",
+      "input": "inputs/r3-json-059.json",
+      "question": "What is the issue_id of the issue whose title is ivory-marmot?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc_CCZE84D5"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-060",
+      "input": "inputs/r3-json-060.json",
+      "question": "What is the service_id of the service with error_rate 206.60?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_M1ZK1A4M"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-061",
+      "input": "inputs/r3-json-061.json",
+      "question": "What is the order_id of the order with amount_cents 218?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "job_N87KFCBQ"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-062",
+      "input": "inputs/r3-json-062.json",
+      "question": "What is the job_id of the CI job whose name is ivory-jackal?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "usr_AGECAKR9"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-063",
+      "input": "inputs/r3-json-063.json",
+      "question": "What is the user_id of the user whose login is gentle-gecko?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_7FW8FJ57"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-064",
+      "input": "inputs/r3-json-064.json",
+      "question": "What is the match_id of the match with line 202?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "dusty-egret"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-065",
+      "input": "inputs/r3-json-065.json",
+      "question": "Which CI job has the highest duration_s value? Answer with its name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "iss_F97VP5TH,iss_XPTAWDVV,iss_YM27B2PA"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-066",
+      "input": "inputs/r3-json-066.json",
+      "question": "List the issue_id values of all issues with state stale, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "svc_577XXGDP,svc_BGBXYF03,svc_DZ9DVW1V"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-067",
+      "input": "inputs/r3-json-067.json",
+      "question": "List the service_id values of all services with tier silver, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "ord_WDQQGT7Q"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-068",
+      "input": "inputs/r3-json-068.json",
+      "question": "What is the order_id of the order whose customer is lunar-falcon?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "evt_JR2NA3J8"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "r3-json-069",
+      "input": "inputs/r3-json-069.json",
+      "question": "What is the event_id of the audit event with seq 824?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "usr_H8EN3CXR"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-070",
+      "input": "inputs/r3-json-070.json",
+      "question": "What is the user_id of the user whose login is eager-falcon?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "202"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-071",
+      "input": "inputs/r3-json-071.json",
+      "question": "What is the highest line value among matches with kind fn?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "job_FKSHVX1P"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-072",
+      "input": "inputs/r3-json-072.json",
+      "question": "What is the job_id of the CI job with duration_s 214.80?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "iss_5X6KYF9Q"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-073",
+      "input": "inputs/r3-json-073.json",
+      "question": "What is the issue_id of the issue whose title is amber-cedar?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc_94M9JGR1"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-074",
+      "input": "inputs/r3-json-074.json",
+      "question": "What is the service_id of the service with error_rate 215.50?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_0JYGV166,ord_0QHFXCHG,ord_6B728T6S,ord_7T96S004,ord_7T96S007,ord_DT2T4VSZ"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-075",
+      "input": "inputs/r3-json-075.json",
+      "question": "List the order_id values of all orders whose coupon is null, comma-separated. A row with no coupon field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "svc_MT8QTS3K"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-076",
+      "input": "inputs/r3-json-076.json",
+      "question": "What is the service_id of the service with error_rate 193.50?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "usr_8SWQFRC7,usr_8SWQFRCW,usr_CVRM9TZH,usr_JSJ60M72,usr_QMFRND1C"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-077",
+      "input": "inputs/r3-json-077.json",
+      "question": "List the user_id values of all users whose team is null, comma-separated. A row with no team field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "fuzzy-dingo"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-078",
+      "input": "inputs/r3-json-078.json",
+      "question": "Which match has the highest line value? Answer with its symbol.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "209.70"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-079",
+      "input": "inputs/r3-json-079.json",
+      "question": "What is the highest duration_s value among CI jobs with conclusion success?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "dusty-gecko"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-080",
+      "input": "inputs/r3-json-080.json",
+      "question": "Which issue has the highest comments value? Answer with its title.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "hazy-egret"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-081",
+      "input": "inputs/r3-json-081.json",
+      "question": "Which service has the highest error_rate value? Answer with its service_name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_26NWHVQ7,ord_26NWHVQC,ord_609F1XFJ,ord_A7S6HRRJ,ord_AS0RPETC,ord_C1ZT9VB1,ord_ZKG1BS06"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-082",
+      "input": "inputs/r3-json-082.json",
+      "question": "List the order_id values of all orders whose coupon is null, comma-separated. A row with no coupon field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "amber-dingo"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-083",
+      "input": "inputs/r3-json-083.json",
+      "question": "Which order has the highest amount_cents value? Answer with its customer.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "lunar-dingo"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-084",
+      "input": "inputs/r3-json-084.json",
+      "question": "Which user has the highest quota_gb value? Answer with its login.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_NFR6THQR"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-085",
+      "input": "inputs/r3-json-085.json",
+      "question": "What is the match_id of the match with line 224?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "job_2D7640Q1"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-086",
+      "input": "inputs/r3-json-086.json",
+      "question": "What is the job_id of the CI job with duration_s 208.70?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "iss_MYJ5JZZC,iss_Q4SA93WG,iss_TAX5EYTF"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-087",
+      "input": "inputs/r3-json-087.json",
+      "question": "List the issue_id values of all issues with state stale, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "svc_WSATR0BJ"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-088",
+      "input": "inputs/r3-json-088.json",
+      "question": "What is the service_id of the service whose service_name is brisk-iguana?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_1X00J6KR,ord_1ZJEHKPC,ord_9JCD2NH7,ord_9JCD2NHK,ord_DTQ1FTRC,ord_VTZGGKFV,ord_XTFPCAD8"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-089",
+      "input": "inputs/r3-json-089.json",
+      "question": "List the order_id values of all orders whose coupon is null, comma-separated. A row with no coupon field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "dusty-jackal"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "r3-json-090",
+      "input": "inputs/r3-json-090.json",
+      "question": "What is the target of the audit event with event_id evt_CMW9XMWM?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "usr_8Y00SY98"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-091",
+      "input": "inputs/r3-json-091.json",
+      "question": "What is the user_id of the user whose login is eager-gecko?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "205"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-092",
+      "input": "inputs/r3-json-092.json",
+      "question": "What is the highest line value among matches with kind fn?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "gentle-cedar"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-093",
+      "input": "inputs/r3-json-093.json",
+      "question": "Which CI job has the highest duration_s value? Answer with its name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "keen-egret"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-094",
+      "input": "inputs/r3-json-094.json",
+      "question": "Which issue has the highest comments value? Answer with its title.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "eager-jackal"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-095",
+      "input": "inputs/r3-json-095.json",
+      "question": "What is the service_name of the service with service_id svc_CQP1XAXP?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_9BAEM92J,ord_C7TPFHC4,ord_TY83G2XJ"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-096",
+      "input": "inputs/r3-json-096.json",
+      "question": "List the order_id values of all orders with status disputed, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "mat_138QG60J,mat_86Q8MJWE,mat_DJY0WY2Y"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-097",
+      "input": "inputs/r3-json-097.json",
+      "question": "List the match_id values of all matches with kind const, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "usr_F1N5K08Z"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-098",
+      "input": "inputs/r3-json-098.json",
+      "question": "What is the user_id of the user whose login is brisk-cedar?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "222"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-099",
+      "input": "inputs/r3-json-099.json",
+      "question": "What is the highest line value among matches with kind fn?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "gentle-falcon"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-100",
+      "input": "inputs/r3-json-100.json",
+      "question": "Which CI job has the highest duration_s value? Answer with its name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "iss_DFBW25T1"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-101",
+      "input": "inputs/r3-json-101.json",
+      "question": "What is the issue_id of the issue whose title is calm-jackal?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc_24C1M4EY,svc_4TZTR3V7,svc_AKC6PAT4,svc_AKC6PAT7,svc_F1ZDXE52,svc_GCJG0AP0,svc_JAKAWVK9,svc_RRYG8TVE"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-102",
+      "input": "inputs/r3-json-102.json",
+      "question": "List the service_id values of all services whose owner is null, comma-separated. A row with no owner field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "ord_87DXEKVB"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-103",
+      "input": "inputs/r3-json-103.json",
+      "question": "What is the order_id of the order whose customer is fuzzy-cedar?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "job_47R1QJVT,job_4RMA8YFT,job_AV976XMT,job_F2TKR270,job_M8X9VF87,job_M8X9VF8X,job_ZRC861RV"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-104",
+      "input": "inputs/r3-json-104.json",
+      "question": "List the job_id values of all CI jobs whose runner is null, comma-separated. A row with no runner field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "eager-koala"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-105",
+      "input": "inputs/r3-json-105.json",
+      "question": "Which user has the highest quota_gb value? Answer with its login.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "eager-falcon"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-106",
+      "input": "inputs/r3-json-106.json",
+      "question": "Which match has the highest line value? Answer with its symbol.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "job_2MF4NG10,job_H08XHWXN,job_YKYKQX5Z"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-107",
+      "input": "inputs/r3-json-107.json",
+      "question": "List the job_id values of all CI jobs with conclusion cancelled, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "calm-egret"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-108",
+      "input": "inputs/r3-json-108.json",
+      "question": "Which issue has the highest comments value? Answer with its title.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc_0T4YKQP9,svc_J3WZA1G8,svc_NQ12ZT4N"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-109",
+      "input": "inputs/r3-json-109.json",
+      "question": "List the service_id values of all services with tier silver, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "ord_DEMK3ZJS"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-110",
+      "input": "inputs/r3-json-110.json",
+      "question": "What is the order_id of the order with amount_cents 198?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "evt_5ACVFG74"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "r3-json-111",
+      "input": "inputs/r3-json-111.json",
+      "question": "What is the event_id of the audit event with seq 826?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "usr_16MB63BG,usr_1C00J60E,usr_4N5Y7A0R,usr_B72NHYWY,usr_D7AMT859,usr_NV8KC5S7,usr_NV8KC5SB"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-112",
+      "input": "inputs/r3-json-112.json",
+      "question": "List the user_id values of all users whose team is null, comma-separated. A row with no team field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "lunar-jackal"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-113",
+      "input": "inputs/r3-json-113.json",
+      "question": "Which match has the highest line value? Answer with its symbol.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "job_CMBT06R7,job_CMBT06RS,job_DPSR794Z,job_EKTRC723,job_HA45XT47"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-114",
+      "input": "inputs/r3-json-114.json",
+      "question": "List the job_id values of all CI jobs whose runner is null, comma-separated. A row with no runner field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "iss_2VV5QNH7,iss_2VV5QNHV,iss_2ZYYW6NV,iss_6YB4ZGYV,iss_E1EKV0HF,iss_HM6235YE,iss_HXY5EFJQ"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-115",
+      "input": "inputs/r3-json-115.json",
+      "question": "List the issue_id values of all issues whose assignee is null, comma-separated. A row with no assignee field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "svc_KZE0934G"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-116",
+      "input": "inputs/r3-json-116.json",
+      "question": "What is the service_id of the service with error_rate 204.30?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_K2AM0M3J"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-117",
+      "input": "inputs/r3-json-117.json",
+      "question": "What is the order_id of the order with amount_cents 222?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "eager-heron"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-118",
+      "input": "inputs/r3-json-118.json",
+      "question": "What is the service_name of the service with service_id svc_W919RE60?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "dusty-badger"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-119",
+      "input": "inputs/r3-json-119.json",
+      "question": "Which user has the highest quota_gb value? Answer with its login.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "225"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-120",
+      "input": "inputs/r3-json-120.json",
+      "question": "What is the highest line value among matches with kind fn?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "job_KB09RVZW"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-121",
+      "input": "inputs/r3-json-121.json",
+      "question": "What is the job_id of the CI job with duration_s 197.50?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "206"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-122",
+      "input": "inputs/r3-json-122.json",
+      "question": "What is the highest comments value among issues with state closed?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "amber-cedar"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-123",
+      "input": "inputs/r3-json-123.json",
+      "question": "What is the service_name of the service with service_id svc_KN5C755T?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_PJ3ZWVK3"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-124",
+      "input": "inputs/r3-json-124.json",
+      "question": "What is the order_id of the order whose customer is jolly-falcon?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_XES4X1QF"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-125",
+      "input": "inputs/r3-json-125.json",
+      "question": "What is the order_id of the order with amount_cents 194?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "usr_M8P9SYT4"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-126",
+      "input": "inputs/r3-json-126.json",
+      "question": "What is the user_id of the user whose login is dusty-koala?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "fuzzy-jackal"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-127",
+      "input": "inputs/r3-json-127.json",
+      "question": "What is the symbol of the match with match_id mat_Y21F1A9Z?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "job_4J3C7YNR,job_5JSTKV45,job_HJJT0V0R,job_MNEN17RM,job_VH9MGK87,job_VH9MGK8A"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-128",
+      "input": "inputs/r3-json-128.json",
+      "question": "List the job_id values of all CI jobs whose runner is null, comma-separated. A row with no runner field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "lunar-koala"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-129",
+      "input": "inputs/r3-json-129.json",
+      "question": "What is the title of the issue with issue_id iss_QVA5J0MV?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc_0RZZ403D,svc_19JYQGJF,svc_NYH2W567"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-130",
+      "input": "inputs/r3-json-130.json",
+      "question": "List the service_id values of all services with tier silver, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "ord_6Z9304V1,ord_QFT58FX0,ord_Z1V73R72"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-131",
+      "input": "inputs/r3-json-131.json",
+      "question": "List the order_id values of all orders with status disputed, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "evt_F9FV14C8"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "r3-json-132",
+      "input": "inputs/r3-json-132.json",
+      "question": "What is the event_id of the audit event whose target is hazy-badger?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "hazy-badger"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-133",
+      "input": "inputs/r3-json-133.json",
+      "question": "What is the login of the user with user_id usr_315DN8QP?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "205"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-134",
+      "input": "inputs/r3-json-134.json",
+      "question": "What is the highest line value among matches with kind fn?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "hazy-egret"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-135",
+      "input": "inputs/r3-json-135.json",
+      "question": "Which CI job has the highest duration_s value? Answer with its name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "amber-badger"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-136",
+      "input": "inputs/r3-json-136.json",
+      "question": "Which issue has the highest comments value? Answer with its title.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "amber-badger"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-137",
+      "input": "inputs/r3-json-137.json",
+      "question": "What is the service_name of the service with service_id svc_3PTYGJ14?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_AW1XNWXN"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-138",
+      "input": "inputs/r3-json-138.json",
+      "question": "What is the order_id of the order with amount_cents 197?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_0AJJM46A,mat_KRWVHTKX,mat_YRBPHCS9"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-139",
+      "input": "inputs/r3-json-139.json",
+      "question": "List the match_id values of all matches with kind const, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "usr_JXDVGY3X"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-140",
+      "input": "inputs/r3-json-140.json",
+      "question": "What is the user_id of the user whose login is amber-falcon?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_02JMKNZG,mat_PJJEXQFG,mat_SHQR1XW7,mat_SHQR1XWR,mat_Z9HET4PB"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-141",
+      "input": "inputs/r3-json-141.json",
+      "question": "List the match_id values of all matches whose crate is null, comma-separated. A row with no crate field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "job_7WD24R5H"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-142",
+      "input": "inputs/r3-json-142.json",
+      "question": "What is the job_id of the CI job whose name is hazy-jackal?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "iss_4NF0M94M,iss_SSKPTD8C,iss_T05SMXT5"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-143",
+      "input": "inputs/r3-json-143.json",
+      "question": "List the issue_id values of all issues with state stale, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "svc_ZRBT1FRB"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-144",
+      "input": "inputs/r3-json-144.json",
+      "question": "What is the service_id of the service with error_rate 219.70?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_03DYYH7J,ord_0BAC07AT,ord_7F97J7WW,ord_DN1KB5Y3,ord_X0NXVPM7,ord_X0NXVPMR,ord_XYBZ4NFD"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-145",
+      "input": "inputs/r3-json-145.json",
+      "question": "List the order_id values of all orders whose coupon is null, comma-separated. A row with no coupon field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "214.10"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-146",
+      "input": "inputs/r3-json-146.json",
+      "question": "What is the highest duration_s value among CI jobs with conclusion success?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "gentle-cedar"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-147",
+      "input": "inputs/r3-json-147.json",
+      "question": "Which user has the highest quota_gb value? Answer with its login.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_HVSAV8C3,mat_J6SC8M6J,mat_X10DSWPS"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-148",
+      "input": "inputs/r3-json-148.json",
+      "question": "List the match_id values of all matches with kind const, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "keen-falcon"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-149",
+      "input": "inputs/r3-json-149.json",
+      "question": "What is the name of the CI job with job_id job_73DNHX6X?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "iss_0N1ZDF6V"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-150",
+      "input": "inputs/r3-json-150.json",
+      "question": "What is the issue_id of the issue whose title is hazy-lemur?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc_MGK0HP3C"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-151",
+      "input": "inputs/r3-json-151.json",
+      "question": "What is the service_id of the service with error_rate 217.70?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_6XJ4VY2S,ord_DX90JH4Q,ord_HE4C7RQT,ord_KM6SF2DX,ord_VQG3V8K7,ord_VQG3V8KC"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-152",
+      "input": "inputs/r3-json-152.json",
+      "question": "List the order_id values of all orders whose coupon is null, comma-separated. A row with no coupon field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "evt_71PAT9VX"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "r3-json-153",
+      "input": "inputs/r3-json-153.json",
+      "question": "What is the event_id of the audit event with seq 834?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ivory-marmot"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-154",
+      "input": "inputs/r3-json-154.json",
+      "question": "Which user has the highest quota_gb value? Answer with its login.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_91W7CY1P,mat_A74NAH8C,mat_BZ4CWB0C,mat_D7W3QXC7,mat_D7W3QXCG"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-155",
+      "input": "inputs/r3-json-155.json",
+      "question": "List the match_id values of all matches whose crate is null, comma-separated. A row with no crate field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "job_423QS8HZ,job_NXVRNYG9,job_RVEXQA48"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-156",
+      "input": "inputs/r3-json-156.json",
+      "question": "List the job_id values of all CI jobs with conclusion cancelled, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "iss_SV6MCEHQ"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-157",
+      "input": "inputs/r3-json-157.json",
+      "question": "What is the issue_id of the issue whose title is ivory-gecko?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc_9DVM45WV"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-158",
+      "input": "inputs/r3-json-158.json",
+      "question": "What is the service_id of the service with error_rate 217.60?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_7X9MFN10"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-159",
+      "input": "inputs/r3-json-159.json",
+      "question": "What is the order_id of the order whose customer is lunar-gecko?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc_7R4XBK09"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-160",
+      "input": "inputs/r3-json-160.json",
+      "question": "What is the service_id of the service with error_rate 217.20?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "usr_CRRSEVWC"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-161",
+      "input": "inputs/r3-json-161.json",
+      "question": "What is the user_id of the user with quota_gb 193.20?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "amber-heron"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-162",
+      "input": "inputs/r3-json-162.json",
+      "question": "Which match has the highest line value? Answer with its symbol.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "job_BAXYWGZP,job_BP83W9XK,job_KKGRF0GQ,job_P72EH1Z7,job_P72EH1ZG,job_QJ5NWHWT,job_TQS3VX1D"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-163",
+      "input": "inputs/r3-json-163.json",
+      "question": "List the job_id values of all CI jobs whose runner is null, comma-separated. A row with no runner field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "iss_S2E1TC6C,iss_TZVKV5JR,iss_W3VG8F5R"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-164",
+      "input": "inputs/r3-json-164.json",
+      "question": "List the issue_id values of all issues with state stale, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "svc_6HR86XZB,svc_DMMPYJPY,svc_WWJGG1P7,svc_WWJGG1PJ"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-165",
+      "input": "inputs/r3-json-165.json",
+      "question": "List the service_id values of all services whose owner is null, comma-separated. A row with no owner field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "ord_91X2C7X0"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-166",
+      "input": "inputs/r3-json-166.json",
+      "question": "What is the order_id of the order whose customer is fuzzy-cedar?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "216"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-167",
+      "input": "inputs/r3-json-167.json",
+      "question": "What is the highest amount_cents value among orders with status paid?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "usr_FPE34Y2P"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-168",
+      "input": "inputs/r3-json-168.json",
+      "question": "What is the user_id of the user whose login is amber-dingo?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_WVXKQFX7"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-169",
+      "input": "inputs/r3-json-169.json",
+      "question": "What is the match_id of the match whose symbol is lunar-gecko?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "job_GSEJMDXY,job_HE3999Y2,job_MCS6BH5R"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-170",
+      "input": "inputs/r3-json-170.json",
+      "question": "List the job_id values of all CI jobs with conclusion cancelled, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "keen-koala"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-171",
+      "input": "inputs/r3-json-171.json",
+      "question": "What is the title of the issue with issue_id iss_6ZDX3YTG?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "brisk-badger"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-172",
+      "input": "inputs/r3-json-172.json",
+      "question": "Which service has the highest error_rate value? Answer with its service_name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_0BB7W83A,ord_KH5NWGTJ,ord_Q9NJYAJ7,ord_Q9NJYAJC,ord_YKKVKKF1"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-173",
+      "input": "inputs/r3-json-173.json",
+      "question": "List the order_id values of all orders whose coupon is null, comma-separated. A row with no coupon field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "evt_2330PZ5D"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "r3-json-174",
+      "input": "inputs/r3-json-174.json",
+      "question": "What is the event_id of the audit event whose target is calm-falcon?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "191.40"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-175",
+      "input": "inputs/r3-json-175.json",
+      "question": "What is the highest quota_gb value among users with role member?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "brisk-badger"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-176",
+      "input": "inputs/r3-json-176.json",
+      "question": "Which match has the highest line value? Answer with its symbol.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "eager-iguana"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-177",
+      "input": "inputs/r3-json-177.json",
+      "question": "What is the name of the CI job with job_id job_SGR5SVTY?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "iss_48GQP355,iss_4EQRZRMW,iss_PFTBGR55"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-178",
+      "input": "inputs/r3-json-178.json",
+      "question": "List the issue_id values of all issues with state stale, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "ivory-iguana"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-179",
+      "input": "inputs/r3-json-179.json",
+      "question": "Which service has the highest error_rate value? Answer with its service_name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "210"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-180",
+      "input": "inputs/r3-json-180.json",
+      "question": "What is the highest amount_cents value among orders with status paid?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "mat_CCJJ5T8Z,mat_MX2XFDNZ,mat_QQ9WT2E1"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-181",
+      "input": "inputs/r3-json-181.json",
+      "question": "List the match_id values of all matches with kind const, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "usr_21V3CVPM"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-182",
+      "input": "inputs/r3-json-182.json",
+      "question": "What is the user_id of the user with quota_gb 222.50?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "jolly-egret"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-183",
+      "input": "inputs/r3-json-183.json",
+      "question": "What is the symbol of the match with match_id mat_54RTBBHW?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "job_QJZCJMHV"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-184",
+      "input": "inputs/r3-json-184.json",
+      "question": "What is the job_id of the CI job whose name is eager-cedar?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "brisk-iguana"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-185",
+      "input": "inputs/r3-json-185.json",
+      "question": "Which issue has the highest comments value? Answer with its title.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "hazy-marmot"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-186",
+      "input": "inputs/r3-json-186.json",
+      "question": "What is the service_name of the service with service_id svc_13N0BY6X?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_124PPHMM,ord_H55E7HK2,ord_KQFC9V2P"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-187",
+      "input": "inputs/r3-json-187.json",
+      "question": "List the order_id values of all orders with status disputed, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "job_NESTHGC8"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-188",
+      "input": "inputs/r3-json-188.json",
+      "question": "What is the job_id of the CI job with duration_s 206.40?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "usr_A7GGM81K,usr_C8858PZN,usr_DZKK9N9G,usr_MGYS61HM,usr_YCGTPW07,usr_YCGTPW0D"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-189",
+      "input": "inputs/r3-json-189.json",
+      "question": "List the user_id values of all users whose team is null, comma-separated. A row with no team field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "mat_CQMJQK31,mat_HNSA0R96,mat_JBFM5MDH"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-190",
+      "input": "inputs/r3-json-190.json",
+      "question": "List the match_id values of all matches with kind const, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "job_GA3YQQ0K"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-191",
+      "input": "inputs/r3-json-191.json",
+      "question": "What is the job_id of the CI job with duration_s 201.40?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "221"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-192",
+      "input": "inputs/r3-json-192.json",
+      "question": "What is the highest comments value among issues with state closed?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "eager-gecko"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-193",
+      "input": "inputs/r3-json-193.json",
+      "question": "Which service has the highest error_rate value? Answer with its service_name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ord_4RND0GFZ,ord_DS49SFH7,ord_DS49SFHY,ord_KRPA3P66,ord_PDRG3WK1,ord_SW0TTJSX"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-194",
+      "input": "inputs/r3-json-194.json",
+      "question": "List the order_id values of all orders whose coupon is null, comma-separated. A row with no coupon field does not count.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "evt_8X8WF1GZ"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "buried_evidence",
+      "id": "r3-json-195",
+      "input": "inputs/r3-json-195.json",
+      "question": "What is the event_id of the audit event with seq 827?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "usr_E4D25JY6"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-196",
+      "input": "inputs/r3-json-196.json",
+      "question": "What is the user_id of the user whose login is keen-koala?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "195"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-197",
+      "input": "inputs/r3-json-197.json",
+      "question": "What is the highest line value among matches with kind fn?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "lunar-jackal"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-198",
+      "input": "inputs/r3-json-198.json",
+      "question": "Which CI job has the highest duration_s value? Answer with its name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "iss_1Z238VEV,iss_G174F316,iss_GVESV6DC"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-199",
+      "input": "inputs/r3-json-199.json",
+      "question": "List the issue_id values of all issues with state stale, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "brisk-iguana"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-200",
+      "input": "inputs/r3-json-200.json",
+      "question": "Which service has the highest error_rate value? Answer with its service_name.",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "eager-badger"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-201",
+      "input": "inputs/r3-json-201.json",
+      "question": "What is the customer of the order with order_id ord_XABW0W2R?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "ivory-marmot"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-202",
+      "input": "inputs/r3-json-202.json",
+      "question": "What is the service_name of the service with service_id svc_TF6GD9PJ?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "lunar-falcon"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "api_query",
+      "id": "r3-json-203",
+      "input": "inputs/r3-json-203.json",
+      "question": "What is the login of the user with user_id usr_WCJ4CA77?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "mat_B77ATS69"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "code_search",
+      "id": "r3-json-204",
+      "input": "inputs/r3-json-204.json",
+      "question": "What is the match_id of the match with line 221?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "job_E4M1GMGG,job_TFPGHZ86,job_X8Z5BYQR"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "failure_diagnosis",
+      "id": "r3-json-205",
+      "input": "inputs/r3-json-205.json",
+      "question": "List the job_id values of all CI jobs with conclusion cancelled, comma-separated.",
+      "rule": "set"
+    },
+    {
+      "answers": [
+        "iss_9T5QVQB9"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "issue_triage",
+      "id": "r3-json-206",
+      "input": "inputs/r3-json-206.json",
+      "question": "What is the issue_id of the issue with comments 198?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "212.40"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "aggregation",
+      "id": "r3-json-207",
+      "input": "inputs/r3-json-207.json",
+      "question": "What is the highest error_rate value among services with tier bronze?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "ord_WF4WKABP"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-208",
+      "input": "inputs/r3-json-208.json",
+      "question": "What is the order_id of the order whose customer is jolly-marmot?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "brisk-marmot"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "exact_id",
+      "id": "r3-json-209",
+      "input": "inputs/r3-json-209.json",
+      "question": "What is the customer of the order with order_id ord_8338HCE1?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "Reka Brandt"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "incompressible",
+      "control": "incompressible",
+      "id": "r3-ctl-incompressible-00",
+      "input": "inputs/r3-ctl-incompressible-00.txt",
+      "question": "Who is the on-call engineer for the week of 2026-11-13?",
+      "rule": "exact_ci"
+    },
+    {
+      "answers": [
+        "71808"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "incompressible",
+      "control": "incompressible",
+      "id": "r3-ctl-incompressible-01",
+      "input": "inputs/r3-ctl-incompressible-01.json",
+      "question": "How many rows did the amber-cedar job write?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "Mina Lindqvist"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "incompressible",
+      "control": "incompressible",
+      "id": "r3-ctl-incompressible-02",
+      "input": "inputs/r3-ctl-incompressible-02.txt",
+      "question": "Who is the on-call engineer for the week of 2026-12-06?",
+      "rule": "exact_ci"
+    },
+    {
+      "answers": [
+        "86963"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "incompressible",
+      "control": "incompressible",
+      "id": "r3-ctl-incompressible-03",
+      "input": "inputs/r3-ctl-incompressible-03.json",
+      "question": "How many rows did the gentle-cedar job write?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "Oskar Moreau"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "incompressible",
+      "control": "incompressible",
+      "id": "r3-ctl-incompressible-04",
+      "input": "inputs/r3-ctl-incompressible-04.txt",
+      "question": "Who is the on-call engineer for the week of 2026-10-01?",
+      "rule": "exact_ci"
+    },
+    {
+      "answers": [
+        "21479"
+      ],
+      "arms": [
+        "table-v2"
+      ],
+      "category": "incompressible",
+      "control": "incompressible",
+      "id": "r3-ctl-incompressible-05",
+      "input": "inputs/r3-ctl-incompressible-05.json",
+      "question": "How many rows did the fuzzy-marmot job write?",
+      "rule": "number"
+    },
+    {
+      "answers": [
+        "svc-calm-jackal"
+      ],
+      "arms": [
+        "drop-evidence",
+        "table-v2"
+      ],
+      "category": "evidence_drop",
+      "control": "evidence_drop",
+      "evidence": "\"revoked_by\": \"svc-calm-jackal\"",
+      "id": "r3-ctl-evidence-drop-00",
+      "input": "inputs/r3-ctl-evidence-drop-00.json",
+      "question": "Who revoked session sess_k2?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "gentle-latency-p99"
+      ],
+      "arms": [
+        "drop-evidence"
+      ],
+      "category": "evidence_drop",
+      "control": "evidence_drop",
+      "evidence": "rollback triggered by",
+      "id": "r3-ctl-evidence-drop-01",
+      "input": "inputs/r3-ctl-evidence-drop-01.log",
+      "question": "Which alert triggered the rollback?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc-dusty-heron"
+      ],
+      "arms": [
+        "drop-evidence",
+        "table-v2"
+      ],
+      "category": "evidence_drop",
+      "control": "evidence_drop",
+      "evidence": "\"revoked_by\": \"svc-dusty-heron\"",
+      "id": "r3-ctl-evidence-drop-02",
+      "input": "inputs/r3-ctl-evidence-drop-02.json",
+      "question": "Who revoked session sess_k6?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "lunar-latency-p99"
+      ],
+      "arms": [
+        "drop-evidence"
+      ],
+      "category": "evidence_drop",
+      "control": "evidence_drop",
+      "evidence": "rollback triggered by",
+      "id": "r3-ctl-evidence-drop-03",
+      "input": "inputs/r3-ctl-evidence-drop-03.log",
+      "question": "Which alert triggered the rollback?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "svc-brisk-jackal"
+      ],
+      "arms": [
+        "drop-evidence",
+        "table-v2"
+      ],
+      "category": "evidence_drop",
+      "control": "evidence_drop",
+      "evidence": "\"revoked_by\": \"svc-brisk-jackal\"",
+      "id": "r3-ctl-evidence-drop-04",
+      "input": "inputs/r3-ctl-evidence-drop-04.json",
+      "question": "Who revoked session sess_k2?",
+      "rule": "exact"
+    },
+    {
+      "answers": [
+        "eager-latency-p99"
+      ],
+      "arms": [
+        "drop-evidence"
+      ],
+      "category": "evidence_drop",
+      "control": "evidence_drop",
+      "evidence": "rollback triggered by",
+      "id": "r3-ctl-evidence-drop-05",
+      "input": "inputs/r3-ctl-evidence-drop-05.log",
+      "question": "Which alert triggered the rollback?",
+      "rule": "exact"
+    }
+  ]
+}

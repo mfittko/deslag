@@ -1,0 +1,80 @@
+[
+  {
+    "service_id": "svc_2M6WVCSP",
+    "service_name": "lunar-lemur",
+    "tier": "bronze",
+    "error_rate": 146.20
+  },
+  {
+    "service_id": "svc_F7TEJYW0",
+    "service_name": "ivory-lemur",
+    "tier": "bronze",
+    "error_rate": 130.52
+  },
+  {
+    "service_id": "svc_C7K42608",
+    "service_name": "keen-cedar",
+    "tier": "bronze",
+    "error_rate": 185.64
+  },
+  {
+    "service_id": "svc_R6EPZNP7",
+    "service_name": "jolly-jackal",
+    "tier": "bronze",
+    "error_rate": 170.90
+  },
+  {
+    "service_id": "svc_PEZV8702",
+    "service_name": "jolly-iguana",
+    "tier": "bronze",
+    "error_rate": 117.09
+  },
+  {
+    "service_id": "svc_ZM3PG12V",
+    "service_name": "calm-koala",
+    "tier": "gold",
+    "error_rate": 230.40
+  },
+  {
+    "service_id": "svc_QKGWNQWD",
+    "service_name": "amber-iguana",
+    "tier": "bronze",
+    "error_rate": 167.94
+  },
+  {
+    "service_id": "svc_QNM6PAR2",
+    "service_name": "gentle-lemur",
+    "tier": "bronze",
+    "error_rate": 137.16
+  },
+  {
+    "service_id": "svc_6AP0BR87",
+    "service_name": "hazy-egret",
+    "tier": "bronze",
+    "error_rate": 160.10
+  },
+  {
+    "service_id": "svc_J2369VKY",
+    "service_name": "hazy-gecko",
+    "tier": "bronze",
+    "error_rate": 121.26
+  },
+  {
+    "service_id": "svc_ZM3PG127",
+    "service_name": "calm-koala-2",
+    "tier": "bronze",
+    "error_rate": 212.40
+  },
+  {
+    "service_id": "svc_JGAJ9HDH",
+    "service_name": "eager-marmot",
+    "tier": "bronze",
+    "error_rate": 152.90
+  },
+  {
+    "service_id": "svc_XZY844AZ",
+    "service_name": "fuzzy-badger",
+    "tier": "bronze",
+    "error_rate": 179.85
+  }
+]

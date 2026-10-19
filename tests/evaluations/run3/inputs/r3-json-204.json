@@ -1,0 +1,98 @@
+[
+  {
+    "match_id": "mat_7ZYS1ADG",
+    "symbol": "brisk-marmot",
+    "kind": "fn",
+    "line": 144,
+    "crate": null
+  },
+  {
+    "match_id": "mat_G57VRHMX",
+    "symbol": "dusty-lemur",
+    "kind": "fn",
+    "line": 159,
+    "crate": "data-team"
+  },
+  {
+    "match_id": "mat_NSMGT3W1",
+    "symbol": "brisk-heron",
+    "kind": "fn",
+    "line": 126
+  },
+  {
+    "match_id": "mat_JYN9GC42",
+    "symbol": "dusty-falcon",
+    "kind": "fn",
+    "line": 176,
+    "crate": "data-team"
+  },
+  {
+    "match_id": "mat_B77ATS67",
+    "symbol": "ivory-jackal-2",
+    "kind": "fn",
+    "line": 113,
+    "crate": "alpha-team"
+  },
+  {
+    "match_id": "mat_2PJK08EA",
+    "symbol": "dusty-jackal",
+    "kind": "fn",
+    "line": 167
+  },
+  {
+    "match_id": "mat_YP7N3JT0",
+    "symbol": "hazy-jackal",
+    "kind": "fn",
+    "line": 128,
+    "crate": "infra-team"
+  },
+  {
+    "match_id": "mat_KKB3WDH2",
+    "symbol": "hazy-marmot",
+    "kind": "fn",
+    "line": 193,
+    "crate": "infra-team"
+  },
+  {
+    "match_id": "mat_VTB3VTFR",
+    "symbol": "fuzzy-jackal",
+    "kind": "fn",
+    "line": 115,
+    "crate": null
+  },
+  {
+    "match_id": "mat_9ESW8NRG",
+    "symbol": "calm-lemur",
+    "kind": "fn",
+    "line": 152,
+    "crate": null
+  },
+  {
+    "match_id": "mat_B77ATS69",
+    "symbol": "ivory-jackal",
+    "kind": "macro",
+    "line": 221,
+    "crate": "beta-team"
+  },
+  {
+    "match_id": "mat_1FKGBYRF",
+    "symbol": "calm-jackal",
+    "kind": "fn",
+    "line": 188,
+    "crate": null
+  },
+  {
+    "match_id": "mat_10Q2F24F",
+    "symbol": "keen-cedar",
+    "kind": "fn",
+    "line": 178,
+    "crate": "alpha-team"
+  },
+  {
+    "match_id": "mat_Q5EEQR4F",
+    "symbol": "brisk-iguana",
+    "kind": "fn",
+    "line": 135,
+    "crate": null
+  }
+]

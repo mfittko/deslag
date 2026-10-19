@@ -1,0 +1,80 @@
+[
+  {
+    "match_id": "mat_CQMJQK37",
+    "symbol": "eager-jackal-2",
+    "kind": "fn",
+    "line": 123
+  },
+  {
+    "match_id": "mat_TG7DFN49",
+    "symbol": "hazy-koala",
+    "kind": "fn",
+    "line": 147
+  },
+  {
+    "match_id": "mat_2SK0FWZK",
+    "symbol": "lunar-heron",
+    "kind": "fn",
+    "line": 136
+  },
+  {
+    "match_id": "mat_JBFM5MDH",
+    "symbol": "fuzzy-falcon",
+    "kind": "const",
+    "line": 119
+  },
+  {
+    "match_id": "mat_9T2EFQH5",
+    "symbol": "keen-badger",
+    "kind": "fn",
+    "line": 167
+  },
+  {
+    "match_id": "mat_P7VBWZ4D",
+    "symbol": "dusty-marmot",
+    "kind": "fn",
+    "line": 160
+  },
+  {
+    "match_id": "mat_2ESKRM5S",
+    "symbol": "amber-jackal",
+    "kind": "fn",
+    "line": 175
+  },
+  {
+    "match_id": "mat_HNSA0R96",
+    "symbol": "brisk-koala",
+    "kind": "const",
+    "line": 108
+  },
+  {
+    "match_id": "mat_2E5FWZQV",
+    "symbol": "gentle-koala",
+    "kind": "fn",
+    "line": 150
+  },
+  {
+    "match_id": "mat_JCS45XGA",
+    "symbol": "keen-jackal",
+    "kind": "fn",
+    "line": 130
+  },
+  {
+    "match_id": "mat_2NY77657",
+    "symbol": "fuzzy-badger",
+    "kind": "fn",
+    "line": 183
+  },
+  {
+    "match_id": "mat_CQMJQK31",
+    "symbol": "eager-jackal",
+    "kind": "const",
+    "line": 105
+  },
+  {
+    "match_id": "mat_PB2BSK1F",
+    "symbol": "lunar-iguana",
+    "kind": "fn",
+    "line": 188
+  }
+]

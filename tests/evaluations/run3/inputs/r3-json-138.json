@@ -1,0 +1,71 @@
+[
+  {
+    "order_id": "ord_91X73FVX",
+    "customer": "fuzzy-dingo",
+    "status": "paid",
+    "amount_cents": 116,
+    "coupon": "data-team"
+  },
+  {
+    "order_id": "ord_Y3BN836S",
+    "customer": "amber-heron",
+    "status": "paid",
+    "amount_cents": 121
+  },
+  {
+    "order_id": "ord_AW1XNWX7",
+    "customer": "eager-iguana-2",
+    "status": "paid",
+    "amount_cents": 113,
+    "coupon": "beta-team"
+  },
+  {
+    "order_id": "ord_GQNV6DZ6",
+    "customer": "ivory-dingo",
+    "status": "paid",
+    "amount_cents": 158,
+    "coupon": null
+  },
+  {
+    "order_id": "ord_FQB69PPX",
+    "customer": "calm-falcon",
+    "status": "paid",
+    "amount_cents": 165,
+    "coupon": "alpha-team"
+  },
+  {
+    "order_id": "ord_GZG5F3NY",
+    "customer": "brisk-marmot",
+    "status": "paid",
+    "amount_cents": 132,
+    "coupon": "beta-team"
+  },
+  {
+    "order_id": "ord_5GA776J3",
+    "customer": "brisk-dingo",
+    "status": "paid",
+    "amount_cents": 136,
+    "coupon": "infra-team"
+  },
+  {
+    "order_id": "ord_X41NT7CY",
+    "customer": "gentle-dingo",
+    "status": "paid",
+    "amount_cents": 153,
+    "coupon": null
+  },
+  {
+    "order_id": "ord_AW1XNWXN",
+    "customer": "eager-iguana",
+    "status": "refunded",
+    "amount_cents": 197,
+    "coupon": null
+  },
+  {
+    "order_id": "ord_FSAYM004",
+    "customer": "eager-gecko",
+    "status": "paid",
+    "amount_cents": 148,
+    "coupon": "beta-team"
+  }
+]

@@ -964,3 +964,57 @@ fn every_transform_arm_has_100_non_control_pairs() {
         assert!(n >= 4, "{control}: {n}");
     }
 }
+
+fn run3_manifest() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/evaluations/run3/manifest.json")
+}
+
+#[test]
+fn run3_manifest_pairs_table_v2_with_both_controls() {
+    let doc: Value =
+        serde_json::from_str(&std::fs::read_to_string(run3_manifest()).unwrap()).unwrap();
+    assert!(doc.get("include").is_none());
+    let tasks = doc["tasks"].as_array().unwrap();
+    let mut pairs = 0;
+    for t in tasks {
+        for a in t["arms"].as_array().unwrap() {
+            assert!(a == "table-v2" || a == "drop-evidence", "{t}");
+        }
+        pairs +=
+            usize::from(t["control"].is_null() && t["arms"] == serde_json::json!(["table-v2"]));
+    }
+    assert!(pairs >= 200, "{pairs} table-v2 non-control tasks");
+    for control in ["incompressible", "evidence_drop"] {
+        assert!(tasks.iter().any(|t| t["control"] == control), "{control}");
+    }
+    assert!(tasks.iter().any(|t| t["category"] == "buried_evidence"));
+}
+
+#[test]
+fn run3_mock_run_detects_evidence_loss_and_keeps_controls_unchanged() {
+    let (_, lines) = mock_run_on(&run3_manifest(), "106", "mock-run3-106.jsonl");
+    let doc: Value =
+        serde_json::from_str(&std::fs::read_to_string(run3_manifest()).unwrap()).unwrap();
+    let expected: usize = doc["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| 1 + t["arms"].as_array().unwrap().len())
+        .sum();
+    assert_eq!(lines.len(), expected);
+    for l in &lines {
+        match l["control"].as_str() {
+            None => assert_eq!(l["success"], true, "{l}"),
+            Some("incompressible") => {
+                assert_eq!(l["variant_unchanged"], true, "{l}");
+                assert_eq!(l["success"], true, "{l}");
+            }
+            Some("evidence_drop") if l["arm"] == "drop-evidence" => {
+                assert_eq!(l["success"], false, "{l}");
+                assert_eq!(l["error_kind"], "abstain", "{l}");
+            }
+            Some("evidence_drop") => assert_eq!(l["success"], true, "{l}"),
+            Some(other) => panic!("unknown control {other}"),
+        }
+    }
+}

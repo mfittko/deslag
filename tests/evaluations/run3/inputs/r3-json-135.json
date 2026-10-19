@@ -1,0 +1,71 @@
+[
+  {
+    "job_id": "job_C8VPSP3J",
+    "name": "fuzzy-koala",
+    "conclusion": "success",
+    "duration_s": 138.56,
+    "runner": "edge-team"
+  },
+  {
+    "job_id": "job_JSSCFWGF",
+    "name": "hazy-egret",
+    "conclusion": "failure",
+    "duration_s": 195.60,
+    "runner": "alpha-team"
+  },
+  {
+    "job_id": "job_PS37B8BJ",
+    "name": "calm-marmot",
+    "conclusion": "success",
+    "duration_s": 164.01,
+    "runner": "core-team"
+  },
+  {
+    "job_id": "job_6X4DJ4CV",
+    "name": "ivory-egret",
+    "conclusion": "success",
+    "duration_s": 145.94,
+    "runner": "infra-team"
+  },
+  {
+    "job_id": "job_52PBE5MX",
+    "name": "eager-marmot",
+    "conclusion": "success",
+    "duration_s": 121.48,
+    "runner": null
+  },
+  {
+    "job_id": "job_ENZZPBSW",
+    "name": "dusty-koala",
+    "conclusion": "success",
+    "duration_s": 161.79,
+    "runner": "alpha-team"
+  },
+  {
+    "job_id": "job_S390T4TT",
+    "name": "lunar-gecko",
+    "conclusion": "success",
+    "duration_s": 154.23,
+    "runner": null
+  },
+  {
+    "job_id": "job_XF99KFYN",
+    "name": "gentle-falcon",
+    "conclusion": "success",
+    "duration_s": 115.67
+  },
+  {
+    "job_id": "job_JSSCFWG7",
+    "name": "hazy-egret-2",
+    "conclusion": "success",
+    "duration_s": 107.64,
+    "runner": "edge-team"
+  },
+  {
+    "job_id": "job_11T5161K",
+    "name": "calm-iguana",
+    "conclusion": "success",
+    "duration_s": 128.83,
+    "runner": null
+  }
+]
